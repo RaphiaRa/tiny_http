@@ -1,0 +1,21 @@
+%{
+#include <stddef.h>
+#include <string.h>
+#include "th_header_id.h"
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmissing-field-initializers"
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+%}
+%define lookup-function-name th_header_id_mapping_find
+%define constants-prefix TH_HEADER_ID_
+%define hash-function-name th_header_id_hash
+%struct-type
+%compare-strncmp
+struct th_header_id_mapping;
+%%
+connection, TH_HEADER_ID_CONNECTION
+content-type, TH_HEADER_ID_CONTENT_TYPE
+content-length, TH_HEADER_ID_CONTENT_LENGTH
+cookie, TH_HEADER_ID_COOKIE
+%%
+#pragma GCC diagnostic pop

@@ -1,0 +1,27 @@
+BasedOnStyle: LLVM
+Language: Cpp
+IndentWidth: 4
+AllowShortFunctionsOnASingleLine: true
+PointerBindsToType: true
+PointerAlignment: Left
+IncludeBlocks: Preserve
+ColumnLimit: 0
+MaxEmptyLinesToKeep: 1
+UseTab: Never
+SortIncludes: true
+BreakBeforeBraces: Custom
+BreakBeforeBinaryOperators: NonAssignment
+BraceWrapping:
+  AfterCaseLabel: false
+  AfterClass: false
+  AfterControlStatement: false
+  AfterEnum: false
+  AfterFunction: true
+  AfterNamespace: true
+  AfterObjCDeclaration: false
+  AfterStruct: false
+  AfterUnion: false
+  BeforeCatch: false
+  BeforeElse: false
+  IndentBraces: false
+StatementMacros: [ 'TH_TEST_BEGIN(name)', 'TH_TEST_END' , 'TH_TEST_CASE_BEGIN(name)', 'TH_TEST_CASE_END' , 'TH_EXPECT(x)', 'TH_STRING(x)']

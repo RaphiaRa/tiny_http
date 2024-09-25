@@ -1,0 +1,147 @@
+#include "th_exchange.h"
+
+#include "th_http_error.h"
+#include "th_log.h"
+#include "th_request.h"
+#include "th_response.h"
+
+#undef TH_LOG_TAG
+#define TH_LOG_TAG "h1_exchange"
+
+/**
+ * @brief th_exchange receives a http messages, processes it and sends a response.
+ */
+struct th_exchange {
+    th_io_composite base;
+    th_allocator* allocator;
+    th_socket* socket;
+    th_router* router;
+    th_fcache* fcache;
+    th_request request;
+    th_response response;
+    enum {
+        TH_EXCHANGE_STATE_START,
+        TH_EXCHANGE_STATE_HANDLE,
+    } state;
+    bool close;
+};
+
+TH_LOCAL(void)
+th_exchange_destroy(void* self)
+{
+    th_exchange* handler = self;
+    TH_LOG_DEBUG("Destroying %p", handler);
+    th_request_deinit(&handler->request);
+    th_response_deinit(&handler->response);
+    th_allocator_free(handler->allocator, handler);
+}
+
+TH_LOCAL(void)
+th_exchange_handle_error(th_exchange* handler, th_err err)
+{
+    th_err http_error = th_http_error(err);
+    th_response_set_code(&handler->response, TH_ERR_CODE(http_error));
+    th_printf_body(&handler->response, "%d %s", TH_ERR_CODE(http_error), th_http_strerror(http_error));
+    th_response_add_header(&handler->response, TH_STRING("Connection"), TH_STRING("close"));
+    handler->close = true;
+    handler->state = TH_EXCHANGE_STATE_HANDLE;
+    th_response_async_write(&handler->response, handler->socket, (th_io_handler*)th_io_composite_ref(&handler->base));
+}
+
+TH_LOCAL(void)
+th_exchange_handle_request(th_exchange* handler)
+{
+    th_err err = TH_ERR_OK;
+    th_socket* socket = handler->socket;
+    // We got a request, let's process it
+    th_request* request = &handler->request;
+    th_router* router = handler->router;
+    th_response* response = &handler->response;
+    // Find the handler for the request
+    if ((err = th_router_handle(router, request, response)) != TH_ERR_OK) {
+        th_exchange_handle_error(handler, err);
+        return;
+    }
+
+    if (request->close) {
+        th_response_add_header(response, TH_STRING("Connection"), TH_STRING("close"));
+        handler->close = true;
+    } else {
+        th_response_add_header(response, TH_STRING("Connection"), TH_STRING("keep-alive"));
+    }
+
+    TH_LOG_DEBUG("Object: %p : Write response %p", handler, response);
+    handler->state = TH_EXCHANGE_STATE_HANDLE;
+    th_response_async_write(response, socket, (th_io_handler*)th_io_composite_ref(&handler->base));
+}
+
+TH_LOCAL(void)
+th_exchange_fn(void* self, size_t len, th_err err)
+{
+    (void)len;
+    th_exchange* handler = self;
+    switch (handler->state) {
+    case TH_EXCHANGE_STATE_START: {
+        if (err != TH_ERR_OK) {
+            TH_LOG_DEBUG("Object: %p Failed to read request: %s", handler, th_strerror(err));
+            if (TH_ERR_CATEGORY(err) == TH_ERR_CATEGORY_HTTP) {
+                th_exchange_handle_error(handler, err);
+            } else {
+                th_io_composite_complete(&handler->base, TH_EXCHANGE_CLOSE, err);
+            }
+            return;
+        }
+        TH_LOG_DEBUG("Object: %p Read request %p of length %zu", handler, &handler->request, len);
+        th_exchange_handle_request(handler);
+        break;
+    }
+    case TH_EXCHANGE_STATE_HANDLE: {
+        if (err != TH_ERR_OK) {
+            TH_LOG_ERROR("Object: %p Failed to write response: %s", handler, th_strerror(err));
+            th_io_composite_complete(&handler->base, TH_EXCHANGE_CLOSE, err);
+            return;
+        }
+        TH_LOG_DEBUG("Object: %p Wrote response %p of length %zu", handler, &handler->response, len);
+        size_t result = handler->close ? TH_EXCHANGE_CLOSE : TH_EXCHANGE_CONTINUE;
+        th_io_composite_complete(&handler->base, result, TH_ERR_OK);
+        break;
+    }
+    }
+}
+
+TH_LOCAL(void)
+th_exchange_init(th_exchange* exchange, th_socket* socket,
+                    th_router* router, th_fcache* fcache,
+                    th_allocator* allocator, th_io_handler* on_complete)
+{
+    th_io_composite_init(&exchange->base, th_exchange_fn, th_exchange_destroy, on_complete);
+    exchange->socket = socket;
+    exchange->router = router;
+    exchange->fcache = fcache;
+    exchange->allocator = allocator ? allocator : th_default_allocator_get();
+    th_request_init(&exchange->request, allocator);
+    th_response_init(&exchange->response, exchange->fcache, allocator);
+    exchange->close = false;
+}
+
+TH_PRIVATE(th_err)
+th_exchange_create(th_exchange** out, th_socket* socket,
+                      th_router* router, th_fcache* fcache,
+                      th_allocator* allocator, th_io_handler* on_complete)
+{
+    th_exchange* handler = th_allocator_alloc(allocator, sizeof(th_exchange));
+    if (!handler) {
+        return TH_ERR_BAD_ALLOC;
+    }
+    th_exchange_init(handler, socket, router, fcache, allocator, on_complete);
+    *out = handler;
+    return TH_ERR_OK;
+}
+
+TH_PRIVATE(void)
+th_exchange_start(th_exchange* handler)
+{
+    handler->state = TH_EXCHANGE_STATE_START;
+    TH_LOG_DEBUG("Object: %p : Reading request %p", handler, &handler->request);
+    th_request_async_read(handler->socket, handler->allocator, &handler->request, (th_io_handler*)handler);
+}

@@ -1,0 +1,51 @@
+%{
+#include <stddef.h>
+#include <string.h>
+#include "th_mime.h"
+#include "th_string.h"
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmissing-field-initializers"
+%}
+%define lookup-function-name th_mime_mapping_find
+%define constants-prefix TH_MIME_
+%define hash-function-name th_mime_hash
+%struct-type
+%compare-strncmp
+struct th_mime_mapping;
+%%
+aac,  TH_STRING_INIT("audio/aac")
+mp3,  TH_STRING_INIT("audio/mpeg")
+ogg,  TH_STRING_INIT("audio/ogg")
+opus, TH_STRING_INIT("audio/opus")
+wav,  TH_STRING_INIT("audio/wav")
+weba, TH_STRING_INIT("audio/webm")
+otf,  TH_STRING_INIT("font/otf")
+ttf,  TH_STRING_INIT("font/ttf")
+woff, TH_STRING_INIT("font/woff")
+woff2,TH_STRING_INIT("font/woff2")
+avif, TH_STRING_INIT("image/avif")
+gif,  TH_STRING_INIT("image/gif")
+jpg,  TH_STRING_INIT("image/jpeg")
+jpeg, TH_STRING_INIT("image/jpeg")
+png,  TH_STRING_INIT("image/png")
+svg,  TH_STRING_INIT("image/svg+xml")
+webp, TH_STRING_INIT("image/webp")
+ico,  TH_STRING_INIT("image/x-icon")
+css,  TH_STRING_INIT("text/css")
+csv,  TH_STRING_INIT("text/csv")
+html, TH_STRING_INIT("text/html")
+js,   TH_STRING_INIT("text/javascript")
+md,   TH_STRING_INIT("text/markdown")
+txt,  TH_STRING_INIT("text/plain")
+mp4,  TH_STRING_INIT("video/mp4")
+mpeg, TH_STRING_INIT("video/mpeg")
+ogv,  TH_STRING_INIT("video/ogg")
+webm, TH_STRING_INIT("video/webm")
+json, TH_STRING_INIT("application/json")
+pdf,  TH_STRING_INIT("application/pdf")
+zip,  TH_STRING_INIT("application/zip")
+xhtml,TH_STRING_INIT("application/xhtml+xml")
+xml,  TH_STRING_INIT("application/xml")
+%%
+#pragma GCC diagnostic pop
+

@@ -1,0 +1,20 @@
+%{
+#include <stddef.h>
+#include <string.h>
+#include "th_method.h"
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmissing-field-initializers"
+%}
+%define lookup-function-name th_method_mapping_find
+%define constants-prefix TH_METHOD_
+%define hash-function-name th_method_hash
+%struct-type
+%compare-strncmp
+struct th_method_mapping;
+%%
+GET,  TH_METHOD_GET
+POST, TH_METHOD_POST
+PUT,  TH_METHOD_PUT
+DELETE, TH_METHOD_DELETE
+%%
+#pragma GCC diagnostic pop

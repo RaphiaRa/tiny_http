@@ -1,4 +1,10 @@
 # tiny_http - Work in Progress...
+<div align="center">
+
+[![Linux](https://github.com/RaphiaRa/tiny_http/actions/workflows/linux.yml/badge.svg?branch=main)](https://github.com/RaphiaRa/tiny_http/actions/workflows/linux.yml)
+[![MacOS](https://github.com/RaphiaRa/tiny_http/actions/workflows/macos.yml/badge.svg?branch=main)](https://github.com/RaphiaRa/tiny_http/actions/workflows/macos.yml)
+
+</div>
 tiny_http is my attempt at creating a lightweight, easy-to-use, and embeddable HTTP server library in C99.
 It is not designed to be a full-fledged web server, but rather a simple tool to build small web applications or to serve static files. No threading or forking is used, so it's not suitable for high-traffic applications.
 

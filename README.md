@@ -29,6 +29,7 @@ int main()
     while (1) {
         th_poll(server, 1000);
     }
+    return 0;
 }
 ```
 Simply copy the code above to a file (e.g. `hello.c`) where you have the `th.h` and `th.c` files, and compile it with:
@@ -106,6 +107,7 @@ int main()
     while (1) {
         th_poll(server, 1000);
     }
+    return 0;
 }
 ```
 It's possible to specify a capture type by adding a colon before the parameter name: `{string:param}` (Default if nothing is specified), `{int:param}`, `{path:param}`.
@@ -140,6 +142,7 @@ int main()
     while (1) {
         th_poll(server, 1000);
     }
+    return 0;
 }
 ```
 

@@ -7,7 +7,9 @@ check_ipo_supported()
 
 # Extra warnings, treat warnings as error
 if(CMAKE_C_COMPILER_ID MATCHES "Clang|GNU")
-  add_compile_options(-Wall -Wextra -pedantic -Werror -g -O0)
+   SET(TH_WARNINGS -Wall -Wextra -Wpedantic -Werror)
+   message(STATUS "Using Clang/GNU compiler, enabling extra warnings: ${TH_WARNINGS}")
+   add_compile_options(${TH_WARNINGS})
 endif()
 
 # Run gperf

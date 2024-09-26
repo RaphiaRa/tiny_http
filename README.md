@@ -41,7 +41,7 @@ but I'll be adding more features and fixing bugs if I have the time.
 
 ## Dependencies
 - OpenSSL (optional, for HTTPS support)
-- gperf (optinal, for binary builds)
+- gperf (optinal, for binary builds and amalgamation)
 - python3 (optional, for running the amalgamation script)
 - picohttpparser (included) - a small, fast HTTP parser
 - The C standard library
@@ -54,9 +54,9 @@ but I'll be adding more features and fixing bugs if I have the time.
 
 ## Enabling HTTPS
 
-To enable HTTPS support, you need to link against OpenSSL and define `TH_WITH_SSL` when compiling the library.
+To enable HTTPS support, you need to link against OpenSSL and set `TH_WITH_SSL=1` when compiling the library.
 ```sh
-$ gcc -o myserver myserver.c th.c -lssl -lcrypto -DTH_WITH_SSL
+$ gcc -o myserver myserver.c th.c -lssl -lcrypto -DTH_WITH_SSL=1
 ```
 
 ## Building the project and CMake integration

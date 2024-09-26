@@ -1,8 +1,7 @@
-cmake_minimum_required(VERSION 3.9 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 project(tiny_http)
 
 set(CMAKE_C_STANDARD 99)
-
 include(CheckIPOSupported)
 check_ipo_supported()
 
@@ -10,7 +9,6 @@ check_ipo_supported()
 if(CMAKE_C_COMPILER_ID MATCHES "Clang|GNU")
   add_compile_options(-Wall -Wextra -pedantic -Werror -g -O0)
 endif()
-
 
 # Run gperf
 find_program(GPERF gperf)
@@ -126,7 +124,6 @@ message(STATUS "sendfile: ${TH_WITH_SENDFILE}")
 check_function_exists(sendfile TH_WITH_MMAP)
 message(STATUS "mmap: ${TH_WITH_MMAP}")
 
-
 target_compile_definitions(tiny_http PRIVATE TH_LOG_LEVEL=${TH_LOG_LEVEL})
 target_compile_definitions(tiny_http PRIVATE TH_WITH_SSL=${TH_WITH_SSL})
 target_compile_definitions(tiny_http PRIVATE TH_HAVE_MMAP=${TH_WITH_MMAP})
@@ -136,36 +133,9 @@ target_include_directories(tiny_http
     PRIVATE src
 )
 
-
 add_library(tiny_http::tiny_http ALIAS tiny_http)
 
-if (NOT TH_DISABLE_AMALGAMATION)
-    # run amalgamation.py with TH_CORE_SRC and TH_3RD_PARTY_SRC
-   function(amalgamation_generate OUTPUT_FILE)
-        # Amalgamation of th.c
-        add_custom_command(
-            OUTPUT ${OUTPUT_FILE}
-            COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/amalgamate.py -o ${OUTPUT_FILE} ${TH_CORE_SRC} ${TH_3RD_PARTY_SRC}
-            COMMAND cp ${CMAKE_CURRENT_SOURCE_DIR}/include/th.h ${CMAKE_CURRENT_BINARY_DIR}/th.h
-            DEPENDS tiny_http
-            COMMENT "Running amalgamation.py on ${OUTPUT_FILE}"
-            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-            VERBATIM
-        )
-    endfunction(amalgamation_generate OUTPUT_FILE)
-    amalgamation_generate(${CMAKE_CURRENT_BINARY_DIR}/th.c)
-
-    # Add amalgamation target
-    # Not actually needed, but this makes sure that the amalgamation file compiles
-    add_library(tiny_http_amalgamation STATIC ${CMAKE_CURRENT_BINARY_DIR}/th.c)
-    target_include_directories(tiny_http_amalgamation 
-        PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>/include
-        PRIVATE src
-    )
-
-    # Also copy the header file
-
-endif()
+# Examples
 
 if (NOT TH_DISABLE_EXAMPLES)
     # Hello world example
@@ -190,6 +160,8 @@ if (NOT TH_DISABLE_EXAMPLES)
         tiny_http::tiny_http
     )
 endif()
+
+# Tests
 
 if (NOT TH_DISABLE_TESTS)
     add_library(tiny_http_test
@@ -241,4 +213,58 @@ if (NOT TH_DISABLE_TESTS)
         get_filename_component(test_name ${test_src} NAME_WE)
         add_test(NAME src/${test_name} COMMAND th_test src/${test_name})
     endforeach()
+endif()
+
+# Amalgamation
+
+if (NOT TH_DISABLE_AMALGAMATION)
+    find_package(Python3)
+    if (Python3_FOUND)
+        message(STATUS "Found Python3: ${Python3_EXECUTABLE}")
+    else()
+        message(STATUS "Python3 not found, disabling amalgamation")
+        SET(TH_DISABLE_AMALGAMATION 1)
+    endif()
+endif()
+
+# Check whether all required python modules are available
+
+if (NOT TH_DISABLE_AMALGAMATION)
+    SET(PYTHON_REQUIRED_MODULES os re argparse networkx)
+    foreach (PYTHON_MODULE ${PYTHON_REQUIRED_MODULES})
+        execute_process(
+            COMMAND ${Python3_EXECUTABLE} -c "import ${PYTHON_MODULE}"
+            RESULT_VARIABLE PYTHON_MODULE_RESULT
+        )
+        if (NOT PYTHON_MODULE_RESULT EQUAL 0)
+            message(STATUS "Python module ${PYTHON_MODULE} not found, disabling amalgamation")
+            SET(TH_DISABLE_AMALGAMATION 1)
+        endif()
+    endforeach()
+endif()
+
+
+if (NOT TH_DISABLE_AMALGAMATION)
+    # run amalgamation.py with TH_CORE_SRC and TH_3RD_PARTY_SRC
+   function(amalgamation_generate OUTPUT_FILE)
+        # Amalgamation of th.c
+        add_custom_command(
+            OUTPUT ${OUTPUT_FILE}
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/amalgamate.py -o ${OUTPUT_FILE} ${TH_CORE_SRC} ${TH_3RD_PARTY_SRC}
+            COMMAND cp ${CMAKE_CURRENT_SOURCE_DIR}/include/th.h ${CMAKE_CURRENT_BINARY_DIR}/th.h
+            DEPENDS tiny_http
+            COMMENT "Running amalgamation.py on ${OUTPUT_FILE}"
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+            VERBATIM
+        )
+    endfunction(amalgamation_generate OUTPUT_FILE)
+    amalgamation_generate(${CMAKE_CURRENT_BINARY_DIR}/th.c)
+
+    # Add amalgamation target
+    # Not actually needed, but this makes sure that the amalgamation file compiles
+    add_library(tiny_http_amalgamation STATIC ${CMAKE_CURRENT_BINARY_DIR}/th.c)
+    target_include_directories(tiny_http_amalgamation
+        PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>/include
+        PRIVATE src
+    )
 endif()

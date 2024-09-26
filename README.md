@@ -80,7 +80,7 @@ $ make
 
 Example - Path capturing:
 ```c
-#include <th.h>
+#include "th.h"
 
 static th_err
 handler(void* userp, const th_request* req, th_response* res)
@@ -106,7 +106,7 @@ It's possible to specify a capture type by adding a colon before the parameter n
 
 Example - File serving:
 ```c
-#include <th.h>
+#include "th.h"
 
 static th_err
 handle_path(void* userp, const th_request* req, th_response* res)

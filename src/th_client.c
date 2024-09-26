@@ -26,10 +26,11 @@ th_client_observable_init(th_client_observable* observable,
                           th_socket* (*get_socket)(void* self),
                           th_address* (*get_address)(void* self),
                           th_err (*start)(void* self),
+                          void (*set_mode)(void* self, th_exchange_mode mode),
                           void (*destroy)(void* self),
                           th_client_observer* observer)
 {
-    th_client_init(&observable->base, get_socket, get_address, start, th_client_observable_destroy);
+    th_client_init(&observable->base, get_socket, get_address, start, set_mode, th_client_observable_destroy);
     th_client_observer_on_init(observer, observable);
     observable->destroy = destroy;
     observable->observer = observer;
@@ -49,6 +50,9 @@ th_tcp_client_get_address(void* self);
 
 TH_LOCAL(th_err)
 th_tcp_client_start(void* self);
+
+TH_LOCAL(void)
+th_tcp_client_set_mode(void* self, th_exchange_mode mode);
 
 TH_LOCAL(th_err)
 th_tcp_client_exchange_next_msg(th_tcp_client* client);
@@ -102,14 +106,15 @@ th_tcp_client_init(th_tcp_client* client, th_context* context,
                    th_allocator* allocator)
 {
     th_client_observable_init(&client->base, th_tcp_client_get_socket, th_tcp_client_get_address,
-                              th_tcp_client_start, th_tcp_client_destroy, observer);
+                              th_tcp_client_start, th_tcp_client_set_mode, th_tcp_client_destroy, observer);
+    th_tcp_client_msg_exchange_handler_init(&client->msg_exchange_handler, client);
     client->context = context;
     client->allocator = allocator ? allocator : th_default_allocator_get();
     client->router = router;
     client->fcache = fcache;
     th_tcp_socket_init(&client->socket, context, client->allocator);
     th_address_init(&client->addr);
-    th_tcp_client_msg_exchange_handler_init(&client->msg_exchange_handler, client);
+    client->mode = TH_EXCHANGE_MODE_NORMAL;
 }
 
 TH_PRIVATE(th_err)
@@ -147,18 +152,25 @@ th_tcp_client_start(void* self)
     return th_tcp_client_exchange_next_msg(client);
 }
 
+TH_LOCAL(void)
+th_tcp_client_set_mode(void* self, th_exchange_mode mode)
+{
+    th_tcp_client* client = (th_tcp_client*)self;
+    client->mode = mode;
+}
+
 TH_LOCAL(th_err)
 th_tcp_client_exchange_next_msg(th_tcp_client* client)
 {
     th_exchange* exchange = NULL;
     th_err err = TH_ERR_OK;
     if ((err = th_exchange_create(&exchange, th_tcp_client_get_socket(client),
-                                     client->router, client->fcache,
-                                     client->allocator, &client->msg_exchange_handler.base))
+                                  client->router, client->fcache,
+                                  client->allocator, &client->msg_exchange_handler.base))
         != TH_ERR_OK) {
         return err;
     }
-    th_exchange_start(exchange);
+    th_exchange_start(exchange, client->mode);
     return err;
 }
 
@@ -198,6 +210,9 @@ th_ssl_client_get_address(void* self);
 
 TH_LOCAL(th_err)
 th_ssl_client_start(void* self);
+
+TH_LOCAL(void)
+th_ssl_client_set_mode(void* self, th_exchange_mode mode);
 
 TH_LOCAL(th_err)
 th_ssl_client_exchange_next_msg(th_ssl_client* client);
@@ -299,19 +314,20 @@ th_ssl_client_init(th_ssl_client* client, th_context* context, th_ssl_context* s
                    th_allocator* allocator)
 {
     th_client_observable_init(&client->base, th_ssl_client_get_socket, th_ssl_client_get_address,
-                              th_ssl_client_start, th_ssl_client_destroy, observer);
-    client->context = context;
-    client->allocator = allocator;
-    client->router = router;
-    client->fcache = fcache;
-    th_ssl_socket_init(&client->socket, context, ssl_context, client->allocator);
-    th_address_init(&client->addr);
+                              th_ssl_client_start, th_ssl_client_set_mode, th_ssl_client_destroy, observer);
     th_ssl_client_io_handler_init(&client->msg_exchange_handler, client,
                                   th_ssl_client_msg_exchange_handler_fn, th_ssl_client_msg_exchange_handler_detroy);
     th_ssl_client_io_handler_init(&client->handshake_handler, client,
                                   th_ssl_client_handshake_handler_fn, th_ssl_client_handshake_handler_detroy);
     th_ssl_client_io_handler_init(&client->shutdown_handler, client,
                                   th_ssl_client_shutdown_handler_fn, th_ssl_client_shutdown_handler_detroy);
+    client->context = context;
+    client->allocator = allocator;
+    client->router = router;
+    client->fcache = fcache;
+    th_ssl_socket_init(&client->socket, context, ssl_context, client->allocator);
+    th_address_init(&client->addr);
+    client->mode = TH_EXCHANGE_MODE_NORMAL;
 }
 
 TH_PRIVATE(th_err)
@@ -358,18 +374,25 @@ th_ssl_client_start(void* self)
     return TH_ERR_OK;
 }
 
+TH_LOCAL(void)
+th_ssl_client_set_mode(void* self, th_exchange_mode mode)
+{
+    th_ssl_client* client = (th_ssl_client*)self;
+    client->mode = mode;
+}
+
 TH_LOCAL(th_err)
 th_ssl_client_exchange_next_msg(th_ssl_client* client)
 {
     th_exchange* exchange = NULL;
     th_err err = TH_ERR_OK;
     if ((err = th_exchange_create(&exchange, th_ssl_client_get_socket(client),
-                                     client->router, client->fcache,
-                                     client->allocator, &client->msg_exchange_handler.base))
+                                  client->router, client->fcache,
+                                  client->allocator, &client->msg_exchange_handler.base))
         != TH_ERR_OK) {
         return err;
     }
-    th_exchange_start(exchange);
+    th_exchange_start(exchange, client->mode);
     return TH_ERR_OK;
 }
 

@@ -20,6 +20,7 @@ struct th_client {
     th_socket* (*get_socket)(void* self);
     th_address* (*get_address)(void* self);
     th_err (*start)(void* self);
+    void (*set_mode)(void* self, th_exchange_mode mode);
 };
 
 /** th_client_init
@@ -31,12 +32,14 @@ th_client_init(th_client* client,
                th_socket* (*get_socket)(void* self),
                th_address* (*get_address)(void* self),
                th_err (*start)(void* self),
+               void (*set_mode)(void* self, th_exchange_mode mode),
                void (*destroy)(void* self))
 {
     th_refcounted_init(&client->base, destroy);
     client->get_socket = get_socket;
     client->get_address = get_address;
     client->start = start;
+    client->set_mode = set_mode;
 }
 
 TH_INLINE(th_socket*)
@@ -55,6 +58,12 @@ TH_INLINE(th_err)
 th_client_start(th_client* client)
 {
     return client->start(client);
+}
+
+TH_INLINE(void)
+th_client_set_mode(th_client* client, th_exchange_mode mode)
+{
+    client->set_mode(client, mode);
 }
 
 TH_INLINE(th_client*)
@@ -117,13 +126,14 @@ typedef struct th_tcp_client_msg_exchange_handler {
 
 struct th_tcp_client {
     th_client_observable base;
+    th_tcp_client_msg_exchange_handler msg_exchange_handler;
     th_tcp_socket socket;
     th_address addr;
     th_context* context;
     th_allocator* allocator;
     th_router* router;
     th_fcache* fcache;
-    th_tcp_client_msg_exchange_handler msg_exchange_handler;
+    th_exchange_mode mode;
 };
 
 TH_PRIVATE(th_err)
@@ -143,15 +153,16 @@ typedef struct th_ssl_client_io_handler {
 
 struct th_ssl_client {
     th_client_observable base;
+    th_ssl_client_io_handler msg_exchange_handler;
+    th_ssl_client_io_handler handshake_handler;
+    th_ssl_client_io_handler shutdown_handler;
     th_ssl_socket socket;
     th_address addr;
     th_context* context;
     th_allocator* allocator;
     th_router* router;
     th_fcache* fcache;
-    th_ssl_client_io_handler msg_exchange_handler;
-    th_ssl_client_io_handler handshake_handler;
-    th_ssl_client_io_handler shutdown_handler;
+    th_exchange_mode mode;
 };
 
 TH_PRIVATE(th_err)

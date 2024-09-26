@@ -3,6 +3,8 @@
 
 #include <th.h>
 
+#include "th_utility.h"
+
 typedef struct th_refcounted {
     unsigned int refcount;
     void (*destroy)(void* self);

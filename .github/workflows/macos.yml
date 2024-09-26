@@ -1,0 +1,35 @@
+name: MacOS
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          brew install gperf
+      - name: Set up Python 3.8
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.8'
+      - name: Install Python dependencies
+        run: |
+          pip install -r requirements.txt
+      - name: Build
+        run: |
+          mkdir build; cd build
+          cmake ..
+          make -j$(nproc)
+      - name: Test
+        run: |
+          cd build
+          ctest

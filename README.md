@@ -42,6 +42,7 @@ but I'll be adding more features and fixing bugs if I have the time.
 ## Dependencies
 - OpenSSL (optional, for HTTPS support)
 - gperf (optinal, for binary builds)
+- python3 (optional, for running the amalgamation script)
 - picohttpparser (included) - a small, fast HTTP parser
 - The C standard library
 

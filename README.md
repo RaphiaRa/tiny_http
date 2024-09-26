@@ -4,10 +4,10 @@ It is not designed to be a full-fledged web server, but rather a simple tool to 
 
 Hello, World! example:
 ```c
-#include <th.h>
+#include "th.h"
 
 static th_err
-handler(void* userp, th_request* req, th_response* res)
+handler(void* userp, const th_request* req, th_response* res)
 {
     th_set_body(res, "Hello, World!");
     th_add_header(res, "Content-Type", "text/plain");
@@ -24,6 +24,14 @@ int main()
         th_poll(server, 1000);
     }
 }
+```
+Simply copy the code above to a file (e.g. `hello.c`) where you have the `th.h` and `th.c` files, and compile it with:
+```sh
+$ gcc -o hello hello.c th.c
+```
+Then run the server with:
+```sh
+$ ./hello
 ```
 
 I wrote this library because I wanted a simple drop-in solution for the legacy C and C++ codebases I work with, hence the lack of dependencies and new language features. It lacks lots of important features and is not production-ready,
@@ -75,7 +83,7 @@ Example - Path capturing:
 #include <th.h>
 
 static th_err
-handler(void* userp, th_request* req, th_response* res)
+handler(void* userp, const th_request* req, th_response* res)
 {
     const char* msg = th_get_path_param(req, "msg");
     th_body_printf(res, "Hello, %s!", msg);
@@ -101,7 +109,7 @@ Example - File serving:
 #include <th.h>
 
 static th_err
-handle_path(void* userp, th_request* req, th_response* res)
+handle_path(void* userp, const th_request* req, th_response* res)
 {
     const char* path = th_get_path_param(req, "path");
     th_body_from_file(res, "root", path);
@@ -109,7 +117,7 @@ handle_path(void* userp, th_request* req, th_response* res)
 }
 
 static th_err
-handle_index(void* userp, th_request* req, th_response* res)
+handle_index(void* userp, const th_request* req, th_response* res)
 {
     th_body_from_file(res, "root", "index.html");
     return TH_ERR_OK;

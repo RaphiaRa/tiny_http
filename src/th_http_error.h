@@ -65,8 +65,17 @@ th_http_strerror(int code)
     case TH_CODE_INTERNAL_SERVER_ERROR:
         return "Internal Server Error";
         break;
+    case TH_CODE_SERVICE_UNAVAILABLE:
+        return "Service Unavailable";
+        break;
     case TH_CODE_NOT_IMPLEMENTED:
         return "Method Not Implemented";
+        break;
+    case TH_CODE_REQUEST_TIMEOUT:
+        return "Request Timeout";
+        break;
+    case TH_CODE_TOO_MANY_REQUESTS:
+        return "Too Many Requests";
         break;
     default:
         return "Unknown";

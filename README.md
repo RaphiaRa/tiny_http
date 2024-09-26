@@ -41,6 +41,7 @@ but I'll be adding more features and fixing bugs if I have the time.
 
 ## Dependencies
 - OpenSSL (optional, for HTTPS support)
+- gperf (optinal, for binary builds)
 - picohttpparser (included) - a small, fast HTTP parser
 - The C standard library
 
@@ -59,7 +60,7 @@ $ gcc -o myserver myserver.c th.c -lssl -lcrypto -DTH_WITH_SSL
 
 ## Building the project and CMake integration
 
-Library builds, examples, and tests can be built using CMake.
+Library builds, examples, and tests can be built using CMake (This requires gperf to be installed).
 ```sh
 $ mkdir build; cd build
 $ cmake ..

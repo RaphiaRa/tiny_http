@@ -33,6 +33,8 @@ struct th_request {
      */
     th_heap_string_vec heap_strings;
     th_buf_vec buffer;
+    /* content_len as specified in the Content-Length header */
+    size_t content_len;
     size_t data_len;
     size_t content_buf_len;
     size_t content_buf_pos;

@@ -88,7 +88,25 @@ TH_TEST_BEGIN(request)
         TH_SHUTDOWN_BASIC(context, request, socket);
     }
     TH_TEST_CASE_END
-    TH_TEST_CASE_BEGIN(request_read_content)
+    TH_TEST_CASE_BEGIN(request_read_content_post)
+    {
+        TH_SETUP_BASIC(context, request, socket);
+        mock_data_set("POST / HTTP/1.1\r\nHost: example.com\r\nContent-Length: 5\r\n\r\nhello");
+        th_request_async_read(&socket.base, th_default_allocator_get(), &request, &handler);
+        while (1) {
+            if (th_context_poll(&context, -1) != TH_ERR_OK)
+                break;
+        }
+        TH_EXPECT(last_err == TH_ERR_OK);
+        TH_EXPECT(request.method == TH_METHOD_POST);
+        TH_EXPECT(strcmp(request.uri_path, "/") == 0);
+        TH_EXPECT(request.minor_version == 1);
+        th_buffer buffer = th_get_body(&request);
+        TH_EXPECT(strncmp(buffer.ptr, "hello", buffer.len) == 0);
+        TH_SHUTDOWN_BASIC(context, request, socket);
+    }
+    TH_TEST_CASE_END
+    TH_TEST_CASE_BEGIN(request_read_content_get)
     {
         TH_SETUP_BASIC(context, request, socket);
         mock_data_set("GET / HTTP/1.1\r\nHost: example.com\r\nContent-Length: 5\r\n\r\nhello");
@@ -97,12 +115,7 @@ TH_TEST_BEGIN(request)
             if (th_context_poll(&context, -1) != TH_ERR_OK)
                 break;
         }
-        TH_EXPECT(last_err == TH_ERR_OK);
-        TH_EXPECT(request.method == TH_METHOD_GET);
-        TH_EXPECT(strcmp(request.uri_path, "/") == 0);
-        TH_EXPECT(request.minor_version == 1);
-        th_buffer buffer = th_get_body(&request);
-        TH_EXPECT(strncmp(buffer.ptr, "hello", buffer.len) == 0);
+        TH_EXPECT(last_err == TH_ERR_HTTP(TH_CODE_BAD_REQUEST));
         TH_SHUTDOWN_BASIC(context, request, socket);
     }
     TH_TEST_CASE_END

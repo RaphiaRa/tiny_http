@@ -199,6 +199,79 @@ th_request_read_handle_content(th_request_read_handler* handler, size_t len)
     th_request_read_handler_complete(handler, body_len, TH_ERR_OK);
 }
 
+TH_LOCAL(th_err)
+th_request_handle_headers(th_request* request, struct phr_header* headers, size_t num_headers)
+{
+    // indirection array for cookie headers
+    // Some clients send multiple cookie headers even though it's not allowed
+    size_t cookie_headers[TH_CONFIG_MAX_HEADER_NUM];
+    size_t num_cookie_headers = 0;
+    // copy headers and parse the most important ones
+    th_cstr_map_reserve(&request->headers, num_headers);
+    th_err err = TH_ERR_OK;
+    for (size_t i = 0; i < num_headers; i++) {
+        th_string key = th_string_make(headers[i].name, headers[i].name_len);
+        th_string value = th_string_make(headers[i].value, headers[i].value_len);
+        th_mut_string_tolower((th_mut_string){th_buf_vec_at(&request->buffer, (size_t)(key.ptr - th_buf_vec_begin(&request->buffer))), key.len});
+        th_header_id hid = th_header_id_from_string(key.ptr, key.len);
+        switch (hid) {
+        case TH_HEADER_ID_CONTENT_LENGTH: {
+            unsigned int len;
+            if ((err = th_string_to_uint(value, &len)) != TH_ERR_OK) {
+                return err;
+            }
+            request->content_len = len;
+            break;
+        }
+        case TH_HEADER_ID_CONNECTION:
+            if (TH_STRING_EQ(value, "close")) {
+                request->close = true;
+            }
+            break;
+        case TH_HEADER_ID_RANGE:
+            if (request->method == TH_METHOD_GET) {
+                return TH_ERR_HTTP(TH_CODE_RANGE_NOT_SATISFIABLE);
+            } else {
+                return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
+            }
+        case TH_HEADER_ID_COOKIE:
+            // Handle cookie headers later to better use the arena allocator
+            if (num_cookie_headers == TH_CONFIG_MAX_HEADER_NUM) {
+                return TH_ERR_HTTP(TH_CODE_REQUEST_HEADER_FIELDS_TOO_LARGE);
+            }
+            cookie_headers[num_cookie_headers++] = i;
+            break;
+        case TH_HEADER_ID_CONTENT_TYPE:
+            if (request->method == TH_METHOD_POST) {
+                if (th_string_eq(value, TH_STRING("application/x-www-form-urlencoded"))) {
+                    request->parse_body_params = true;
+                    //} else if (th_string_eq(th_string_substr(value, 0, th_string_find_first(value, 0, ';')), TH_STRING("multipart/form-data"))) {
+                } else {
+                    return TH_ERR_HTTP(TH_CODE_UNSUPPORTED_MEDIA_TYPE);
+                }
+            }
+            break;
+        case TH_HEADER_ID_TRANSFER_ENCODING:
+            return TH_ERR_HTTP(TH_CODE_NOT_IMPLEMENTED);
+        default:
+            break;
+        }
+        // store the header
+        if ((err = th_request_store_header(request, key, value)) != TH_ERR_OK) {
+            return err;
+        }
+    }
+
+    // parse cookie headers
+    for (size_t i = 0; i < num_cookie_headers; i++) {
+        th_string value = th_string_make(headers[cookie_headers[i]].value, headers[cookie_headers[i]].value_len);
+        if ((err = th_request_parse_cookie_list(request, value)) != TH_ERR_OK) {
+            return err;
+        }
+    }
+    return TH_ERR_OK;
+}
+
 TH_LOCAL(void)
 th_request_read_handle_header(th_request_read_handler* handler, size_t len)
 {
@@ -218,7 +291,7 @@ th_request_read_handle_header(th_request_read_handler* handler, size_t len)
         if (data_len == buf_len) {
             if (buf_len == TH_CONFIG_LARGE_HEADER_LEN) {
                 // We have reached the maximum header length
-                th_request_read_handler_complete(handler, 0, TH_ERR_HTTP(TH_CODE_REQUEST_HEADER_TOO_LARGE));
+                th_request_read_handler_complete(handler, 0, TH_ERR_HTTP(TH_CODE_REQUEST_HEADER_FIELDS_TOO_LARGE));
                 return;
             }
             th_buf_vec_resize(&request->buffer, TH_CONFIG_LARGE_HEADER_LEN);
@@ -237,90 +310,35 @@ th_request_read_handle_header(th_request_read_handler* handler, size_t len)
     }
     request->method = mm->method;
 
-    // parse headers
-    // content length as specified in the header
-    size_t content_len = 0;
-
-    // indirection array for cookie headers
-    // Some clients send multiple cookie headers even though it's not allowed
-    size_t cookie_headers[TH_CONFIG_MAX_HEADER_NUM];
-    size_t num_cookie_headers = 0;
-    // copy headers and parse the most important ones
-    th_cstr_map_reserve(&request->headers, num_headers);
-    th_err err = TH_ERR_OK;
-    for (size_t i = 0; i < num_headers; i++) {
-        th_string key = th_string_make(headers[i].name, headers[i].name_len);
-        th_string value = th_string_make(headers[i].value, headers[i].value_len);
-        th_mut_string_tolower((th_mut_string){th_buf_vec_at(&request->buffer, (size_t)(key.ptr - th_buf_vec_begin(&request->buffer))), key.len});
-        th_header_id hid = th_header_id_from_string(key.ptr, key.len);
-        switch (hid) {
-        case TH_HEADER_ID_CONTENT_LENGTH: {
-            unsigned int len;
-            if ((err = th_string_to_uint(value, &len)) != TH_ERR_OK) {
-                th_request_read_handler_complete(handler, 0, TH_ERR_HTTP(TH_CODE_BAD_REQUEST));
-                return;
-            }
-            content_len = len;
-            break;
-        }
-        case TH_HEADER_ID_CONNECTION:
-            if (TH_STRING_EQ(value, "close")) {
-                request->close = true;
-            }
-            break;
-        case TH_HEADER_ID_COOKIE:
-            // Handle cookie headers later to better use the arena allocator
-            if (num_cookie_headers == TH_CONFIG_MAX_HEADER_NUM) {
-                th_request_read_handler_complete(handler, 0, TH_ERR_HTTP(TH_CODE_BAD_REQUEST));
-                return;
-            }
-            cookie_headers[num_cookie_headers++] = i;
-            break;
-        case TH_HEADER_ID_CONTENT_TYPE:
-            if (request->method == TH_METHOD_POST) {
-                if (th_string_eq(value, TH_STRING("application/x-www-form-urlencoded"))) {
-                    request->parse_body_params = true;
-                } else if (th_string_eq(th_string_substr(value, 0, th_string_find_first(value, 0, ';')), TH_STRING("multipart/form-data"))) {
-                    th_request_read_handler_complete(handler, 0, TH_ERR_HTTP(TH_CODE_NOT_IMPLEMENTED));
-                    return;
-                }
-            }
-            break;
-        default:
-            break;
-        }
-        // store the header
-        if ((err = th_request_store_header(request, key, value)) != TH_ERR_OK) {
-            th_request_read_handler_complete(handler, 0, err);
-            return;
-        }
-    }
-
-    // parse cookie headers
-    for (size_t i = 0; i < num_cookie_headers; i++) {
-        th_string value = th_string_make(headers[cookie_headers[i]].value, headers[cookie_headers[i]].value_len);
-        if ((err = th_request_parse_cookie_list(request, value)) != TH_ERR_OK) {
-            th_request_read_handler_complete(handler, 0, err);
-            return;
-        }
-    }
-
     // find path query
+    th_err err = TH_ERR_OK;
     if ((err = th_request_parse_path(request, path)) != TH_ERR_OK) {
         th_request_read_handler_complete(handler, 0, err);
         return;
     }
 
+    // handle headers
+    if ((err = th_request_handle_headers(request, headers, num_headers)) != TH_ERR_OK) {
+        th_request_read_handler_complete(handler, 0, err);
+        return;
+    }
+
+    // Get is not allowed to have a body
+    if (request->method == TH_METHOD_GET && request->content_len > 0) {
+        th_request_read_handler_complete(handler, 0, TH_ERR_HTTP(TH_CODE_BAD_REQUEST));
+        return;
+    }
+
     // let's check whether we have all the content
     size_t trailing = data_len - header_len;
-    if (content_len == trailing) {
+    if (request->content_len == trailing) {
         th_buf_vec_resize(&request->buffer, data_len);
         th_buf_vec_shrink_to_fit(&request->buffer);
         request->content_buf = th_buf_vec_at(&request->buffer, header_len);
         request->content_buf_len = request->content_buf_pos = trailing;
         th_request_read_handle_content(handler, 0);
         return;
-    } else if (content_len == 0) { // trailing is not 0
+    } else if (request->content_len == 0) { // trailing is not 0
         th_buf_vec_resize(&request->buffer, data_len);
         th_buf_vec_shrink_to_fit(&request->buffer);
         th_request_read_handler_complete(handler, 0, TH_ERR_HTTP(TH_CODE_BAD_REQUEST));
@@ -328,7 +346,7 @@ th_request_read_handle_header(th_request_read_handler* handler, size_t len)
     }
 
     // check whether the content length is ok
-    if (content_len > TH_CONFIG_MAX_CONTENT_LEN) {
+    if (request->content_len > TH_CONFIG_MAX_CONTENT_LEN) {
         th_request_read_handler_complete(handler, 0, TH_ERR_HTTP(TH_CODE_PAYLOAD_TOO_LARGE));
         return;
     }
@@ -336,15 +354,15 @@ th_request_read_handle_header(th_request_read_handler* handler, size_t len)
     // we have more content, set up the buffer
     size_t remaining_buf = th_buf_vec_size(&request->buffer) - data_len;
     request->content_buf_pos = data_len - header_len; // content length we have so far
-    if (remaining_buf >= content_len) {
+    if (remaining_buf >= request->content_len) {
         request->content_buf = th_buf_vec_at(&request->buffer, header_len);
         request->content_buf_len = remaining_buf;
-    } else if (th_buf_vec_size(&request->buffer) >= content_len) {
+    } else if (th_buf_vec_size(&request->buffer) >= request->content_len) {
         memmove(th_buf_vec_at(&request->buffer, 0), th_buf_vec_at(&request->buffer, header_len), request->content_buf_pos);
         request->content_buf = th_buf_vec_at(&request->buffer, 0);
         request->content_buf_len = th_buf_vec_size(&request->buffer) - request->content_buf_pos;
     } else {
-        th_buf_vec_resize(&request->buffer, content_len);
+        th_buf_vec_resize(&request->buffer, request->content_len);
         memmove(th_buf_vec_at(&request->buffer, 0), th_buf_vec_at(&request->buffer, header_len), request->content_buf_pos);
         request->content_buf = th_buf_vec_at(&request->buffer, 0);
         request->content_buf_len = th_buf_vec_size(&request->buffer) - request->content_buf_pos;

@@ -12,9 +12,9 @@ typedef enum th_header_id {
     TH_HEADER_ID_CONTENT_TYPE,
     TH_HEADER_ID_DATE,
     TH_HEADER_ID_SERVER,
+    TH_HEADER_ID_COOKIE,
     TH_HEADER_ID_MAX,
     TH_HEADER_ID_UNKNOWN = TH_HEADER_ID_MAX,
-    TH_HEADER_ID_COOKIE,
 } th_header_id;
 
 struct th_header_id_mapping {

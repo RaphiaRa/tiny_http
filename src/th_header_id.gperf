@@ -17,5 +17,7 @@ connection, TH_HEADER_ID_CONNECTION
 content-type, TH_HEADER_ID_CONTENT_TYPE
 content-length, TH_HEADER_ID_CONTENT_LENGTH
 cookie, TH_HEADER_ID_COOKIE
+transfer-encoding, TH_HEADER_ID_TRANSFER_ENCODING
+range, TH_HEADER_ID_RANGE
 %%
 #pragma GCC diagnostic pop

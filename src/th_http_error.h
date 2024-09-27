@@ -59,9 +59,6 @@ th_http_strerror(int code)
     case TH_CODE_PAYLOAD_TOO_LARGE:
         return "Payload Too Large";
         break;
-    case TH_CODE_REQUEST_HEADER_TOO_LARGE:
-        return "Request Header Too Large";
-        break;
     case TH_CODE_INTERNAL_SERVER_ERROR:
         return "Internal Server Error";
         break;
@@ -76,6 +73,24 @@ th_http_strerror(int code)
         break;
     case TH_CODE_TOO_MANY_REQUESTS:
         return "Too Many Requests";
+        break;
+    case TH_CODE_URI_TOO_LONG:
+        return "URI Too Long";
+        break;
+    case TH_CODE_UNSUPPORTED_MEDIA_TYPE:
+        return "Unsupported Media Type";
+        break;
+    case TH_CODE_RANGE_NOT_SATISFIABLE:
+        return "Range Not Satisfiable";
+        break;
+    case TH_CODE_REQUEST_HEADER_FIELDS_TOO_LARGE:
+        return "Request Header Fields Too Large";
+        break;
+    case TH_CODE_UNAUTHORIZED:
+        return "Unauthorized";
+        break;
+    case TH_CODE_FORBIDDEN:
+        return "Forbidden";
         break;
     default:
         return "Unknown";

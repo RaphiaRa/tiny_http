@@ -215,6 +215,8 @@ th_poll_service_run(void* self, int timeout_ms)
     size_t reenqueue = 0;
     for (size_t i = 0; i < service->nfds; ++i) {
         th_poll_handle* handle = th_poll_handle_map_try_get(&service->handles, service->fds[i].fd);
+        if (!handle) // handle was removed
+            continue;
         short revents = service->fds[i].revents;
         short events = service->fds[i].events & (POLLIN | POLLOUT);
         int op_index = 0;

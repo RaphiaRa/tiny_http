@@ -540,6 +540,7 @@ th_request_init(th_request* request, th_allocator* allocator)
     th_heap_string_vec_init(&request->heap_strings, &request->vec_allocator.base);
     th_buf_vec_init(&request->buffer, request->allocator);
     request->data_len = 0;
+    request->content_len = 0;
     request->content_buf = NULL;
     request->content_buf_len = 0;
     request->content_buf_pos = 0;

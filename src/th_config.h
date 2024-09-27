@@ -78,7 +78,7 @@
 
 #if TH_WITH_SENDFILE
 #if defined(TH_CONFIG_OS_LINUX)
-#define TH_CONFIG_WITH_LINUX_SENDFILE 1
+//#define TH_CONFIG_WITH_LINUX_SENDFILE 1
 #elif defined(TH_CONFIG_OS_OSX) || defined(TH_CONFIG_OS_FreeBSD) || defined(TH_CONFIG_OS_NetBSD) || defined(TH_CONFIG_OS_OpenBSD)
 #define TH_CONFIG_WITH_BSD_SENDFILE 1
 #endif

@@ -226,6 +226,8 @@ th_request_handle_headers(th_request* request, struct phr_header* headers, size_
         case TH_HEADER_ID_CONNECTION:
             if (TH_STRING_EQ(value, "close")) {
                 request->close = true;
+            } else if (TH_STRING_EQ(value, "keep-alive")) {
+                request->close = false;
             }
             break;
         case TH_HEADER_ID_RANGE:
@@ -301,7 +303,8 @@ th_request_read_handle_header(th_request_read_handler* handler, size_t len)
     }
     size_t header_len = (size_t)pret;
     TH_LOG_DEBUG("%p: Parsed request: %.*s %.*s HTTP/%d.%d", request, (int)method.len, method.ptr, (int)path.len, path.ptr, 1, request->minor_version);
-
+    if (request->minor_version == 0)
+        request->close = true; // HTTP/1.0 defaults to close
     // find method
     struct th_method_mapping* mm = th_method_mapping_find(method.ptr, method.len);
     if (!mm) {

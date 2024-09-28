@@ -57,10 +57,10 @@ th_dir_mgr_add(th_dir_mgr* mgr, th_string label, th_string path)
     if ((err = th_dir_map_set(&mgr->map, th_dir_mgr_get_last_string(mgr), dir)) != TH_ERR_OK)
         goto cleanup_string;
     return TH_ERR_OK;
-cleanup_dir:
-    th_dir_deinit(&dir);
 cleanup_string:
     th_dir_mgr_remove_last_string(mgr);
+cleanup_dir:
+    th_dir_deinit(&dir);
     return err;
 }
 

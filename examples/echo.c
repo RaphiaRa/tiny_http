@@ -20,10 +20,6 @@ const char* method_strings[] = {
     "PUT",
     "DELETE",
     "PATCH",
-    "HEAD",
-    "OPTIONS",
-    "CONNECT",
-    "TRACE",
 };
 
 static th_err
@@ -43,7 +39,7 @@ handler(void* userp, const th_request* req, th_response* resp)
     iter = th_map_begin(th_get_cookies(req));
     for (; iter; iter = th_map_next(th_get_cookies(req), iter)) {
         len += (size_t)snprintf(buf + len, buf_len - len, "  %s: %s\n", iter->key, iter->value);
-    } 
+    }
     len += (size_t)snprintf(buf + len, buf_len - len, "Query params:\n");
     iter = th_map_begin(th_get_query_params(req));
     for (; iter; iter = th_map_next(th_get_query_params(req), iter)) {

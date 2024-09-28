@@ -23,13 +23,13 @@ th_tcp_socket_set_fd_options(int fd)
     int flags = fcntl(fd, F_GETFL, 0);
     if (flags == -1
         || fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1) {
-        TH_LOG_ERROR("Failed to set non-blocking: %s", th_strerror(TH_ERR_SYSTEM(errno)));
+        TH_LOG_WARN("Failed to set non-blocking: %s", th_strerror(TH_ERR_SYSTEM(errno)));
     }
     int optval = 1;
     if (setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &optval, sizeof(optval)) == -1)
-        TH_LOG_ERROR("Failed to disable nagle: %s", th_strerror(TH_ERR_SYSTEM(errno)));
+        TH_LOG_WARN("Failed to disable nagle: %s", th_strerror(TH_ERR_SYSTEM(errno)));
     if (setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &optval, sizeof(optval)) == -1)
-        TH_LOG_ERROR("Failed to enable keepalive: %s", th_strerror(TH_ERR_SYSTEM(errno)));
+        TH_LOG_WARN("Failed to enable keepalive: %s", th_strerror(TH_ERR_SYSTEM(errno)));
 }
 #elif defined(TH_CONFIG_OS_WIN)
 TH_LOCAL(void)
@@ -37,12 +37,12 @@ th_tcp_socket_set_fd_options(int fd)
 {
     u_long mode = 1;
     if (ioctlsocket(fd, FIONBIO, &mode) == SOCKET_ERROR)
-        TH_LOG_ERROR("Failed to set non-blocking: %s", th_strerror(TH_ERR_SYSTEM(WSAGetLastError())));
+        TH_LOG_WARN("Failed to set non-blocking: %s", th_strerror(TH_ERR_SYSTEM(WSAGetLastError())));
     int optval = 1;
     if (setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (const char*)&optval, sizeof(optval)) == SOCKET_ERROR)
-        TH_LOG_ERROR("Failed to disable nagle: %s", th_strerror(TH_ERR_SYSTEM(WSAGetLastError())));
+        TH_LOG_WARN("Failed to disable nagle: %s", th_strerror(TH_ERR_SYSTEM(WSAGetLastError())));
     if (setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, (const char*)&optval, sizeof(optval)) == SOCKET_ERROR)
-        TH_LOG_ERROR("Failed to enable keepalive: %s", th_strerror(TH_ERR_SYSTEM(WSAGetLastError())));
+        TH_LOG_WARN("Failed to enable keepalive: %s", th_strerror(TH_ERR_SYSTEM(WSAGetLastError())));
 }
 #else
 TH_LOCAL(void)

@@ -300,7 +300,7 @@ th_request_read_handle_header(th_request_read_handler* handler, size_t len)
         return;
     }
     size_t header_len = (size_t)pret;
-    TH_LOG_DEBUG("Object %p: Parsed request: %.*s %.*s HTTP/%d.%d", request, (int)method.len, method.ptr, (int)path.len, path.ptr, 1, request->minor_version);
+    TH_LOG_DEBUG("%p: Parsed request: %.*s %.*s HTTP/%d.%d", request, (int)method.len, method.ptr, (int)path.len, path.ptr, 1, request->minor_version);
 
     // find method
     struct th_method_mapping* mm = th_method_mapping_find(method.ptr, method.len);

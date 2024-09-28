@@ -20,6 +20,12 @@ th_default_log_get(void);
 TH_PRIVATE(void)
 th_log_printf(int level, const char* fmt, ...) TH_MAYBE_UNUSED;
 
+#if TH_LOG_LEVEL <= TH_LOG_LEVEL_TRACE
+#define TH_LOG_TRACE(...) th_log_printf(TH_LOG_LEVEL_TRACE, "TRACE: [" TH_LOG_TAG "] " __VA_ARGS__)
+#else
+#define TH_LOG_TRACE(...) ((void)0)
+#endif
+
 #if TH_LOG_LEVEL <= TH_LOG_LEVEL_DEBUG
 #define TH_LOG_DEBUG(...) th_log_printf(TH_LOG_LEVEL_DEBUG, "DEBUG: [" TH_LOG_TAG "] " __VA_ARGS__)
 #else

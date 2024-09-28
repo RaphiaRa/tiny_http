@@ -84,12 +84,13 @@ const char* th_strerror(th_err err);
 /* error related declarations end */
 /* log declarations begin */
 
-#define TH_LOG_LEVEL_DEBUG 0
-#define TH_LOG_LEVEL_INFO 1
-#define TH_LOG_LEVEL_WARN 2
-#define TH_LOG_LEVEL_ERROR 3
-#define TH_LOG_LEVEL_FATAL 4
-#define TH_LOG_LEVEL_NONE 5
+#define TH_LOG_LEVEL_TRACE 0
+#define TH_LOG_LEVEL_DEBUG 1
+#define TH_LOG_LEVEL_INFO 2
+#define TH_LOG_LEVEL_WARN 3
+#define TH_LOG_LEVEL_ERROR 4
+#define TH_LOG_LEVEL_FATAL 5
+#define TH_LOG_LEVEL_NONE 6
 
 /** th_log
  * @brief Log interface. Library user can implement this interface and pass it to th_log_set

@@ -326,7 +326,7 @@ th_ssl_socket_io_handler_writev_with_file(th_ssl_socket_io_handler* handler, th_
                                               stream, offset, len, &result))
         != TH_ERR_OK) {
         if (TH_ERR_CODE(err) == SSL_ERROR_WANT_READ) {
-            TH_LOG_DEBUG("SSL_write wants read, switching to async read");
+            TH_LOG_TRACE("SSL_write wants read, switching to async read");
             handler->state = TH_SSL_IO_STATE_READ;
             th_smem_bio_get_wbuf(socket->rbio, &handler->buffer);
             th_tcp_socket_async_read(&socket->tcp_socket, handler->buffer.base, handler->buffer.len,
@@ -335,7 +335,7 @@ th_ssl_socket_io_handler_writev_with_file(th_ssl_socket_io_handler* handler, th_
             th_ssl_socket_io_handler_complete(handler, result, err);
         }
     } else {
-        TH_LOG_DEBUG("SSL_write %d bytes", (int)result);
+        TH_LOG_TRACE("SSL_write %d bytes", (int)result);
         handler->result = result;
         handler->state = TH_SSL_IO_STATE_WRITE;
         th_smem_bio_get_rdata(socket->wbio, &handler->buffer);
@@ -355,20 +355,20 @@ th_ssl_socket_io_handler_readv(th_ssl_socket_io_handler* handler, th_iov* iov, s
         || (BIO_pending(socket->wbio) > 0)) {
         if (BIO_pending(socket->wbio) > 0) {
             th_smem_bio_get_rdata(socket->wbio, &handler->buffer);
-            TH_LOG_DEBUG("[th_ssl_socket] SSL_read wants write, switching to async write");
+            TH_LOG_TRACE("SSL_read wants write, switching to async write");
             handler->state = TH_SSL_IO_STATE_WRITE;
             if (result > 0)
                 handler->result = result;
             th_socket_async_write_exact(&socket->tcp_socket.base, handler->buffer.base, handler->buffer.len,
                                         (th_socket_handler*)th_io_composite_forward(&handler->base, type));
         } else if (TH_ERR_CODE(err) == SSL_ERROR_WANT_READ) {
-            TH_LOG_DEBUG("[th_ssl_socket] SSL_read wants read, switching to async read");
+            TH_LOG_TRACE("SSL_read wants read, switching to async read");
             handler->state = TH_SSL_IO_STATE_READ;
             th_smem_bio_get_wbuf(socket->rbio, &handler->buffer);
             th_tcp_socket_async_read(&socket->tcp_socket, handler->buffer.base, handler->buffer.len,
                                      (th_socket_handler*)th_io_composite_forward(&handler->base, type));
         } else if (TH_ERR_CODE(err) == SSL_ERROR_ZERO_RETURN) {
-            TH_LOG_DEBUG("[th_ssl_socket] SSL_read zero return");
+            TH_LOG_TRACE("SSL_read zero return");
             th_ssl_socket_io_handler_complete(handler, 0, TH_ERR_EOF);
         } else {
             th_ssl_log_error_stack();
@@ -391,18 +391,18 @@ th_ssl_socket_io_handler_handshake(th_ssl_socket_io_handler* handler,
             if (err == TH_ERR_OK)
                 handler->result = 1; // handshake done
             th_smem_bio_get_rdata(socket->wbio, &handler->buffer);
-            TH_LOG_DEBUG("SSL_handshake wants write, switching to async write");
+            TH_LOG_TRACE("SSL_handshake wants write, switching to async write");
             handler->state = TH_SSL_IO_STATE_WRITE;
             th_socket_async_write_exact(&socket->tcp_socket.base, handler->buffer.base, handler->buffer.len,
                                         (th_socket_handler*)th_io_composite_forward(&handler->base, type));
         } else if (TH_ERR_CODE(err) == SSL_ERROR_WANT_READ) {
-            TH_LOG_DEBUG("SSL_handshake wants read, switching to async read");
+            TH_LOG_TRACE("SSL_handshake wants read, switching to async read");
             handler->state = TH_SSL_IO_STATE_READ;
             th_smem_bio_get_wbuf(socket->rbio, &handler->buffer);
             th_tcp_socket_async_read(&socket->tcp_socket, handler->buffer.base, handler->buffer.len,
                                      (th_socket_handler*)th_io_composite_forward(&handler->base, type));
         } else if (TH_ERR_CODE(err) == SSL_ERROR_ZERO_RETURN) {
-            TH_LOG_DEBUG("SSL_handshake zero return");
+            TH_LOG_TRACE("SSL_handshake zero return");
             th_ssl_socket_io_handler_complete(handler, 0, TH_ERR_EOF);
         } else {
             th_ssl_log_error_stack();

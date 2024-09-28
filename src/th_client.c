@@ -72,14 +72,18 @@ th_tcp_client_msg_exchange_handler_fn(void* self, size_t close, th_err err)
     th_tcp_client_msg_exchange_handler* handler = self;
     th_tcp_client* client = handler->client;
     if (err != TH_ERR_OK && err != TH_ERR_EOF) {
-        TH_LOG_ERROR("Object: %p: %s", client, th_strerror(err));
+        TH_LOG_ERROR("%p: %s", client, th_strerror(err));
+        return;
+    }
+    if (err == TH_ERR_EOF) {
+        TH_LOG_DEBUG("%p: Connection closed", client);
         return;
     }
     if (close) {
-        TH_LOG_DEBUG("Object: %p: Closing", client);
+        TH_LOG_DEBUG("%p: Closing", client);
     } else {
         if ((err = th_tcp_client_exchange_next_msg(th_tcp_client_ref(client))) != TH_ERR_OK) {
-            TH_LOG_ERROR("Object: %p: Failed to initiate processing of next message: %s", client, th_strerror(err));
+            TH_LOG_ERROR("%p: Failed to initiate processing of next message: %s", client, th_strerror(err));
         }
     }
 }
@@ -149,6 +153,7 @@ TH_LOCAL(th_err)
 th_tcp_client_start(void* self)
 {
     th_tcp_client* client = (th_tcp_client*)self;
+    TH_LOG_TRACE("%p: Starting", client);
     return th_tcp_client_exchange_next_msg(client);
 }
 
@@ -178,7 +183,7 @@ TH_LOCAL(void)
 th_tcp_client_destroy(void* self)
 {
     th_tcp_client* client = self;
-    TH_LOG_DEBUG("Object: %p Destroying", client);
+    TH_LOG_TRACE("%p: Destroying", client);
     th_tcp_socket_deinit(&client->socket);
     th_allocator_free(client->allocator, client);
 }
@@ -231,15 +236,19 @@ th_ssl_client_msg_exchange_handler_fn(void* self, size_t close, th_err err)
 {
     th_ssl_client_io_handler* handler = self;
     th_ssl_client* client = handler->client;
-    if (err != TH_ERR_OK) {
-        TH_LOG_ERROR("Object: %p: %s", client, th_strerror(err));
+    if (err != TH_ERR_OK && err != TH_ERR_EOF) {
+        TH_LOG_DEBUG("%p: %s", client, th_strerror(err));
+        return;
+    }
+    if (err == TH_ERR_EOF) {
+        TH_LOG_DEBUG("%p: Connection closed", client);
         return;
     }
     if (close) {
-        TH_LOG_DEBUG("Object: %p: Closing", client);
+        TH_LOG_DEBUG("%p: Closing", client);
     } else {
         if ((err = th_ssl_client_exchange_next_msg(th_ssl_client_ref(client))) != TH_ERR_OK) {
-            TH_LOG_ERROR("Object: %p: Failed to initiate processing of next message: %s", client, th_strerror(err));
+            TH_LOG_ERROR("%p: Failed to initiate processing of next message: %s", client, th_strerror(err));
         }
     }
 }
@@ -259,10 +268,10 @@ th_ssl_client_handshake_handler_fn(void* self, size_t len, th_err err)
     th_ssl_client_io_handler* handler = self;
     th_ssl_client* client = handler->client;
     if (err != TH_ERR_OK) {
-        TH_LOG_ERROR("Object: %p Handshake error: %s", client, th_strerror(err));
+        TH_LOG_ERROR("%p Handshake error: %s", client, th_strerror(err));
         return;
     }
-    TH_LOG_DEBUG("Object: %p Handshake complete", client);
+    TH_LOG_TRACE("%p Handshake complete", client);
     if ((err = th_ssl_client_exchange_next_msg((th_ssl_client*)th_client_ref((th_client*)client))) != TH_ERR_OK) {
         TH_LOG_ERROR("Object; %p Failed to initiate processing of next message: %s", client, th_strerror(err));
     }
@@ -285,10 +294,10 @@ th_ssl_client_shutdown_handler_fn(void* self, size_t len, th_err err)
     (void)client;
     // Whatever the result, we should finish the client
     if (err != TH_ERR_OK) {
-        TH_LOG_ERROR("[th_ssl_client] %p Shutdown error: %s", client, th_strerror(err));
+        TH_LOG_ERROR("%p Shutdown error: %s", client, th_strerror(err));
         return;
     }
-    TH_LOG_DEBUG("[th_ssl_client] %p Shutdown complete", client);
+    TH_LOG_DEBUG("%p Shutdown complete", client);
 }
 
 TH_LOCAL(void)
@@ -368,7 +377,7 @@ TH_LOCAL(th_err)
 th_ssl_client_start(void* self)
 {
     th_ssl_client* client = (th_ssl_client*)self;
-    TH_LOG_DEBUG("Starting %p", client);
+    TH_LOG_TRACE("%p: Starting", client);
     th_ssl_socket_set_mode(&client->socket, TH_SSL_SOCKET_MODE_SERVER);
     th_ssl_client_start_handshake(client);
     return TH_ERR_OK;
@@ -400,7 +409,7 @@ TH_LOCAL(void)
 th_ssl_client_destroy(void* self)
 {
     th_ssl_client* client = self;
-    TH_LOG_DEBUG("[th_ssl_client] %p Destroying", client);
+    TH_LOG_TRACE("%p Destroying", client);
     th_ssl_socket_deinit(&client->socket);
     th_allocator_free(client->allocator, client);
 }

@@ -15,15 +15,15 @@ th_io_service_create(th_io_service** out, th_runner* runner, th_allocator* alloc
     (void)out;
 #if defined(TH_CONFIG_OS_MOCK)
     (void)allocator;
-    TH_LOG_INFO("Using mock");
+    TH_LOG_TRACE("Using mock");
     return th_mock_service_create(out, runner);
 #endif
 #if defined(TH_CONFIG_WITH_KQUEUE)
-    TH_LOG_INFO("Using kqueue");
+    TH_LOG_TRACE("Using kqueue");
     return th_kqueue_service_create(out, runner, allocator);
 #endif
 #if defined(TH_CONFIG_WITH_POLL)
-    TH_LOG_INFO("Using poll");
+    TH_LOG_TRACE("Using poll");
     return th_poll_service_create(out, runner, allocator);
 #endif
     TH_LOG_ERROR("No IO service implementation available");

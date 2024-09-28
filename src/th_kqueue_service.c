@@ -94,7 +94,7 @@ th_kqueue_service_run(void* self, int timeout_ms)
         return;
     }
     for (int i = 0; i < nev; ++i) {
-        TH_LOG_DEBUG("kevent: fd=%d, filter=%s, flags=%s, data=%d",
+        TH_LOG_TRACE("kevent: fd=%d, filter=%s, flags=%s, data=%d",
                      (int)evlist[i].ident, th_kqueue_fitler_to_string(evlist[i].filter),
                      th_kqueue_flags_to_string(evlist[i].flags), (int)evlist[i].data);
 

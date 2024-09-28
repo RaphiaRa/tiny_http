@@ -62,6 +62,7 @@ th_exchange_handle_request(th_exchange* handler)
         th_exchange_write_error_response((th_exchange*)th_io_composite_ref(&handler->base), err);
         return;
     }
+    response->minor_version = request->minor_version;
 
     if (request->close) {
         th_response_add_header(response, TH_STRING("Connection"), TH_STRING("close"));

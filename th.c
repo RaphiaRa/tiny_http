@@ -79,7 +79,7 @@
 
 #if TH_WITH_SENDFILE
 #if defined(TH_CONFIG_OS_LINUX)
-#define TH_CONFIG_WITH_LINUX_SENDFILE 1
+//#define TH_CONFIG_WITH_LINUX_SENDFILE 1
 #elif defined(TH_CONFIG_OS_OSX) || defined(TH_CONFIG_OS_FreeBSD) || defined(TH_CONFIG_OS_NetBSD) || defined(TH_CONFIG_OS_OpenBSD)
 #define TH_CONFIG_WITH_BSD_SENDFILE 1
 #endif
@@ -183,157 +183,117 @@
 /* Server related config end */
 
 /* End of th_config.h */
-/* Start of th_fmt.h */
+/* Start of th_string.h */
 
-
-#include <stddef.h>
 #include <stdint.h>
-#include <time.h>
+#include <string.h>
 
 
-TH_PRIVATE(const char*)
-th_fmt_uint_to_str(char* buf, size_t len, unsigned int val);
 
-TH_PRIVATE(const char*)
-th_fmt_uint_to_str_ex(char* buf, size_t len, unsigned int val, size_t* out_len);
+extern size_t th_string_npos;
 
-/** th_fmt_str_append
- * @brief Append a string to a buffer.
- * @param buf The buffer to append to.
- * @param pos The current position in the buffer (where to append).
- * @param len The length of the buffer.
- * @param str The string to append.
- * @return The number of characters appended.
+typedef struct th_string {
+    const char* ptr;
+    size_t len;
+} th_string;
+
+/** th_string_make
+ * @brief Helper function to create a th_string from a pointer and a length.
  */
+TH_INLINE(th_string)
+th_string_make(const char* ptr, size_t len)
+{
+    return (th_string){ptr, len};
+}
+
+/** th_string_from_cstr
+ * @brief Helper function to create a th_string from a null-terminated string.
+ */
+TH_INLINE(th_string)
+th_string_from_cstr(const char* str)
+{
+    return th_string_make(str, strlen(str));
+}
+
+/** th_string_eq
+ * @brief Helper function to compare two th_strings.
+ * @return 1 if the strings are equal, 0 otherwise.
+ */
+TH_PRIVATE(bool)
+th_string_eq(th_string a, th_string b);
+
+/** th_string_empty
+ * @brief Helper function to check if a th_string is empty.
+ * @return true if the string is empty, false otherwise.
+ */
+TH_INLINE(bool)
+th_string_empty(th_string str)
+{
+    return str.len == 0;
+}
+
+/** TH_STRING_INIT
+ * @brief Helper macro to initialize a th_string from string literal.
+ */
+#define TH_STRING_INIT(str) {"" str, sizeof(str) - 1}
+
+/** TH_STRING
+ * @brief Helper macro to create a th_string compound literal from a string literal.
+ */
+#define TH_STRING(str) ((th_string){"" str, sizeof(str) - 1})
+
+/** TH_STRING_EQ
+ * @brief Helper macro to compare a th_string with a string literal.
+ */
+#define TH_STRING_EQ(str, cmp) (th_string_eq(str, TH_STRING(cmp)))
+
+TH_PRIVATE(bool)
+th_string_is_uint(th_string str);
+
+TH_PRIVATE(th_err)
+th_string_to_uint(th_string str, unsigned int* out);
+
 TH_PRIVATE(size_t)
-th_fmt_str_append(char* buf, size_t pos, size_t len, const char* str);
+th_string_find_first(th_string str, size_t start, char c);
 
 TH_PRIVATE(size_t)
-th_fmt_strn_append(char* buf, size_t pos, size_t len, const char* str, size_t n);
+th_string_find_first_not(th_string str, size_t start, char c);
 
 TH_PRIVATE(size_t)
-th_fmt_strtime(char* buf, size_t len, th_date date);
-/* End of th_fmt.h */
-/* Start of th_io_op.h */
+th_string_find_last_not(th_string str, size_t start, char c);
 
+TH_PRIVATE(size_t)
+th_string_find_first_of(th_string str, size_t start, const char* chars);
 
+/*
+TH_PRIVATE(size_t)
+th_string_find_last(th_string str, size_t start, char c);
+*/
 
-#include <stddef.h>
+TH_PRIVATE(th_string)
+th_string_substr(th_string str, size_t start, size_t len);
 
-TH_PRIVATE(th_err)
-th_io_op_openat(void* self, size_t* result) TH_MAYBE_UNUSED;
+/** th_string_trim
+ * @brief Removes leading and trailing whitespace from a string.
+ * This doesn't modify the original string, just returns a new view of it.
+ * @param str The string to trim.
+ * @return A new string view with leading and trailing whitespace removed.
+ */
+TH_PRIVATE(th_string)
+th_string_trim(th_string str);
 
-TH_PRIVATE(th_err)
-th_io_op_open(void* self, size_t* result) TH_MAYBE_UNUSED;
+TH_PRIVATE(uint32_t)
+th_string_hash(th_string str);
 
-TH_PRIVATE(th_err)
-th_io_op_close(void* self, size_t* result) TH_MAYBE_UNUSED;
-
-TH_PRIVATE(th_err)
-th_io_op_read(void* self, size_t* result) TH_MAYBE_UNUSED;
-
-TH_PRIVATE(th_err)
-th_io_op_readv(void* self, size_t* result) TH_MAYBE_UNUSED;
-
-TH_PRIVATE(th_err)
-th_io_op_write(void* self, size_t* result) TH_MAYBE_UNUSED;
-
-TH_PRIVATE(th_err)
-th_io_op_writev(void* self, size_t* result) TH_MAYBE_UNUSED;
-
-TH_PRIVATE(th_err)
-th_io_op_send(void* self, size_t* result) TH_MAYBE_UNUSED;
-
-TH_PRIVATE(th_err)
-th_io_op_sendv(void* self, size_t* result) TH_MAYBE_UNUSED;
-
-TH_PRIVATE(th_err)
-th_io_op_accept(void* self, size_t* result) TH_MAYBE_UNUSED;
-
-TH_PRIVATE(th_err)
-th_io_op_sendfile(void* self, size_t* result) TH_MAYBE_UNUSED;
-
-/* End of th_io_op.h */
-/* Start of th_io_op_linux.h */
-
-
-
-#if defined(TH_CONFIG_WITH_LINUX_SENDFILE)
-TH_PRIVATE(th_err)
-th_io_op_linux_sendfile(void* self, size_t* result) TH_MAYBE_UNUSED;
-#endif
-
-/* End of th_io_op_linux.h */
-/* Start of th_ssl_context.h */
-
-
-#if TH_WITH_SSL
-
-#include <openssl/ssl.h>
-
-typedef struct th_ssl_context {
-    SSL_CTX* ctx;
-    BIO_METHOD* smem_method;
-} th_ssl_context;
-
-TH_PRIVATE(th_err)
-th_ssl_context_init(th_ssl_context* context, const char* key, const char* cert);
+typedef struct th_mut_string {
+    char* ptr;
+    size_t len;
+} th_mut_string;
 
 TH_PRIVATE(void)
-th_ssl_context_deinit(th_ssl_context* context);
+th_mut_string_tolower(th_mut_string str);
 
-#endif
-/* End of th_ssl_context.h */
-/* Start of th_iov.h */
-
-#include <stddef.h>
-#include <sys/uio.h>
-
-
-/** th_iov
- *@brief I/O vector.
- */
-
-typedef struct th_iov {
-    void* base;
-    size_t len;
-} th_iov;
-
-/** th_iov_consume
- *@brief Consume the I/O vector and
- * return the number of bytes that were not consumed.
- */
-TH_INLINE(size_t)
-th_iov_consume(th_iov** iov, size_t* iov_len, size_t consume)
-{
-    size_t zeroed = 0;
-    for (size_t i = 0; i < *iov_len; i++) {
-        if (consume < (*iov)[i].len) {
-            (*iov)[i].base = (char*)(*iov)[i].base + consume;
-            (*iov)[i].len -= consume;
-            consume = 0;
-            break;
-        }
-        consume -= (*iov)[i].len;
-        (*iov)[i].len = 0;
-        zeroed++;
-    }
-    *iov_len -= zeroed;
-    (*iov) += zeroed;
-    return consume;
-}
-
-TH_INLINE(size_t)
-th_iov_bytes(th_iov* iov, size_t iov_len)
-{
-    size_t bytes = 0;
-    for (size_t i = 0; i < iov_len; i++) {
-        bytes += iov[i].len;
-    }
-    return bytes;
-}
-
-/* End of th_iov.h */
+/* End of th_string.h */
 /* Start of th_log.h */
 
 
@@ -352,6 +312,12 @@ th_default_log_get(void);
 
 TH_PRIVATE(void)
 th_log_printf(int level, const char* fmt, ...) TH_MAYBE_UNUSED;
+
+#if TH_LOG_LEVEL <= TH_LOG_LEVEL_TRACE
+#define TH_LOG_TRACE(...) th_log_printf(TH_LOG_LEVEL_TRACE, "TRACE: [" TH_LOG_TAG "] " __VA_ARGS__)
+#else
+#define TH_LOG_TRACE(...) ((void)0)
+#endif
 
 #if TH_LOG_LEVEL <= TH_LOG_LEVEL_DEBUG
 #define TH_LOG_DEBUG(...) th_log_printf(TH_LOG_LEVEL_DEBUG, "DEBUG: [" TH_LOG_TAG "] " __VA_ARGS__)
@@ -700,217 +666,6 @@ th_pool_allocator_deinit(th_pool_allocator* pool);
     }
 
 /* End of th_allocator.h */
-/* Start of th_ssl_smem_bio.h */
-
-
-#if TH_WITH_SSL
-
-#include <openssl/bio.h>
-
-
-TH_PRIVATE(BIO_METHOD*)
-th_smem_bio(th_ssl_context* ssl_context);
-
-TH_PRIVATE(void)
-th_smem_bio_setup_buf(BIO* bio, th_allocator* allocator, size_t max_len);
-
-TH_PRIVATE(size_t)
-th_smem_ensure_buf_size(BIO* bio, size_t size);
-
-TH_PRIVATE(void)
-th_smem_bio_set_eof(BIO* bio);
-
-TH_PRIVATE(void)
-th_smem_bio_get_rdata(BIO* bio, th_iov* buf);
-
-TH_PRIVATE(void)
-th_smem_bio_get_wbuf(BIO* bio, th_iov* buf);
-
-TH_PRIVATE(void)
-th_smem_bio_inc_read_pos(BIO* bio, size_t len);
-
-TH_PRIVATE(void)
-th_smem_bio_inc_write_pos(BIO* bio, size_t len);
-
-#endif
-/* End of th_ssl_smem_bio.h */
-/* Start of th_io_op_mock.h */
-
-
-
-#if defined(TH_CONFIG_OS_MOCK)
-
-TH_PRIVATE(th_err)
-th_io_op_mock_read(void* self, size_t* result);
-
-TH_PRIVATE(th_err)
-th_io_op_mock_readv(void* self, size_t* result);
-
-TH_PRIVATE(th_err)
-th_io_op_mock_write(void* self, size_t* result);
-
-TH_PRIVATE(th_err)
-th_io_op_mock_writev(void* self, size_t* result);
-
-TH_PRIVATE(th_err)
-th_io_op_mock_send(void* self, size_t* result);
-
-TH_PRIVATE(th_err)
-th_io_op_mock_sendv(void* self, size_t* result);
-
-TH_PRIVATE(th_err)
-th_io_op_mock_accept(void* self, size_t* result);
-
-TH_PRIVATE(th_err)
-th_io_op_mock_sendfile(void* self, size_t* result);
-
-#endif
-
-/* End of th_io_op_mock.h */
-/* Start of th_header_id.h */
-
-
-#include <stddef.h>
-#include <stdint.h>
-
-typedef enum th_header_id {
-    TH_HEADER_ID_CONNECTION,
-    TH_HEADER_ID_CONTENT_LENGTH,
-    TH_HEADER_ID_CONTENT_TYPE,
-    TH_HEADER_ID_DATE,
-    TH_HEADER_ID_SERVER,
-    TH_HEADER_ID_MAX,
-    TH_HEADER_ID_UNKNOWN = TH_HEADER_ID_MAX,
-    TH_HEADER_ID_COOKIE,
-} th_header_id;
-
-struct th_header_id_mapping {
-    const char* name;
-    th_header_id id;
-};
-
-struct th_header_id_mapping*
-th_header_id_mapping_find(const char* name, size_t len);
-
-TH_INLINE(th_header_id)
-th_header_id_from_string(const char* name, size_t len)
-{
-    struct th_header_id_mapping* mapping = th_header_id_mapping_find(name, (unsigned int)len);
-    return mapping ? mapping->id : TH_HEADER_ID_UNKNOWN;
-}
-
-/* End of th_header_id.h */
-/* Start of th_string.h */
-
-#include <stdint.h>
-#include <string.h>
-
-
-
-extern size_t th_string_npos;
-
-typedef struct th_string {
-    const char* ptr;
-    size_t len;
-} th_string;
-
-/** th_string_make
- * @brief Helper function to create a th_string from a pointer and a length.
- */
-TH_INLINE(th_string)
-th_string_make(const char* ptr, size_t len)
-{
-    return (th_string){ptr, len};
-}
-
-/** th_string_from_cstr
- * @brief Helper function to create a th_string from a null-terminated string.
- */
-TH_INLINE(th_string)
-th_string_from_cstr(const char* str)
-{
-    return th_string_make(str, strlen(str));
-}
-
-/** th_string_eq
- * @brief Helper function to compare two th_strings.
- * @return 1 if the strings are equal, 0 otherwise.
- */
-TH_PRIVATE(bool)
-th_string_eq(th_string a, th_string b);
-
-/** th_string_empty
- * @brief Helper function to check if a th_string is empty.
- * @return true if the string is empty, false otherwise.
- */
-TH_INLINE(bool)
-th_string_empty(th_string str)
-{
-    return str.len == 0;
-}
-
-/** TH_STRING_INIT
- * @brief Helper macro to initialize a th_string from string literal.
- */
-#define TH_STRING_INIT(str) {"" str, sizeof(str) - 1}
-
-/** TH_STRING
- * @brief Helper macro to create a th_string compound literal from a string literal.
- */
-#define TH_STRING(str) ((th_string){"" str, sizeof(str) - 1})
-
-/** TH_STRING_EQ
- * @brief Helper macro to compare a th_string with a string literal.
- */
-#define TH_STRING_EQ(str, cmp) (th_string_eq(str, TH_STRING(cmp)))
-
-TH_PRIVATE(bool)
-th_string_is_uint(th_string str);
-
-TH_PRIVATE(th_err)
-th_string_to_uint(th_string str, unsigned int* out);
-
-TH_PRIVATE(size_t)
-th_string_find_first(th_string str, size_t start, char c);
-
-TH_PRIVATE(size_t)
-th_string_find_first_not(th_string str, size_t start, char c);
-
-TH_PRIVATE(size_t)
-th_string_find_last_not(th_string str, size_t start, char c);
-
-TH_PRIVATE(size_t)
-th_string_find_first_of(th_string str, size_t start, const char* chars);
-
-/*
-TH_PRIVATE(size_t)
-th_string_find_last(th_string str, size_t start, char c);
-*/
-
-TH_PRIVATE(th_string)
-th_string_substr(th_string str, size_t start, size_t len);
-
-/** th_string_trim
- * @brief Removes leading and trailing whitespace from a string.
- * This doesn't modify the original string, just returns a new view of it.
- * @param str The string to trim.
- * @return A new string view with leading and trailing whitespace removed.
- */
-TH_PRIVATE(th_string)
-th_string_trim(th_string str);
-
-TH_PRIVATE(uint32_t)
-th_string_hash(th_string str);
-
-typedef struct th_mut_string {
-    char* ptr;
-    size_t len;
-} th_mut_string;
-
-TH_PRIVATE(void)
-th_mut_string_tolower(th_mut_string str);
-
-/* End of th_string.h */
 /* Start of th_vec.h */
 
 
@@ -1152,6 +907,306 @@ TH_PRIVATE(void)
 th_dir_deinit(th_dir* dir);
 
 /* End of th_dir.h */
+/* Start of th_path.h */
+
+
+/**
+ * @brief th_path provides a bunch of helper functions to work with paths.
+ */
+
+/**
+ * @brief th_path_resolve resolves a path to a absolute path.
+ * @param dir The directory to resolve the path against.
+ * @param path The path to resolve.
+ * @param out The resolved path.
+ * @return TH_ERR_OK on success, otherwise an error code.
+ */
+TH_PRIVATE(th_err)
+th_path_resolve_against(th_string path, th_dir* dir, th_heap_string* out);
+
+TH_PRIVATE(th_err)
+th_path_resolve(th_string path, th_heap_string* out);
+
+TH_PRIVATE(bool)
+th_path_is_within(th_string path, th_dir* dir);
+
+TH_PRIVATE(bool)
+th_path_is_hidden(th_string path);
+
+/* End of th_path.h */
+/* Start of th_iov.h */
+
+#include <stddef.h>
+#include <sys/uio.h>
+
+
+/** th_iov
+ *@brief I/O vector.
+ */
+
+typedef struct th_iov {
+    void* base;
+    size_t len;
+} th_iov;
+
+/** th_iov_consume
+ *@brief Consume the I/O vector and
+ * return the number of bytes that were not consumed.
+ */
+TH_INLINE(size_t)
+th_iov_consume(th_iov** iov, size_t* iov_len, size_t consume)
+{
+    size_t zeroed = 0;
+    for (size_t i = 0; i < *iov_len; i++) {
+        if (consume < (*iov)[i].len) {
+            (*iov)[i].base = (char*)(*iov)[i].base + consume;
+            (*iov)[i].len -= consume;
+            consume = 0;
+            break;
+        }
+        consume -= (*iov)[i].len;
+        (*iov)[i].len = 0;
+        zeroed++;
+    }
+    *iov_len -= zeroed;
+    (*iov) += zeroed;
+    return consume;
+}
+
+TH_INLINE(size_t)
+th_iov_bytes(th_iov* iov, size_t iov_len)
+{
+    size_t bytes = 0;
+    for (size_t i = 0; i < iov_len; i++) {
+        bytes += iov[i].len;
+    }
+    return bytes;
+}
+
+/* End of th_iov.h */
+/* Start of th_system_error.h */
+
+
+#if defined(TH_CONFIG_OS_POSIX)
+#include <errno.h>
+#include <string.h>
+#elif defined(TH_CONFIG_OS_WIN)
+#include <windows.h>
+#endif
+
+TH_INLINE(const char*)
+th_system_strerror(int errc) TH_MAYBE_UNUSED;
+
+TH_INLINE(const char*)
+th_system_strerror(int errc)
+{
+#if defined(TH_CONFIG_OS_POSIX)
+    return strerror(errc);
+#elif defined(TH_CONFIG_OS_WIN)
+    static char buf[256];
+    FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, NULL, errc, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), buf, sizeof(buf), NULL);
+    return buf;
+#elif defined(TH_CONFIG_OS_MOCK)
+    (void)errc;
+    return "mock error";
+#endif
+}
+
+/* Define the system error codes that we use */
+#if defined(TH_CONFIG_OS_POSIX)
+#define TH_ENOENT ENOENT
+#define TH_EINTR EINTR
+#define TH_EIO EIO
+#define TH_EBADF EBADF
+#define TH_EBUSY EBUSY
+#define TH_EAGAIN EAGAIN
+#define TH_EWOULDBLOCK EWOULDBLOCK
+#define TH_ENOMEM ENOMEM
+#define TH_ENOSYS ENOSYS
+#define TH_ETIMEDOUT ETIMEDOUT
+#define TH_ECANCELED ECANCELED
+#elif defined(TH_CONFIG_OS_WIN)
+#define TH_ENOENT ERROR_FILE_NOT_FOUND
+#define TH_EINTR ERROR_INTERRUPT
+#define TH_EIO ERROR_IO_DEVICE
+#define TH_EBADF ERROR_BAD_FORMAT
+#define TH_EBUSY ERROR_BUSY
+#define TH_EAGAIN ERROR_RETRY
+#define TH_EWOULDBLOCK ERROR_RETRY
+#define TH_ENOMEM ERROR_OUTOFMEMORY
+#define TH_ENOSYS ERROR_NOT_SUPPORTED
+#define TH_ETIMEDOUT ERROR_TIMEOUT
+#define TH_ECANCELED ERROR_CANCELLED
+#elif defined(TH_CONFIG_OS_MOCK)
+#define TH_ENOENT 1
+#define TH_EINTR 2
+#define TH_EIO 3
+#define TH_EBUSY 4
+#define TH_EAGAIN 5
+#define TH_EWOULDBLOCK 6
+#define TH_ENOMEM 7
+#define TH_ENOSYS 8
+#define TH_ETIMEDOUT 9
+#define TH_ECANCELED 10
+#define TH_EBADF 11
+#endif
+
+/* End of th_system_error.h */
+/* Start of th_mock_syscall.h */
+
+#include <stddef.h>
+
+
+typedef struct th_mock_syscall {
+    int (*accept)(void);
+    int (*open)(void);
+    int (*lseek)(void);
+    int (*close)(void);
+    int (*read)(void* buf, size_t len);
+    int (*write)(size_t len);
+    int (*settime)(void);
+} th_mock_syscall;
+
+th_mock_syscall* th_mock_syscall_get(void);
+void th_mock_syscall_reset(void);
+
+int th_mock_accept(void);
+
+int th_mock_open(void);
+
+int th_mock_lseek(void);
+
+int th_mock_close(void);
+
+int th_mock_read(void* buf, size_t len);
+
+int th_mock_write(size_t len);
+
+int th_mock_settime(void);
+
+/* End of th_mock_syscall.h */
+/* Start of th_io_op_bsd.h */
+
+
+#if defined(TH_CONFIG_WITH_BSD_SENDFILE)
+TH_PRIVATE(th_err)
+th_io_op_bsd_sendfile(void* self, size_t* result) TH_MAYBE_UNUSED;
+#endif
+
+/* End of th_io_op_bsd.h */
+/* Start of th_ssl_error.h */
+
+#if TH_WITH_SSL
+
+
+TH_PRIVATE(void)
+th_ssl_log_error_stack(void);
+
+TH_PRIVATE(const char*)
+th_ssl_strerror(int code);
+
+TH_PRIVATE(th_err)
+th_ssl_handle_error_stack(void);
+
+#endif // TH_WITH_SSL
+/* End of th_ssl_error.h */
+/* Start of th_http_error.h */
+
+
+
+#include <errno.h>
+
+/** th_http_err
+ * @brief Converts a error code to a equivalent HTTP error code.
+ */
+TH_INLINE(th_err)
+th_http_error(th_err err)
+{
+    switch (TH_ERR_CATEGORY(err)) {
+    case TH_ERR_CATEGORY_SYSTEM:
+        switch (TH_ERR_CODE(err)) {
+            {
+            case TH_ENOENT:
+                return TH_ERR_HTTP(TH_CODE_NOT_FOUND);
+                break;
+            case TH_ETIMEDOUT:
+                return TH_ERR_HTTP(TH_CODE_REQUEST_TIMEOUT);
+                break;
+            default:
+                return TH_ERR_HTTP(TH_CODE_INTERNAL_SERVER_ERROR);
+                break;
+            }
+        }
+        break;
+    case TH_ERR_CATEGORY_HTTP:
+        return err;
+        break;
+    }
+    return TH_ERR_HTTP(TH_CODE_INTERNAL_SERVER_ERROR);
+}
+
+TH_INLINE(const char*)
+th_http_strerror(int code)
+{
+    switch (code) {
+    case TH_CODE_OK:
+        return "OK";
+        break;
+    case TH_CODE_MOVED_PERMANENTLY:
+        return "Moved Permanently";
+        break;
+    case TH_CODE_BAD_REQUEST:
+        return "Bad Request";
+        break;
+    case TH_CODE_NOT_FOUND:
+        return "Not Found";
+        break;
+    case TH_CODE_METHOD_NOT_ALLOWED:
+        return "Method Not Allowed";
+        break;
+    case TH_CODE_PAYLOAD_TOO_LARGE:
+        return "Payload Too Large";
+        break;
+    case TH_CODE_INTERNAL_SERVER_ERROR:
+        return "Internal Server Error";
+        break;
+    case TH_CODE_SERVICE_UNAVAILABLE:
+        return "Service Unavailable";
+        break;
+    case TH_CODE_NOT_IMPLEMENTED:
+        return "Method Not Implemented";
+        break;
+    case TH_CODE_REQUEST_TIMEOUT:
+        return "Request Timeout";
+        break;
+    case TH_CODE_TOO_MANY_REQUESTS:
+        return "Too Many Requests";
+        break;
+    case TH_CODE_URI_TOO_LONG:
+        return "URI Too Long";
+        break;
+    case TH_CODE_UNSUPPORTED_MEDIA_TYPE:
+        return "Unsupported Media Type";
+        break;
+    case TH_CODE_RANGE_NOT_SATISFIABLE:
+        return "Range Not Satisfiable";
+        break;
+    case TH_CODE_REQUEST_HEADER_FIELDS_TOO_LARGE:
+        return "Request Header Fields Too Large";
+        break;
+    case TH_CODE_UNAUTHORIZED:
+        return "Unauthorized";
+        break;
+    case TH_CODE_FORBIDDEN:
+        return "Forbidden";
+        break;
+    default:
+        return "Unknown";
+        break;
+    }
+}
+
+/* End of th_http_error.h */
 /* Start of th_file.h */
 
 
@@ -1598,6 +1653,153 @@ TH_PRIVATE(void)
 th_runner_deinit(th_runner* runner);
 
 /* End of th_runner.h */
+/* Start of th_mock_service.h */
+
+
+
+#if defined(TH_CONFIG_OS_MOCK)
+
+
+typedef struct th_mock_service th_mock_service;
+typedef struct th_mock_handle th_mock_handle;
+struct th_mock_handle {
+    th_io_handle base;
+    th_mock_service* service;
+    int fd;
+};
+
+struct th_mock_service {
+    th_io_service base;
+    th_runner* runner;
+};
+
+TH_PRIVATE(th_err)
+th_mock_service_create(th_io_service** out, th_runner* runner);
+
+#endif
+/* End of th_mock_service.h */
+/* Start of th_io_op_posix.h */
+
+
+
+#if defined(TH_CONFIG_OS_POSIX)
+
+TH_PRIVATE(th_err)
+th_io_op_posix_read(void* self, size_t* result);
+
+TH_PRIVATE(th_err)
+th_io_op_posix_readv(void* self, size_t* result);
+
+TH_PRIVATE(th_err)
+th_io_op_posix_write(void* self, size_t* result);
+
+TH_PRIVATE(th_err)
+th_io_op_posix_writev(void* self, size_t* result);
+
+TH_PRIVATE(th_err)
+th_io_op_posix_send(void* self, size_t* result);
+
+TH_PRIVATE(th_err)
+th_io_op_posix_sendv(void* self, size_t* result);
+
+TH_PRIVATE(th_err)
+th_io_op_posix_accept(void* self, size_t* result);
+
+TH_PRIVATE(th_err)
+th_io_op_posix_sendfile_mmap(void* self, size_t* result) TH_MAYBE_UNUSED;
+
+TH_PRIVATE(th_err)
+th_io_op_posix_sendfile_buffered(void* self, size_t* result) TH_MAYBE_UNUSED;
+
+#endif
+/* End of th_io_op_posix.h */
+/* Start of th_io_op_mock.h */
+
+
+
+#if defined(TH_CONFIG_OS_MOCK)
+
+TH_PRIVATE(th_err)
+th_io_op_mock_read(void* self, size_t* result);
+
+TH_PRIVATE(th_err)
+th_io_op_mock_readv(void* self, size_t* result);
+
+TH_PRIVATE(th_err)
+th_io_op_mock_write(void* self, size_t* result);
+
+TH_PRIVATE(th_err)
+th_io_op_mock_writev(void* self, size_t* result);
+
+TH_PRIVATE(th_err)
+th_io_op_mock_send(void* self, size_t* result);
+
+TH_PRIVATE(th_err)
+th_io_op_mock_sendv(void* self, size_t* result);
+
+TH_PRIVATE(th_err)
+th_io_op_mock_accept(void* self, size_t* result);
+
+TH_PRIVATE(th_err)
+th_io_op_mock_sendfile(void* self, size_t* result);
+
+#endif
+
+/* End of th_io_op_mock.h */
+/* Start of th_ssl_context.h */
+
+
+#if TH_WITH_SSL
+
+#include <openssl/ssl.h>
+
+typedef struct th_ssl_context {
+    SSL_CTX* ctx;
+    BIO_METHOD* smem_method;
+} th_ssl_context;
+
+TH_PRIVATE(th_err)
+th_ssl_context_init(th_ssl_context* context, const char* key, const char* cert);
+
+TH_PRIVATE(void)
+th_ssl_context_deinit(th_ssl_context* context);
+
+#endif
+/* End of th_ssl_context.h */
+/* Start of th_ssl_smem_bio.h */
+
+
+#if TH_WITH_SSL
+
+#include <openssl/bio.h>
+
+
+TH_PRIVATE(BIO_METHOD*)
+th_smem_bio(th_ssl_context* ssl_context);
+
+TH_PRIVATE(void)
+th_smem_bio_setup_buf(BIO* bio, th_allocator* allocator, size_t max_len);
+
+TH_PRIVATE(size_t)
+th_smem_ensure_buf_size(BIO* bio, size_t size);
+
+TH_PRIVATE(void)
+th_smem_bio_set_eof(BIO* bio);
+
+TH_PRIVATE(void)
+th_smem_bio_get_rdata(BIO* bio, th_iov* buf);
+
+TH_PRIVATE(void)
+th_smem_bio_get_wbuf(BIO* bio, th_iov* buf);
+
+TH_PRIVATE(void)
+th_smem_bio_inc_read_pos(BIO* bio, size_t len);
+
+TH_PRIVATE(void)
+th_smem_bio_inc_write_pos(BIO* bio, size_t len);
+
+#endif
+/* End of th_ssl_smem_bio.h */
 /* Start of th_io_composite.h */
 
 
@@ -1811,6 +2013,136 @@ th_socket_async_sendfile_exact(th_socket* sock, th_iov* iov, size_t iovcnt, th_f
 /* th_socket functionss end */
 
 /* End of th_socket.h */
+/* Start of th_acceptor.h */
+
+
+
+typedef struct th_acceptor {
+    th_context* context;
+    th_allocator* allocator;
+    th_io_handle* handle;
+} th_acceptor;
+
+typedef struct th_acceptor_opt {
+    bool reuse_addr;
+    bool reuse_port;
+} th_acceptor_opt;
+
+TH_PRIVATE(th_err)
+th_acceptor_init(th_acceptor* acceptor, th_context* context,
+                 th_allocator* allocator,
+                 const char* addr, const char* port);
+
+/** th_acceptor_async_accept
+ * @brief Asynchronously accept a new connection. And call the handler when the operation is complete.
+ * Both addr and sock must point to valid memory locations until the handler is called.
+ * @param acceptor The acceptor that will accept the new connection.
+ * @param addr Pointer to the address that will be filled with the address of the new connection.
+ * @param sock Pointer to the socket that will be filled with the new connection.
+ */
+TH_PRIVATE(void)
+th_acceptor_async_accept(th_acceptor* acceptor, th_address* addr, th_io_handler* handler);
+
+TH_PRIVATE(void)
+th_acceptor_cancel(th_acceptor* acceptor);
+
+TH_PRIVATE(void)
+th_acceptor_deinit(th_acceptor* acceptor);
+
+/* End of th_acceptor.h */
+/* Start of th_tcp_socket.h */
+
+
+/* th_tcp_socket begin */
+
+typedef struct th_tcp_socket {
+    th_socket base;
+    th_context* context;
+    th_allocator* allocator;
+    th_io_handle* handle;
+} th_tcp_socket;
+
+TH_PRIVATE(void)
+th_tcp_socket_init(th_tcp_socket* socket, th_context* context, th_allocator* allocator);
+
+/** th_socket_close
+ * @brief Closes the underlying file descriptor of the socket.
+ * while the socket object is still valid and can be reused.
+ */
+TH_PRIVATE(void)
+th_tcp_socket_close(th_tcp_socket* socket);
+
+TH_PRIVATE(void)
+th_tcp_socket_deinit(th_tcp_socket* socket);
+
+#define th_tcp_socket_set_fd(socket, fd) ((socket)->base.set_fd((socket), (fd)))
+
+#define th_tcp_socket_cancel(socket) ((socket)->base.cancel((socket)))
+
+#define th_tcp_socket_get_allocator(socket) ((socket)->base.get_allocator((socket)))
+
+#define th_tcp_socket_get_context(socket) ((socket)->base.get_context((socket)))
+
+#define th_tcp_socket_async_write(socket, addr, len, handler) ((socket)->base.async_write((socket), (addr), (len), (handler)))
+
+#define th_tcp_socket_async_writev(socket, iov, iovcnt, handler) ((socket)->base.async_writev((socket), (iov), (iovcnt), (handler)))
+
+#define th_tcp_socket_async_read(socket, addr, len, handler) ((socket)->base.async_read((socket), (addr), (len), (handler)))
+
+#define th_tcp_socket_async_readv(socket, iov, iovcnt, handler) ((socket)->base.async_readv((socket), (iov), (iovcnt), (handler)))
+
+#define th_tcp_socket_async_sendfile(socket, header, iovcnt, stream, offset, len, handler) ((socket)->base.async_sendfile((socket), (header), (iovcnt), (stream), (offset), (len), (handler)))
+
+/* th_tcp_socket end */
+
+/* End of th_tcp_socket.h */
+/* Start of th_ssl_socket.h */
+#if TH_WITH_SSL
+
+
+#include <openssl/ssl.h>
+
+/* th_ssl_socket begin */
+
+typedef struct th_ssl_socket {
+    th_socket base;
+    th_tcp_socket tcp_socket;
+    SSL* ssl;
+    BIO* wbio; // ssl output buffer
+    BIO* rbio; // ssl input buffer
+} th_ssl_socket;
+
+typedef enum th_ssl_socket_mode {
+    TH_SSL_SOCKET_MODE_SERVER,
+    TH_SSL_SOCKET_MODE_CLIENT
+} th_ssl_socket_mode;
+
+TH_PRIVATE(th_err)
+th_ssl_socket_init(th_ssl_socket* socket, th_context* context, th_ssl_context* ssl_context, th_allocator* allocator);
+
+/** ssl socket specific functions */
+
+TH_PRIVATE(void)
+th_ssl_socket_set_mode(th_ssl_socket* socket, th_ssl_socket_mode mode);
+
+TH_PRIVATE(void)
+th_ssl_socket_async_handshake(th_ssl_socket* socket, th_socket_handler* handler);
+
+TH_PRIVATE(void)
+th_ssl_socket_async_shutdown(th_ssl_socket* socket, th_socket_handler* handler);
+
+/** th_socket_close
+ * @brief Closes the underlying file descriptor of the socket.
+ * while the socket object is still valid and can be reused.
+ */
+TH_PRIVATE(void)
+th_ssl_socket_close(th_ssl_socket* socket);
+
+TH_PRIVATE(void)
+th_ssl_socket_deinit(th_ssl_socket* socket);
+
+#endif
+/* End of th_ssl_socket.h */
 /* Start of th_hash.h */
 
 #include <stddef.h>
@@ -2153,6 +2485,78 @@ TH_DEFINE_HASHMAP(th_cstr_map, const char*, const char*, th_cstr_hash, th_cstr_e
 /* th_cstr_map end */
 
 /* End of th_hashmap.h */
+/* Start of th_request.h */
+
+
+
+#define TH_REQUEST_MAP_ARENA_LEN 512
+#define TH_REQUEST_STRING_ARENA_LEN 512
+#define TH_REQUEST_VEC_ARENA_LEN 1024
+
+struct th_request {
+    th_allocator* allocator;
+    const char* uri_path;
+    const char* uri_query;
+    void* map_arena;
+    void* vec_arena;
+    void* string_arena;
+    th_arena_allocator map_allocator;
+    th_arena_allocator vec_allocator;
+    th_arena_allocator string_allocator;
+    th_cstr_map cookies;
+    th_cstr_map headers;
+    th_cstr_map query_params;
+    th_cstr_map body_params;
+    th_cstr_map path_params;
+    /** heap_strings
+     * This vector is used to store heap allocated strings that are used in the request.
+     * It's used to ensure that all memory is deallocated when the request is destroyed.
+     */
+    th_heap_string_vec heap_strings;
+    th_buf_vec buffer;
+    /* content_len as specified in the Content-Length header */
+    size_t content_len;
+    size_t data_len;
+    size_t content_buf_len;
+    size_t content_buf_pos;
+    char* content_buf;
+    th_method method;
+    int minor_version;
+    bool close;
+    bool parse_body_params;
+};
+
+TH_PRIVATE(void)
+th_request_init(th_request* request, th_allocator* allocator);
+
+TH_PRIVATE(void)
+th_request_deinit(th_request* request);
+
+TH_PRIVATE(void)
+th_request_async_read(th_socket* sock, th_allocator* allocator, th_request* request, th_io_handler* on_complete);
+
+TH_PRIVATE(th_err)
+th_request_store_cookie(th_request* request, th_string key, th_string value);
+
+TH_PRIVATE(th_err)
+th_request_store_header(th_request* request, th_string key, th_string value);
+
+TH_PRIVATE(th_err)
+th_request_store_query_param(th_request* request, th_string key, th_string value);
+
+TH_PRIVATE(th_err)
+th_request_store_body_param(th_request* request, th_string key, th_string value);
+
+TH_PRIVATE(th_err)
+th_request_store_path_param(th_request* request, th_string key, th_string value);
+
+TH_PRIVATE(th_err)
+th_request_store_uri_path(th_request* request, th_string path);
+
+TH_PRIVATE(th_err)
+th_request_store_uri_query(th_request* request, th_string query);
+
+/* End of th_request.h */
 /* Start of th_dir_mgr.h */
 
 
@@ -2179,6 +2583,7 @@ th_dir_mgr_deinit(th_dir_mgr* mgr);
 
 /* End of th_dir_mgr.h */
 /* Start of th_refcounted.h */
+
 
 
 typedef struct th_refcounted {
@@ -2276,6 +2681,41 @@ TH_PRIVATE(void)
 th_fcache_deinit(th_fcache* cache);
 
 /* End of th_fcache.h */
+/* Start of th_header_id.h */
+
+
+#include <stddef.h>
+#include <stdint.h>
+
+typedef enum th_header_id {
+    TH_HEADER_ID_CONNECTION,
+    TH_HEADER_ID_CONTENT_LENGTH,
+    TH_HEADER_ID_CONTENT_TYPE,
+    TH_HEADER_ID_DATE,
+    TH_HEADER_ID_SERVER,
+    TH_HEADER_ID_COOKIE,
+    TH_HEADER_ID_TRANSFER_ENCODING,
+    TH_HEADER_ID_RANGE,
+    TH_HEADER_ID_MAX,
+    TH_HEADER_ID_UNKNOWN = TH_HEADER_ID_MAX,
+} th_header_id;
+
+struct th_header_id_mapping {
+    const char* name;
+    th_header_id id;
+};
+
+struct th_header_id_mapping*
+th_header_id_mapping_find(const char* name, size_t len);
+
+TH_INLINE(th_header_id)
+th_header_id_from_string(const char* name, size_t len)
+{
+    struct th_header_id_mapping* mapping = th_header_id_mapping_find(name, (unsigned int)len);
+    return mapping ? mapping->id : TH_HEADER_ID_UNKNOWN;
+}
+
+/* End of th_header_id.h */
 /* Start of th_response.h */
 
 
@@ -2334,76 +2774,6 @@ TH_PRIVATE(void)
 th_response_async_write(th_response* response, th_socket* socket, th_io_handler* handler);
 
 /* End of th_response.h */
-/* Start of th_request.h */
-
-
-
-#define TH_REQUEST_MAP_ARENA_LEN 512
-#define TH_REQUEST_STRING_ARENA_LEN 512
-#define TH_REQUEST_VEC_ARENA_LEN 1024
-
-struct th_request {
-    th_allocator* allocator;
-    const char* uri_path;
-    const char* uri_query;
-    void* map_arena;
-    void* vec_arena;
-    void* string_arena;
-    th_arena_allocator map_allocator;
-    th_arena_allocator vec_allocator;
-    th_arena_allocator string_allocator;
-    th_cstr_map cookies;
-    th_cstr_map headers;
-    th_cstr_map query_params;
-    th_cstr_map body_params;
-    th_cstr_map path_params;
-    /** heap_strings
-     * This vector is used to store heap allocated strings that are used in the request.
-     * It's used to ensure that all memory is deallocated when the request is destroyed.
-     */
-    th_heap_string_vec heap_strings;
-    th_buf_vec buffer;
-    size_t data_len;
-    size_t content_buf_len;
-    size_t content_buf_pos;
-    char* content_buf;
-    th_method method;
-    int minor_version;
-    bool close;
-    bool parse_body_params;
-};
-
-TH_PRIVATE(void)
-th_request_init(th_request* request, th_allocator* allocator);
-
-TH_PRIVATE(void)
-th_request_deinit(th_request* request);
-
-TH_PRIVATE(void)
-th_request_async_read(th_socket* sock, th_allocator* allocator, th_request* request, th_io_handler* on_complete);
-
-TH_PRIVATE(th_err)
-th_request_store_cookie(th_request* request, th_string key, th_string value);
-
-TH_PRIVATE(th_err)
-th_request_store_header(th_request* request, th_string key, th_string value);
-
-TH_PRIVATE(th_err)
-th_request_store_query_param(th_request* request, th_string key, th_string value);
-
-TH_PRIVATE(th_err)
-th_request_store_body_param(th_request* request, th_string key, th_string value);
-
-TH_PRIVATE(th_err)
-th_request_store_path_param(th_request* request, th_string key, th_string value);
-
-TH_PRIVATE(th_err)
-th_request_store_uri_path(th_request* request, th_string path);
-
-TH_PRIVATE(th_err)
-th_request_store_uri_query(th_request* request, th_string query);
-
-/* End of th_request.h */
 /* Start of th_router.h */
 
 
@@ -2459,110 +2829,23 @@ th_router_add_route(th_router* router, th_method method, th_string route, th_han
 #define TH_EXCHANGE_CONTINUE (size_t)0
 #define TH_EXCHANGE_CLOSE (size_t)1
 
+typedef enum th_exchange_mode {
+    TH_EXCHANGE_MODE_NORMAL = 0,
+    TH_EXCHANGE_MODE_REJECT_UNAVAILABLE = (int)TH_ERR_HTTP(TH_CODE_SERVICE_UNAVAILABLE),
+    TH_EXCHANGE_MODE_REJECT_TOO_MANY_REQUESTS = (int)TH_ERR_HTTP(TH_CODE_TOO_MANY_REQUESTS),
+} th_exchange_mode;
+
 typedef struct th_exchange th_exchange;
 
 TH_PRIVATE(th_err)
 th_exchange_create(th_exchange** exchange, th_socket* socket,
-                      th_router* router, th_fcache* fcache,
-                      th_allocator* allocator, th_io_handler* on_complete);
+                   th_router* router, th_fcache* fcache,
+                   th_allocator* allocator, th_io_handler* on_complete);
 
 TH_PRIVATE(void)
-th_exchange_start(th_exchange* exchange);
+th_exchange_start(th_exchange* exchange, th_exchange_mode mode);
 
 /* End of th_exchange.h */
-/* Start of th_tcp_socket.h */
-
-
-/* th_tcp_socket begin */
-
-typedef struct th_tcp_socket {
-    th_socket base;
-    th_context* context;
-    th_allocator* allocator;
-    th_io_handle* handle;
-} th_tcp_socket;
-
-TH_PRIVATE(void)
-th_tcp_socket_init(th_tcp_socket* socket, th_context* context, th_allocator* allocator);
-
-/** th_socket_close
- * @brief Closes the underlying file descriptor of the socket.
- * while the socket object is still valid and can be reused.
- */
-TH_PRIVATE(void)
-th_tcp_socket_close(th_tcp_socket* socket);
-
-TH_PRIVATE(void)
-th_tcp_socket_deinit(th_tcp_socket* socket);
-
-#define th_tcp_socket_set_fd(socket, fd) ((socket)->base.set_fd((socket), (fd)))
-
-#define th_tcp_socket_cancel(socket) ((socket)->base.cancel((socket)))
-
-#define th_tcp_socket_get_allocator(socket) ((socket)->base.get_allocator((socket)))
-
-#define th_tcp_socket_get_context(socket) ((socket)->base.get_context((socket)))
-
-#define th_tcp_socket_async_write(socket, addr, len, handler) ((socket)->base.async_write((socket), (addr), (len), (handler)))
-
-#define th_tcp_socket_async_writev(socket, iov, iovcnt, handler) ((socket)->base.async_writev((socket), (iov), (iovcnt), (handler)))
-
-#define th_tcp_socket_async_read(socket, addr, len, handler) ((socket)->base.async_read((socket), (addr), (len), (handler)))
-
-#define th_tcp_socket_async_readv(socket, iov, iovcnt, handler) ((socket)->base.async_readv((socket), (iov), (iovcnt), (handler)))
-
-#define th_tcp_socket_async_sendfile(socket, header, iovcnt, stream, offset, len, handler) ((socket)->base.async_sendfile((socket), (header), (iovcnt), (stream), (offset), (len), (handler)))
-
-/* th_tcp_socket end */
-
-/* End of th_tcp_socket.h */
-/* Start of th_ssl_socket.h */
-#if TH_WITH_SSL
-
-
-#include <openssl/ssl.h>
-
-/* th_ssl_socket begin */
-
-typedef struct th_ssl_socket {
-    th_socket base;
-    th_tcp_socket tcp_socket;
-    SSL* ssl;
-    BIO* wbio; // ssl output buffer
-    BIO* rbio; // ssl input buffer
-} th_ssl_socket;
-
-typedef enum th_ssl_socket_mode {
-    TH_SSL_SOCKET_MODE_SERVER,
-    TH_SSL_SOCKET_MODE_CLIENT
-} th_ssl_socket_mode;
-
-TH_PRIVATE(th_err)
-th_ssl_socket_init(th_ssl_socket* socket, th_context* context, th_ssl_context* ssl_context, th_allocator* allocator);
-
-/** ssl socket specific functions */
-
-TH_PRIVATE(void)
-th_ssl_socket_set_mode(th_ssl_socket* socket, th_ssl_socket_mode mode);
-
-TH_PRIVATE(void)
-th_ssl_socket_async_handshake(th_ssl_socket* socket, th_socket_handler* handler);
-
-TH_PRIVATE(void)
-th_ssl_socket_async_shutdown(th_ssl_socket* socket, th_socket_handler* handler);
-
-/** th_socket_close
- * @brief Closes the underlying file descriptor of the socket.
- * while the socket object is still valid and can be reused.
- */
-TH_PRIVATE(void)
-th_ssl_socket_close(th_ssl_socket* socket);
-
-TH_PRIVATE(void)
-th_ssl_socket_deinit(th_ssl_socket* socket);
-
-#endif
-/* End of th_ssl_socket.h */
 /* Start of th_client.h */
 
 
@@ -2574,6 +2857,7 @@ struct th_client {
     th_socket* (*get_socket)(void* self);
     th_address* (*get_address)(void* self);
     th_err (*start)(void* self);
+    void (*set_mode)(void* self, th_exchange_mode mode);
 };
 
 /** th_client_init
@@ -2585,12 +2869,14 @@ th_client_init(th_client* client,
                th_socket* (*get_socket)(void* self),
                th_address* (*get_address)(void* self),
                th_err (*start)(void* self),
+               void (*set_mode)(void* self, th_exchange_mode mode),
                void (*destroy)(void* self))
 {
     th_refcounted_init(&client->base, destroy);
     client->get_socket = get_socket;
     client->get_address = get_address;
     client->start = start;
+    client->set_mode = set_mode;
 }
 
 TH_INLINE(th_socket*)
@@ -2609,6 +2895,12 @@ TH_INLINE(th_err)
 th_client_start(th_client* client)
 {
     return client->start(client);
+}
+
+TH_INLINE(void)
+th_client_set_mode(th_client* client, th_exchange_mode mode)
+{
+    client->set_mode(client, mode);
 }
 
 TH_INLINE(th_client*)
@@ -2671,13 +2963,14 @@ typedef struct th_tcp_client_msg_exchange_handler {
 
 struct th_tcp_client {
     th_client_observable base;
+    th_tcp_client_msg_exchange_handler msg_exchange_handler;
     th_tcp_socket socket;
     th_address addr;
     th_context* context;
     th_allocator* allocator;
     th_router* router;
     th_fcache* fcache;
-    th_tcp_client_msg_exchange_handler msg_exchange_handler;
+    th_exchange_mode mode;
 };
 
 TH_PRIVATE(th_err)
@@ -2697,15 +2990,16 @@ typedef struct th_ssl_client_io_handler {
 
 struct th_ssl_client {
     th_client_observable base;
+    th_ssl_client_io_handler msg_exchange_handler;
+    th_ssl_client_io_handler handshake_handler;
+    th_ssl_client_io_handler shutdown_handler;
     th_ssl_socket socket;
     th_address addr;
     th_context* context;
     th_allocator* allocator;
     th_router* router;
     th_fcache* fcache;
-    th_ssl_client_io_handler msg_exchange_handler;
-    th_ssl_client_io_handler handshake_handler;
-    th_ssl_client_io_handler shutdown_handler;
+    th_exchange_mode mode;
 };
 
 TH_PRIVATE(th_err)
@@ -2747,43 +3041,6 @@ TH_PRIVATE(void)
 th_client_tracker_deinit(th_client_tracker* client_tracker);
 
 /* End of th_client_tracker.h */
-/* Start of th_acceptor.h */
-
-
-
-typedef struct th_acceptor {
-    th_context* context;
-    th_allocator* allocator;
-    th_io_handle* handle;
-} th_acceptor;
-
-typedef struct th_acceptor_opt {
-    bool reuse_addr;
-    bool reuse_port;
-} th_acceptor_opt;
-
-TH_PRIVATE(th_err)
-th_acceptor_init(th_acceptor* acceptor, th_context* context,
-                 th_allocator* allocator,
-                 const char* addr, const char* port);
-
-/** th_acceptor_async_accept
- * @brief Asynchronously accept a new connection. And call the handler when the operation is complete.
- * Both addr and sock must point to valid memory locations until the handler is called.
- * @param acceptor The acceptor that will accept the new connection.
- * @param addr Pointer to the address that will be filled with the address of the new connection.
- * @param sock Pointer to the socket that will be filled with the new connection.
- */
-TH_PRIVATE(void)
-th_acceptor_async_accept(th_acceptor* acceptor, th_address* addr, th_io_handler* handler);
-
-TH_PRIVATE(void)
-th_acceptor_cancel(th_acceptor* acceptor);
-
-TH_PRIVATE(void)
-th_acceptor_deinit(th_acceptor* acceptor);
-
-/* End of th_acceptor.h */
 /* Start of th_client_acceptor.h */
 
 
@@ -2896,6 +3153,59 @@ TH_PRIVATE(void)
 th_listener_destroy(th_listener* listener);
 
 /* End of th_listener.h */
+/* Start of th_io_op_linux.h */
+
+
+
+#if defined(TH_CONFIG_WITH_LINUX_SENDFILE)
+TH_PRIVATE(th_err)
+th_io_op_linux_sendfile(void* self, size_t* result) TH_MAYBE_UNUSED;
+#endif
+
+/* End of th_io_op_linux.h */
+/* Start of th_fmt.h */
+
+
+#include <stddef.h>
+#include <stdint.h>
+#include <time.h>
+
+
+TH_PRIVATE(const char*)
+th_fmt_uint_to_str(char* buf, size_t len, unsigned int val);
+
+TH_PRIVATE(const char*)
+th_fmt_uint_to_str_ex(char* buf, size_t len, unsigned int val, size_t* out_len);
+
+/** th_fmt_str_append
+ * @brief Append a string to a buffer.
+ * @param buf The buffer to append to.
+ * @param pos The current position in the buffer (where to append).
+ * @param len The length of the buffer.
+ * @param str The string to append.
+ * @return The number of characters appended.
+ */
+TH_PRIVATE(size_t)
+th_fmt_str_append(char* buf, size_t pos, size_t len, const char* str);
+
+TH_PRIVATE(size_t)
+th_fmt_strn_append(char* buf, size_t pos, size_t len, const char* str, size_t n);
+
+TH_PRIVATE(size_t)
+th_fmt_strtime(char* buf, size_t len, th_date date);
+/* End of th_fmt.h */
+/* Start of th_mime.h */
+
+
+
+struct th_mime_mapping {
+    const char* name;
+    th_string mime;
+};
+
+struct th_mime_mapping* th_mime_mapping_find(const char* ext, size_t len);
+
+/* End of th_mime.h */
 /* Start of th_timer.h */
 
 
@@ -2918,6 +3228,114 @@ TH_PRIVATE(bool)
 th_timer_expired(th_timer* timer);
 
 /* End of th_timer.h */
+/* Start of th_kqueue_service.h */
+
+
+
+#ifdef TH_CONFIG_WITH_KQUEUE
+
+#include <sys/event.h>
+#include <sys/time.h>
+#include <sys/types.h>
+
+/* Forward declarations begin */
+
+typedef struct th_kqueue_service th_kqueue_service;
+typedef struct th_kqueue_handle th_kqueue_handle;
+typedef struct th_kqueue_handle_cleaner th_kqueue_handle_cleaner;
+
+/* Forward declarations end */
+
+struct th_kqueue_handle {
+    th_io_handle base;
+    th_timer timer;
+    th_allocator* allocator;
+    th_kqueue_handle* pool_next;
+    th_kqueue_handle* pool_prev;
+    th_kqueue_handle* timer_next;
+    th_kqueue_handle* timer_prev;
+    th_kqueue_service* service;
+    th_io_task* iot[TH_IO_OP_TYPE_MAX];
+    int fd;
+    th_io_op_type active;
+    bool timeout_enabled;
+};
+
+#ifndef TH_KQUEUE_HANDLE_POOL
+#define TH_KQUEUE_HANDLE_POOL
+TH_DEFINE_OBJ_POOL_ALLOCATOR(th_kqueue_handle_pool, th_kqueue_handle, pool_prev, pool_next)
+#endif
+
+#ifndef TH_KQUEUE_HANDLE_TIMER_LIST
+#define TH_KQUEUE_HANDLE_TIMER_LIST
+TH_DEFINE_LIST(th_kqueue_timer_list, th_kqueue_handle, timer_prev, timer_next)
+#endif
+
+struct th_kqueue_service {
+    th_io_service base;
+    th_allocator* allocator;
+    th_runner* runner;
+    th_kqueue_handle_pool handle_allocator;
+    th_kqueue_timer_list timer_list;
+    int kq;
+};
+
+TH_PRIVATE(th_err)
+th_kqueue_service_create(th_io_service** out, th_runner* runner, th_allocator* allocator);
+
+#endif /* TH_HAVE_KQUEUE */
+/* End of th_kqueue_service.h */
+/* Start of th_url_decode.h */
+
+
+
+#include <stddef.h>
+
+typedef enum th_url_decode_type {
+    TH_URL_DECODE_TYPE_PATH = 0,
+    TH_URL_DECODE_TYPE_QUERY
+} th_url_decode_type;
+
+/*
+TH_PRIVATE(th_err)
+th_url_decode_inplace(char* str, size_t* in_out_len, th_url_decode_type type);
+*/
+
+TH_PRIVATE(th_err)
+th_url_decode_string(th_string input, th_heap_string* output, th_url_decode_type type);
+
+/* End of th_url_decode.h */
+/* Start of th_io_op.h */
+
+
+
+#include <stddef.h>
+
+TH_PRIVATE(th_err)
+th_io_op_read(void* self, size_t* result) TH_MAYBE_UNUSED;
+
+TH_PRIVATE(th_err)
+th_io_op_readv(void* self, size_t* result) TH_MAYBE_UNUSED;
+
+TH_PRIVATE(th_err)
+th_io_op_write(void* self, size_t* result) TH_MAYBE_UNUSED;
+
+TH_PRIVATE(th_err)
+th_io_op_writev(void* self, size_t* result) TH_MAYBE_UNUSED;
+
+TH_PRIVATE(th_err)
+th_io_op_send(void* self, size_t* result) TH_MAYBE_UNUSED;
+
+TH_PRIVATE(th_err)
+th_io_op_sendv(void* self, size_t* result) TH_MAYBE_UNUSED;
+
+TH_PRIVATE(th_err)
+th_io_op_accept(void* self, size_t* result) TH_MAYBE_UNUSED;
+
+TH_PRIVATE(th_err)
+th_io_op_sendfile(void* self, size_t* result) TH_MAYBE_UNUSED;
+
+/* End of th_io_op.h */
 /* Start of th_poll_service.h */
 
 
@@ -3005,404 +3423,6 @@ th_poll_service_create(th_io_service** out, th_runner* runner, th_allocator* all
 
 #endif /* TH_HAVE_POLL */
 /* End of th_poll_service.h */
-/* Start of th_mock_service.h */
-
-
-
-#if defined(TH_CONFIG_OS_MOCK)
-
-
-typedef struct th_mock_service th_mock_service;
-typedef struct th_mock_handle th_mock_handle;
-struct th_mock_handle {
-    th_io_handle base;
-    th_mock_service* service;
-    int fd;
-};
-
-struct th_mock_service {
-    th_io_service base;
-    th_runner* runner;
-};
-
-TH_PRIVATE(th_err)
-th_mock_service_create(th_io_service** out, th_runner* runner);
-
-#endif
-/* End of th_mock_service.h */
-/* Start of th_url_decode.h */
-
-
-
-#include <stddef.h>
-
-typedef enum th_url_decode_type {
-    TH_URL_DECODE_TYPE_PATH = 0,
-    TH_URL_DECODE_TYPE_QUERY
-} th_url_decode_type;
-
-/*
-TH_PRIVATE(th_err)
-th_url_decode_inplace(char* str, size_t* in_out_len, th_url_decode_type type);
-*/
-
-TH_PRIVATE(th_err)
-th_url_decode_string(th_string input, th_heap_string* output, th_url_decode_type type);
-
-/* End of th_url_decode.h */
-/* Start of th_path.h */
-
-
-/**
- * @brief th_path provides a bunch of helper functions to work with paths.
- */
-
-/**
- * @brief th_path_resolve resolves a path to a absolute path.
- * @param dir The directory to resolve the path against.
- * @param path The path to resolve.
- * @param out The resolved path.
- * @return TH_ERR_OK on success, otherwise an error code.
- */
-TH_PRIVATE(th_err)
-th_path_resolve_against(th_string path, th_dir* dir, th_heap_string* out);
-
-TH_PRIVATE(th_err)
-th_path_resolve(th_string path, th_heap_string* out);
-
-TH_PRIVATE(bool)
-th_path_is_within(th_string path, th_dir* dir);
-
-TH_PRIVATE(bool)
-th_path_is_hidden(th_string path);
-
-/* End of th_path.h */
-/* Start of th_ssl_error.h */
-
-#if TH_WITH_SSL
-
-
-TH_PRIVATE(void)
-th_ssl_log_error_stack(void);
-
-TH_PRIVATE(const char*)
-th_ssl_strerror(int code);
-
-TH_PRIVATE(th_err)
-th_ssl_handle_error_stack(void);
-
-#endif // TH_WITH_SSL
-/* End of th_ssl_error.h */
-/* Start of th_io_op_posix.h */
-
-
-
-#if defined(TH_CONFIG_OS_POSIX)
-
-TH_PRIVATE(th_err)
-th_io_op_posix_read(void* self, size_t* result);
-
-TH_PRIVATE(th_err)
-th_io_op_posix_readv(void* self, size_t* result);
-
-TH_PRIVATE(th_err)
-th_io_op_posix_write(void* self, size_t* result);
-
-TH_PRIVATE(th_err)
-th_io_op_posix_writev(void* self, size_t* result);
-
-TH_PRIVATE(th_err)
-th_io_op_posix_send(void* self, size_t* result);
-
-TH_PRIVATE(th_err)
-th_io_op_posix_sendv(void* self, size_t* result);
-
-TH_PRIVATE(th_err)
-th_io_op_posix_accept(void* self, size_t* result);
-
-TH_PRIVATE(th_err)
-th_io_op_posix_sendfile_mmap(void* self, size_t* result) TH_MAYBE_UNUSED;
-
-TH_PRIVATE(th_err)
-th_io_op_posix_sendfile_buffered(void* self, size_t* result) TH_MAYBE_UNUSED;
-
-#endif
-/* End of th_io_op_posix.h */
-/* Start of th_system_error.h */
-
-
-#if defined(TH_CONFIG_OS_POSIX)
-#include <errno.h>
-#include <string.h>
-#elif defined(TH_CONFIG_OS_WIN)
-#include <windows.h>
-#endif
-
-TH_INLINE(const char*)
-th_system_strerror(int errc) TH_MAYBE_UNUSED;
-
-TH_INLINE(const char*)
-th_system_strerror(int errc)
-{
-#if defined(TH_CONFIG_OS_POSIX)
-    return strerror(errc);
-#elif defined(TH_CONFIG_OS_WIN)
-    static char buf[256];
-    FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, NULL, errc, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), buf, sizeof(buf), NULL);
-    return buf;
-#elif defined(TH_CONFIG_OS_MOCK)
-    (void)errc;
-    return "mock error";
-#endif
-}
-
-/* Define the system error codes that we use */
-#if defined(TH_CONFIG_OS_POSIX)
-#define TH_ENOENT ENOENT
-#define TH_EINTR EINTR
-#define TH_EIO EIO
-#define TH_EBADF EBADF
-#define TH_EBUSY EBUSY
-#define TH_EAGAIN EAGAIN
-#define TH_EWOULDBLOCK EWOULDBLOCK
-#define TH_ENOMEM ENOMEM
-#define TH_ENOSYS ENOSYS
-#define TH_ETIMEDOUT ETIMEDOUT
-#define TH_ECANCELED ECANCELED
-#elif defined(TH_CONFIG_OS_WIN)
-#define TH_ENOENT ERROR_FILE_NOT_FOUND
-#define TH_EINTR ERROR_INTERRUPT
-#define TH_EIO ERROR_IO_DEVICE
-#define TH_EBADF ERROR_BAD_FORMAT
-#define TH_EBUSY ERROR_BUSY
-#define TH_EAGAIN ERROR_RETRY
-#define TH_EWOULDBLOCK ERROR_RETRY
-#define TH_ENOMEM ERROR_OUTOFMEMORY
-#define TH_ENOSYS ERROR_NOT_SUPPORTED
-#define TH_ETIMEDOUT ERROR_TIMEOUT
-#define TH_ECANCELED ERROR_CANCELLED
-#elif defined(TH_CONFIG_OS_MOCK)
-#define TH_ENOENT 1
-#define TH_EINTR 2
-#define TH_EIO 3
-#define TH_EBUSY 4
-#define TH_EAGAIN 5
-#define TH_EWOULDBLOCK 6
-#define TH_ENOMEM 7
-#define TH_ENOSYS 8
-#define TH_ETIMEDOUT 9
-#define TH_ECANCELED 10
-#define TH_EBADF 11
-#endif
-
-/* End of th_system_error.h */
-/* Start of th_mock_syscall.h */
-
-#include <stddef.h>
-
-
-typedef struct th_mock_syscall {
-    int (*accept)(void);
-    int (*open)(void);
-    int (*lseek)(void);
-    int (*close)(void);
-    int (*read)(void* buf, size_t len);
-    int (*write)(size_t len);
-    int (*settime)(void);
-} th_mock_syscall;
-
-th_mock_syscall* th_mock_syscall_get(void);
-void th_mock_syscall_reset(void);
-
-int th_mock_accept(void);
-
-int th_mock_open(void);
-
-int th_mock_lseek(void);
-
-int th_mock_close(void);
-
-int th_mock_read(void* buf, size_t len);
-
-int th_mock_write(size_t len);
-
-int th_mock_settime(void);
-
-/* End of th_mock_syscall.h */
-/* Start of th_io_op_bsd.h */
-
-
-#if defined(TH_CONFIG_WITH_BSD_SENDFILE)
-TH_PRIVATE(th_err)
-th_io_op_bsd_sendfile(void* self, size_t* result) TH_MAYBE_UNUSED;
-#endif
-
-/* End of th_io_op_bsd.h */
-/* Start of th_http_error.h */
-
-
-
-#include <errno.h>
-
-/** th_http_err
- * @brief Converts a error code to a equivalent HTTP error code.
- */
-TH_INLINE(th_err)
-th_http_error(th_err err)
-{
-    switch (TH_ERR_CATEGORY(err)) {
-    case TH_ERR_CATEGORY_SYSTEM:
-        switch (TH_ERR_CODE(err)) {
-            {
-            case TH_ENOENT:
-                return TH_ERR_HTTP(TH_CODE_NOT_FOUND);
-                break;
-            case TH_ETIMEDOUT:
-                return TH_ERR_HTTP(TH_CODE_REQUEST_TIMEOUT);
-                break;
-            default:
-                return TH_ERR_HTTP(TH_CODE_INTERNAL_SERVER_ERROR);
-                break;
-            }
-        }
-        break;
-    case TH_ERR_CATEGORY_HTTP:
-        return err;
-        break;
-    }
-    return TH_ERR_HTTP(TH_CODE_INTERNAL_SERVER_ERROR);
-}
-
-TH_INLINE(const char*)
-th_http_strerror(int code)
-{
-    switch (code) {
-    case TH_CODE_OK:
-        return "OK";
-        break;
-    case TH_CODE_MOVED_PERMANENTLY:
-        return "Moved Permanently";
-        break;
-    case TH_CODE_BAD_REQUEST:
-        return "Bad Request";
-        break;
-    case TH_CODE_NOT_FOUND:
-        return "Not Found";
-        break;
-    case TH_CODE_METHOD_NOT_ALLOWED:
-        return "Method Not Allowed";
-        break;
-    case TH_CODE_PAYLOAD_TOO_LARGE:
-        return "Payload Too Large";
-        break;
-    case TH_CODE_REQUEST_HEADER_TOO_LARGE:
-        return "Request Header Too Large";
-        break;
-    case TH_CODE_INTERNAL_SERVER_ERROR:
-        return "Internal Server Error";
-        break;
-    case TH_CODE_NOT_IMPLEMENTED:
-        return "Method Not Implemented";
-        break;
-    default:
-        return "Unknown";
-        break;
-    }
-}
-
-/* End of th_http_error.h */
-/* Start of th_mime.h */
-
-
-
-struct th_mime_mapping {
-    const char* name;
-    th_string mime;
-};
-
-struct th_mime_mapping* th_mime_mapping_find(const char* ext, size_t len);
-
-/* End of th_mime.h */
-/* Start of th_kqueue_service.h */
-
-
-
-#ifdef TH_CONFIG_WITH_KQUEUE
-
-#include <sys/event.h>
-#include <sys/time.h>
-#include <sys/types.h>
-
-/* Forward declarations begin */
-
-typedef struct th_kqueue_service th_kqueue_service;
-typedef struct th_kqueue_handle th_kqueue_handle;
-typedef struct th_kqueue_handle_cleaner th_kqueue_handle_cleaner;
-
-/* Forward declarations end */
-
-struct th_kqueue_handle {
-    th_io_handle base;
-    th_timer timer;
-    th_allocator* allocator;
-    th_kqueue_handle* pool_next;
-    th_kqueue_handle* pool_prev;
-    th_kqueue_handle* timer_next;
-    th_kqueue_handle* timer_prev;
-    th_kqueue_service* service;
-    th_io_task* iot[TH_IO_OP_TYPE_MAX];
-    int fd;
-    th_io_op_type active;
-    bool timeout_enabled;
-};
-
-#ifndef TH_KQUEUE_HANDLE_POOL
-#define TH_KQUEUE_HANDLE_POOL
-TH_DEFINE_OBJ_POOL_ALLOCATOR(th_kqueue_handle_pool, th_kqueue_handle, pool_prev, pool_next)
-#endif
-
-#ifndef TH_KQUEUE_HANDLE_TIMER_LIST
-#define TH_KQUEUE_HANDLE_TIMER_LIST
-TH_DEFINE_LIST(th_kqueue_timer_list, th_kqueue_handle, timer_prev, timer_next)
-#endif
-
-struct th_kqueue_service {
-    th_io_service base;
-    th_allocator* allocator;
-    th_runner* runner;
-    th_kqueue_handle_pool handle_allocator;
-    th_kqueue_timer_list timer_list;
-    int kq;
-};
-
-TH_PRIVATE(th_err)
-th_kqueue_service_create(th_io_service** out, th_runner* runner, th_allocator* allocator);
-
-#endif /* TH_HAVE_KQUEUE */
-/* End of th_kqueue_service.h */
-/* Start of th_method.h */
-
-
-struct th_method_mapping {
-    const char* name;
-    th_method method;
-};
-
-struct th_method_mapping* th_method_mapping_find(const char* str, size_t len);
-
-/* End of th_method.h */
-/* Start of th_align.h */
-
-#include <stdint.h>
-
-#define TH_ALIGNOF(type) offsetof(struct { char c; type member; }, member)
-#define TH_ALIGNAS(align, ptr) ((void*)(((uintptr_t)(ptr) + ((align) - 1)) & ~((align) - 1)))
-#define TH_ALIGNUP(n, align) (((n) + (align) - 1) & ~((align) - 1))
-#define TH_ALIGNDOWN(n, align) ((n) & ~((align) - 1))
-
-typedef long double th_max_align;
-
-/* End of th_align.h */
 /* Start of picohttpparser.h */
 /*
  * Copyright (c) 2009-2014 Kazuho Oku, Tokuhiro Matsuno, Daisuke Murase,
@@ -3489,6 +3509,29 @@ int phr_decode_chunked_is_in_data(struct phr_chunked_decoder *decoder);
 #endif
 
 /* End of picohttpparser.h */
+/* Start of th_method.h */
+
+
+struct th_method_mapping {
+    const char* name;
+    th_method method;
+};
+
+struct th_method_mapping* th_method_mapping_find(const char* str, size_t len);
+
+/* End of th_method.h */
+/* Start of th_align.h */
+
+#include <stdint.h>
+
+#define TH_ALIGNOF(type) offsetof(struct { char c; type member; }, member)
+#define TH_ALIGNAS(align, ptr) ((void*)(((uintptr_t)(ptr) + ((align) - 1)) & ~((align) - 1)))
+#define TH_ALIGNUP(n, align) (((n) + (align) - 1) & ~((align) - 1))
+#define TH_ALIGNDOWN(n, align) ((n) & ~((align) - 1))
+
+typedef long double th_max_align;
+
+/* End of th_align.h */
 /* Start of src/th_server.c */
 
 #include <stdint.h>
@@ -5420,7 +5463,7 @@ th_kqueue_service_run(void* self, int timeout_ms)
         return;
     }
     for (int i = 0; i < nev; ++i) {
-        TH_LOG_DEBUG("kevent: fd=%d, filter=%s, flags=%s, data=%d",
+        TH_LOG_TRACE("kevent: fd=%d, filter=%s, flags=%s, data=%d",
                      (int)evlist[i].ident, th_kqueue_fitler_to_string(evlist[i].filter),
                      th_kqueue_flags_to_string(evlist[i].flags), (int)evlist[i].data);
 
@@ -5832,17 +5875,18 @@ th_poll_service_run(void* self, int timeout_ms)
 {
     th_poll_service* service = (th_poll_service*)self;
 
-    TH_LOG_DEBUG("Waiting for %d fds", service->nfds);
     int ret = poll(service->fds, service->nfds, timeout_ms);
     if (ret <= 0) {
         if (ret == -1)
-            TH_LOG_ERROR("poll failed: %s", strerror(errno));
+            TH_LOG_WARN("poll failed: %s", strerror(errno));
         return;
     }
 
     size_t reenqueue = 0;
     for (size_t i = 0; i < service->nfds; ++i) {
         th_poll_handle* handle = th_poll_handle_map_try_get(&service->handles, service->fds[i].fd);
+        if (!handle) // handle was removed
+            continue;
         short revents = service->fds[i].revents;
         short events = service->fds[i].events & (POLLIN | POLLOUT);
         int op_index = 0;
@@ -6353,13 +6397,13 @@ th_tcp_socket_set_fd_options(int fd)
     int flags = fcntl(fd, F_GETFL, 0);
     if (flags == -1
         || fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1) {
-        TH_LOG_ERROR("Failed to set non-blocking: %s", th_strerror(TH_ERR_SYSTEM(errno)));
+        TH_LOG_WARN("Failed to set non-blocking: %s", th_strerror(TH_ERR_SYSTEM(errno)));
     }
     int optval = 1;
     if (setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &optval, sizeof(optval)) == -1)
-        TH_LOG_ERROR("Failed to disable nagle: %s", th_strerror(TH_ERR_SYSTEM(errno)));
+        TH_LOG_WARN("Failed to disable nagle: %s", th_strerror(TH_ERR_SYSTEM(errno)));
     if (setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &optval, sizeof(optval)) == -1)
-        TH_LOG_ERROR("Failed to enable keepalive: %s", th_strerror(TH_ERR_SYSTEM(errno)));
+        TH_LOG_WARN("Failed to enable keepalive: %s", th_strerror(TH_ERR_SYSTEM(errno)));
 }
 #elif defined(TH_CONFIG_OS_WIN)
 TH_LOCAL(void)
@@ -6367,12 +6411,12 @@ th_tcp_socket_set_fd_options(int fd)
 {
     u_long mode = 1;
     if (ioctlsocket(fd, FIONBIO, &mode) == SOCKET_ERROR)
-        TH_LOG_ERROR("Failed to set non-blocking: %s", th_strerror(TH_ERR_SYSTEM(WSAGetLastError())));
+        TH_LOG_WARN("Failed to set non-blocking: %s", th_strerror(TH_ERR_SYSTEM(WSAGetLastError())));
     int optval = 1;
     if (setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (const char*)&optval, sizeof(optval)) == SOCKET_ERROR)
-        TH_LOG_ERROR("Failed to disable nagle: %s", th_strerror(TH_ERR_SYSTEM(WSAGetLastError())));
+        TH_LOG_WARN("Failed to disable nagle: %s", th_strerror(TH_ERR_SYSTEM(WSAGetLastError())));
     if (setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, (const char*)&optval, sizeof(optval)) == SOCKET_ERROR)
-        TH_LOG_ERROR("Failed to enable keepalive: %s", th_strerror(TH_ERR_SYSTEM(WSAGetLastError())));
+        TH_LOG_WARN("Failed to enable keepalive: %s", th_strerror(TH_ERR_SYSTEM(WSAGetLastError())));
 }
 #else
 TH_LOCAL(void)
@@ -6711,6 +6755,79 @@ th_request_read_handle_content(th_request_read_handler* handler, size_t len)
     th_request_read_handler_complete(handler, body_len, TH_ERR_OK);
 }
 
+TH_LOCAL(th_err)
+th_request_handle_headers(th_request* request, struct phr_header* headers, size_t num_headers)
+{
+    // indirection array for cookie headers
+    // Some clients send multiple cookie headers even though it's not allowed
+    size_t cookie_headers[TH_CONFIG_MAX_HEADER_NUM];
+    size_t num_cookie_headers = 0;
+    // copy headers and parse the most important ones
+    th_cstr_map_reserve(&request->headers, num_headers);
+    th_err err = TH_ERR_OK;
+    for (size_t i = 0; i < num_headers; i++) {
+        th_string key = th_string_make(headers[i].name, headers[i].name_len);
+        th_string value = th_string_make(headers[i].value, headers[i].value_len);
+        th_mut_string_tolower((th_mut_string){th_buf_vec_at(&request->buffer, (size_t)(key.ptr - th_buf_vec_begin(&request->buffer))), key.len});
+        th_header_id hid = th_header_id_from_string(key.ptr, key.len);
+        switch (hid) {
+        case TH_HEADER_ID_CONTENT_LENGTH: {
+            unsigned int len;
+            if ((err = th_string_to_uint(value, &len)) != TH_ERR_OK) {
+                return err;
+            }
+            request->content_len = len;
+            break;
+        }
+        case TH_HEADER_ID_CONNECTION:
+            if (TH_STRING_EQ(value, "close")) {
+                request->close = true;
+            }
+            break;
+        case TH_HEADER_ID_RANGE:
+            if (request->method == TH_METHOD_GET) {
+                return TH_ERR_HTTP(TH_CODE_RANGE_NOT_SATISFIABLE);
+            } else {
+                return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
+            }
+        case TH_HEADER_ID_COOKIE:
+            // Handle cookie headers later to better use the arena allocator
+            if (num_cookie_headers == TH_CONFIG_MAX_HEADER_NUM) {
+                return TH_ERR_HTTP(TH_CODE_REQUEST_HEADER_FIELDS_TOO_LARGE);
+            }
+            cookie_headers[num_cookie_headers++] = i;
+            break;
+        case TH_HEADER_ID_CONTENT_TYPE:
+            if (request->method == TH_METHOD_POST) {
+                if (th_string_eq(value, TH_STRING("application/x-www-form-urlencoded"))) {
+                    request->parse_body_params = true;
+                    //} else if (th_string_eq(th_string_substr(value, 0, th_string_find_first(value, 0, ';')), TH_STRING("multipart/form-data"))) {
+                } else {
+                    return TH_ERR_HTTP(TH_CODE_UNSUPPORTED_MEDIA_TYPE);
+                }
+            }
+            break;
+        case TH_HEADER_ID_TRANSFER_ENCODING:
+            return TH_ERR_HTTP(TH_CODE_NOT_IMPLEMENTED);
+        default:
+            break;
+        }
+        // store the header
+        if ((err = th_request_store_header(request, key, value)) != TH_ERR_OK) {
+            return err;
+        }
+    }
+
+    // parse cookie headers
+    for (size_t i = 0; i < num_cookie_headers; i++) {
+        th_string value = th_string_make(headers[cookie_headers[i]].value, headers[cookie_headers[i]].value_len);
+        if ((err = th_request_parse_cookie_list(request, value)) != TH_ERR_OK) {
+            return err;
+        }
+    }
+    return TH_ERR_OK;
+}
+
 TH_LOCAL(void)
 th_request_read_handle_header(th_request_read_handler* handler, size_t len)
 {
@@ -6730,7 +6847,7 @@ th_request_read_handle_header(th_request_read_handler* handler, size_t len)
         if (data_len == buf_len) {
             if (buf_len == TH_CONFIG_LARGE_HEADER_LEN) {
                 // We have reached the maximum header length
-                th_request_read_handler_complete(handler, 0, TH_ERR_HTTP(TH_CODE_REQUEST_HEADER_TOO_LARGE));
+                th_request_read_handler_complete(handler, 0, TH_ERR_HTTP(TH_CODE_REQUEST_HEADER_FIELDS_TOO_LARGE));
                 return;
             }
             th_buf_vec_resize(&request->buffer, TH_CONFIG_LARGE_HEADER_LEN);
@@ -6739,7 +6856,7 @@ th_request_read_handle_header(th_request_read_handler* handler, size_t len)
         return;
     }
     size_t header_len = (size_t)pret;
-    TH_LOG_DEBUG("Object %p: Parsed request: %.*s %.*s HTTP/%d.%d", request, (int)method.len, method.ptr, (int)path.len, path.ptr, 1, request->minor_version);
+    TH_LOG_DEBUG("%p: Parsed request: %.*s %.*s HTTP/%d.%d", request, (int)method.len, method.ptr, (int)path.len, path.ptr, 1, request->minor_version);
 
     // find method
     struct th_method_mapping* mm = th_method_mapping_find(method.ptr, method.len);
@@ -6749,90 +6866,35 @@ th_request_read_handle_header(th_request_read_handler* handler, size_t len)
     }
     request->method = mm->method;
 
-    // parse headers
-    // content length as specified in the header
-    size_t content_len = 0;
-
-    // indirection array for cookie headers
-    // Some clients send multiple cookie headers even though it's not allowed
-    size_t cookie_headers[TH_CONFIG_MAX_HEADER_NUM];
-    size_t num_cookie_headers = 0;
-    // copy headers and parse the most important ones
-    th_cstr_map_reserve(&request->headers, num_headers);
-    th_err err = TH_ERR_OK;
-    for (size_t i = 0; i < num_headers; i++) {
-        th_string key = th_string_make(headers[i].name, headers[i].name_len);
-        th_string value = th_string_make(headers[i].value, headers[i].value_len);
-        th_mut_string_tolower((th_mut_string){th_buf_vec_at(&request->buffer, (size_t)(key.ptr - th_buf_vec_begin(&request->buffer))), key.len});
-        th_header_id hid = th_header_id_from_string(key.ptr, key.len);
-        switch (hid) {
-        case TH_HEADER_ID_CONTENT_LENGTH: {
-            unsigned int len;
-            if ((err = th_string_to_uint(value, &len)) != TH_ERR_OK) {
-                th_request_read_handler_complete(handler, 0, TH_ERR_HTTP(TH_CODE_BAD_REQUEST));
-                return;
-            }
-            content_len = len;
-            break;
-        }
-        case TH_HEADER_ID_CONNECTION:
-            if (TH_STRING_EQ(value, "close")) {
-                request->close = true;
-            }
-            break;
-        case TH_HEADER_ID_COOKIE:
-            // Handle cookie headers later to better use the arena allocator
-            if (num_cookie_headers == TH_CONFIG_MAX_HEADER_NUM) {
-                th_request_read_handler_complete(handler, 0, TH_ERR_HTTP(TH_CODE_BAD_REQUEST));
-                return;
-            }
-            cookie_headers[num_cookie_headers++] = i;
-            break;
-        case TH_HEADER_ID_CONTENT_TYPE:
-            if (request->method == TH_METHOD_POST) {
-                if (th_string_eq(value, TH_STRING("application/x-www-form-urlencoded"))) {
-                    request->parse_body_params = true;
-                } else if (th_string_eq(th_string_substr(value, 0, th_string_find_first(value, 0, ';')), TH_STRING("multipart/form-data"))) {
-                    th_request_read_handler_complete(handler, 0, TH_ERR_HTTP(TH_CODE_NOT_IMPLEMENTED));
-                    return;
-                }
-            }
-            break;
-        default:
-            break;
-        }
-        // store the header
-        if ((err = th_request_store_header(request, key, value)) != TH_ERR_OK) {
-            th_request_read_handler_complete(handler, 0, err);
-            return;
-        }
-    }
-
-    // parse cookie headers
-    for (size_t i = 0; i < num_cookie_headers; i++) {
-        th_string value = th_string_make(headers[cookie_headers[i]].value, headers[cookie_headers[i]].value_len);
-        if ((err = th_request_parse_cookie_list(request, value)) != TH_ERR_OK) {
-            th_request_read_handler_complete(handler, 0, err);
-            return;
-        }
-    }
-
     // find path query
+    th_err err = TH_ERR_OK;
     if ((err = th_request_parse_path(request, path)) != TH_ERR_OK) {
         th_request_read_handler_complete(handler, 0, err);
         return;
     }
 
+    // handle headers
+    if ((err = th_request_handle_headers(request, headers, num_headers)) != TH_ERR_OK) {
+        th_request_read_handler_complete(handler, 0, err);
+        return;
+    }
+
+    // Get is not allowed to have a body
+    if (request->method == TH_METHOD_GET && request->content_len > 0) {
+        th_request_read_handler_complete(handler, 0, TH_ERR_HTTP(TH_CODE_BAD_REQUEST));
+        return;
+    }
+
     // let's check whether we have all the content
     size_t trailing = data_len - header_len;
-    if (content_len == trailing) {
+    if (request->content_len == trailing) {
         th_buf_vec_resize(&request->buffer, data_len);
         th_buf_vec_shrink_to_fit(&request->buffer);
         request->content_buf = th_buf_vec_at(&request->buffer, header_len);
         request->content_buf_len = request->content_buf_pos = trailing;
         th_request_read_handle_content(handler, 0);
         return;
-    } else if (content_len == 0) { // trailing is not 0
+    } else if (request->content_len == 0) { // trailing is not 0
         th_buf_vec_resize(&request->buffer, data_len);
         th_buf_vec_shrink_to_fit(&request->buffer);
         th_request_read_handler_complete(handler, 0, TH_ERR_HTTP(TH_CODE_BAD_REQUEST));
@@ -6840,7 +6902,7 @@ th_request_read_handle_header(th_request_read_handler* handler, size_t len)
     }
 
     // check whether the content length is ok
-    if (content_len > TH_CONFIG_MAX_CONTENT_LEN) {
+    if (request->content_len > TH_CONFIG_MAX_CONTENT_LEN) {
         th_request_read_handler_complete(handler, 0, TH_ERR_HTTP(TH_CODE_PAYLOAD_TOO_LARGE));
         return;
     }
@@ -6848,15 +6910,15 @@ th_request_read_handle_header(th_request_read_handler* handler, size_t len)
     // we have more content, set up the buffer
     size_t remaining_buf = th_buf_vec_size(&request->buffer) - data_len;
     request->content_buf_pos = data_len - header_len; // content length we have so far
-    if (remaining_buf >= content_len) {
+    if (remaining_buf >= request->content_len) {
         request->content_buf = th_buf_vec_at(&request->buffer, header_len);
         request->content_buf_len = remaining_buf;
-    } else if (th_buf_vec_size(&request->buffer) >= content_len) {
+    } else if (th_buf_vec_size(&request->buffer) >= request->content_len) {
         memmove(th_buf_vec_at(&request->buffer, 0), th_buf_vec_at(&request->buffer, header_len), request->content_buf_pos);
         request->content_buf = th_buf_vec_at(&request->buffer, 0);
         request->content_buf_len = th_buf_vec_size(&request->buffer) - request->content_buf_pos;
     } else {
-        th_buf_vec_resize(&request->buffer, content_len);
+        th_buf_vec_resize(&request->buffer, request->content_len);
         memmove(th_buf_vec_at(&request->buffer, 0), th_buf_vec_at(&request->buffer, header_len), request->content_buf_pos);
         request->content_buf = th_buf_vec_at(&request->buffer, 0);
         request->content_buf_len = th_buf_vec_size(&request->buffer) - request->content_buf_pos;
@@ -7034,6 +7096,7 @@ th_request_init(th_request* request, th_allocator* allocator)
     th_heap_string_vec_init(&request->heap_strings, &request->vec_allocator.base);
     th_buf_vec_init(&request->buffer, request->allocator);
     request->data_len = 0;
+    request->content_len = 0;
     request->content_buf = NULL;
     request->content_buf_len = 0;
     request->content_buf_pos = 0;
@@ -7293,7 +7356,7 @@ th_response_finalize_header_buf(th_response* response)
     // Shrink the buffer to the actual needed size
     size_t pos = response->cur_header_buf_pos;
     void* new_buf = th_allocator_realloc(response->allocator, response->header_buf[pos].base, response->header_buf[pos].len);
-    assert(new_buf && "Reallocation with smaller size should always succeed");
+    TH_ASSERT(new_buf && "Reallocation with smaller size should always succeed");
     if (!new_buf) {
         return TH_ERR_BAD_ALLOC;
     }
@@ -7589,15 +7652,15 @@ th_io_service_create(th_io_service** out, th_runner* runner, th_allocator* alloc
     (void)out;
 #if defined(TH_CONFIG_OS_MOCK)
     (void)allocator;
-    TH_LOG_INFO("Using mock");
+    TH_LOG_TRACE("Using mock");
     return th_mock_service_create(out, runner);
 #endif
 #if defined(TH_CONFIG_WITH_KQUEUE)
-    TH_LOG_INFO("Using kqueue");
+    TH_LOG_TRACE("Using kqueue");
     return th_kqueue_service_create(out, runner, allocator);
 #endif
 #if defined(TH_CONFIG_WITH_POLL)
-    TH_LOG_INFO("Using poll");
+    TH_LOG_TRACE("Using poll");
     return th_poll_service_create(out, runner, allocator);
 #endif
     TH_LOG_ERROR("No IO service implementation available");
@@ -7693,10 +7756,11 @@ th_client_observable_init(th_client_observable* observable,
                           th_socket* (*get_socket)(void* self),
                           th_address* (*get_address)(void* self),
                           th_err (*start)(void* self),
+                          void (*set_mode)(void* self, th_exchange_mode mode),
                           void (*destroy)(void* self),
                           th_client_observer* observer)
 {
-    th_client_init(&observable->base, get_socket, get_address, start, th_client_observable_destroy);
+    th_client_init(&observable->base, get_socket, get_address, start, set_mode, th_client_observable_destroy);
     th_client_observer_on_init(observer, observable);
     observable->destroy = destroy;
     observable->observer = observer;
@@ -7717,6 +7781,9 @@ th_tcp_client_get_address(void* self);
 TH_LOCAL(th_err)
 th_tcp_client_start(void* self);
 
+TH_LOCAL(void)
+th_tcp_client_set_mode(void* self, th_exchange_mode mode);
+
 TH_LOCAL(th_err)
 th_tcp_client_exchange_next_msg(th_tcp_client* client);
 
@@ -7735,14 +7802,18 @@ th_tcp_client_msg_exchange_handler_fn(void* self, size_t close, th_err err)
     th_tcp_client_msg_exchange_handler* handler = self;
     th_tcp_client* client = handler->client;
     if (err != TH_ERR_OK && err != TH_ERR_EOF) {
-        TH_LOG_ERROR("Object: %p: %s", client, th_strerror(err));
+        TH_LOG_ERROR("%p: %s", client, th_strerror(err));
+        return;
+    }
+    if (err == TH_ERR_EOF) {
+        TH_LOG_DEBUG("%p: Connection closed", client);
         return;
     }
     if (close) {
-        TH_LOG_DEBUG("Object: %p: Closing", client);
+        TH_LOG_DEBUG("%p: Closing", client);
     } else {
         if ((err = th_tcp_client_exchange_next_msg(th_tcp_client_ref(client))) != TH_ERR_OK) {
-            TH_LOG_ERROR("Object: %p: Failed to initiate processing of next message: %s", client, th_strerror(err));
+            TH_LOG_ERROR("%p: Failed to initiate processing of next message: %s", client, th_strerror(err));
         }
     }
 }
@@ -7769,14 +7840,15 @@ th_tcp_client_init(th_tcp_client* client, th_context* context,
                    th_allocator* allocator)
 {
     th_client_observable_init(&client->base, th_tcp_client_get_socket, th_tcp_client_get_address,
-                              th_tcp_client_start, th_tcp_client_destroy, observer);
+                              th_tcp_client_start, th_tcp_client_set_mode, th_tcp_client_destroy, observer);
+    th_tcp_client_msg_exchange_handler_init(&client->msg_exchange_handler, client);
     client->context = context;
     client->allocator = allocator ? allocator : th_default_allocator_get();
     client->router = router;
     client->fcache = fcache;
     th_tcp_socket_init(&client->socket, context, client->allocator);
     th_address_init(&client->addr);
-    th_tcp_client_msg_exchange_handler_init(&client->msg_exchange_handler, client);
+    client->mode = TH_EXCHANGE_MODE_NORMAL;
 }
 
 TH_PRIVATE(th_err)
@@ -7811,7 +7883,15 @@ TH_LOCAL(th_err)
 th_tcp_client_start(void* self)
 {
     th_tcp_client* client = (th_tcp_client*)self;
+    TH_LOG_TRACE("%p: Starting", client);
     return th_tcp_client_exchange_next_msg(client);
+}
+
+TH_LOCAL(void)
+th_tcp_client_set_mode(void* self, th_exchange_mode mode)
+{
+    th_tcp_client* client = (th_tcp_client*)self;
+    client->mode = mode;
 }
 
 TH_LOCAL(th_err)
@@ -7820,12 +7900,12 @@ th_tcp_client_exchange_next_msg(th_tcp_client* client)
     th_exchange* exchange = NULL;
     th_err err = TH_ERR_OK;
     if ((err = th_exchange_create(&exchange, th_tcp_client_get_socket(client),
-                                     client->router, client->fcache,
-                                     client->allocator, &client->msg_exchange_handler.base))
+                                  client->router, client->fcache,
+                                  client->allocator, &client->msg_exchange_handler.base))
         != TH_ERR_OK) {
         return err;
     }
-    th_exchange_start(exchange);
+    th_exchange_start(exchange, client->mode);
     return err;
 }
 
@@ -7833,7 +7913,7 @@ TH_LOCAL(void)
 th_tcp_client_destroy(void* self)
 {
     th_tcp_client* client = self;
-    TH_LOG_DEBUG("Object: %p Destroying", client);
+    TH_LOG_TRACE("%p: Destroying", client);
     th_tcp_socket_deinit(&client->socket);
     th_allocator_free(client->allocator, client);
 }
@@ -7866,6 +7946,9 @@ th_ssl_client_get_address(void* self);
 TH_LOCAL(th_err)
 th_ssl_client_start(void* self);
 
+TH_LOCAL(void)
+th_ssl_client_set_mode(void* self, th_exchange_mode mode);
+
 TH_LOCAL(th_err)
 th_ssl_client_exchange_next_msg(th_ssl_client* client);
 
@@ -7883,15 +7966,19 @@ th_ssl_client_msg_exchange_handler_fn(void* self, size_t close, th_err err)
 {
     th_ssl_client_io_handler* handler = self;
     th_ssl_client* client = handler->client;
-    if (err != TH_ERR_OK) {
-        TH_LOG_ERROR("Object: %p: %s", client, th_strerror(err));
+    if (err != TH_ERR_OK && err != TH_ERR_EOF) {
+        TH_LOG_DEBUG("%p: %s", client, th_strerror(err));
+        return;
+    }
+    if (err == TH_ERR_EOF) {
+        TH_LOG_DEBUG("%p: Connection closed", client);
         return;
     }
     if (close) {
-        TH_LOG_DEBUG("Object: %p: Closing", client);
+        TH_LOG_DEBUG("%p: Closing", client);
     } else {
         if ((err = th_ssl_client_exchange_next_msg(th_ssl_client_ref(client))) != TH_ERR_OK) {
-            TH_LOG_ERROR("Object: %p: Failed to initiate processing of next message: %s", client, th_strerror(err));
+            TH_LOG_ERROR("%p: Failed to initiate processing of next message: %s", client, th_strerror(err));
         }
     }
 }
@@ -7911,10 +7998,10 @@ th_ssl_client_handshake_handler_fn(void* self, size_t len, th_err err)
     th_ssl_client_io_handler* handler = self;
     th_ssl_client* client = handler->client;
     if (err != TH_ERR_OK) {
-        TH_LOG_ERROR("Object: %p Handshake error: %s", client, th_strerror(err));
+        TH_LOG_ERROR("%p Handshake error: %s", client, th_strerror(err));
         return;
     }
-    TH_LOG_DEBUG("Object: %p Handshake complete", client);
+    TH_LOG_TRACE("%p Handshake complete", client);
     if ((err = th_ssl_client_exchange_next_msg((th_ssl_client*)th_client_ref((th_client*)client))) != TH_ERR_OK) {
         TH_LOG_ERROR("Object; %p Failed to initiate processing of next message: %s", client, th_strerror(err));
     }
@@ -7937,10 +8024,10 @@ th_ssl_client_shutdown_handler_fn(void* self, size_t len, th_err err)
     (void)client;
     // Whatever the result, we should finish the client
     if (err != TH_ERR_OK) {
-        TH_LOG_ERROR("[th_ssl_client] %p Shutdown error: %s", client, th_strerror(err));
+        TH_LOG_ERROR("%p Shutdown error: %s", client, th_strerror(err));
         return;
     }
-    TH_LOG_DEBUG("[th_ssl_client] %p Shutdown complete", client);
+    TH_LOG_DEBUG("%p Shutdown complete", client);
 }
 
 TH_LOCAL(void)
@@ -7966,19 +8053,20 @@ th_ssl_client_init(th_ssl_client* client, th_context* context, th_ssl_context* s
                    th_allocator* allocator)
 {
     th_client_observable_init(&client->base, th_ssl_client_get_socket, th_ssl_client_get_address,
-                              th_ssl_client_start, th_ssl_client_destroy, observer);
-    client->context = context;
-    client->allocator = allocator;
-    client->router = router;
-    client->fcache = fcache;
-    th_ssl_socket_init(&client->socket, context, ssl_context, client->allocator);
-    th_address_init(&client->addr);
+                              th_ssl_client_start, th_ssl_client_set_mode, th_ssl_client_destroy, observer);
     th_ssl_client_io_handler_init(&client->msg_exchange_handler, client,
                                   th_ssl_client_msg_exchange_handler_fn, th_ssl_client_msg_exchange_handler_detroy);
     th_ssl_client_io_handler_init(&client->handshake_handler, client,
                                   th_ssl_client_handshake_handler_fn, th_ssl_client_handshake_handler_detroy);
     th_ssl_client_io_handler_init(&client->shutdown_handler, client,
                                   th_ssl_client_shutdown_handler_fn, th_ssl_client_shutdown_handler_detroy);
+    client->context = context;
+    client->allocator = allocator;
+    client->router = router;
+    client->fcache = fcache;
+    th_ssl_socket_init(&client->socket, context, ssl_context, client->allocator);
+    th_address_init(&client->addr);
+    client->mode = TH_EXCHANGE_MODE_NORMAL;
 }
 
 TH_PRIVATE(th_err)
@@ -8019,10 +8107,17 @@ TH_LOCAL(th_err)
 th_ssl_client_start(void* self)
 {
     th_ssl_client* client = (th_ssl_client*)self;
-    TH_LOG_DEBUG("Starting %p", client);
+    TH_LOG_TRACE("%p: Starting", client);
     th_ssl_socket_set_mode(&client->socket, TH_SSL_SOCKET_MODE_SERVER);
     th_ssl_client_start_handshake(client);
     return TH_ERR_OK;
+}
+
+TH_LOCAL(void)
+th_ssl_client_set_mode(void* self, th_exchange_mode mode)
+{
+    th_ssl_client* client = (th_ssl_client*)self;
+    client->mode = mode;
 }
 
 TH_LOCAL(th_err)
@@ -8031,12 +8126,12 @@ th_ssl_client_exchange_next_msg(th_ssl_client* client)
     th_exchange* exchange = NULL;
     th_err err = TH_ERR_OK;
     if ((err = th_exchange_create(&exchange, th_ssl_client_get_socket(client),
-                                     client->router, client->fcache,
-                                     client->allocator, &client->msg_exchange_handler.base))
+                                  client->router, client->fcache,
+                                  client->allocator, &client->msg_exchange_handler.base))
         != TH_ERR_OK) {
         return err;
     }
-    th_exchange_start(exchange);
+    th_exchange_start(exchange, client->mode);
     return TH_ERR_OK;
 }
 
@@ -8044,7 +8139,7 @@ TH_LOCAL(void)
 th_ssl_client_destroy(void* self)
 {
     th_ssl_client* client = self;
-    TH_LOG_DEBUG("[th_ssl_client] %p Destroying", client);
+    TH_LOG_TRACE("%p Destroying", client);
     th_ssl_socket_deinit(&client->socket);
     th_allocator_free(client->allocator, client);
 }
@@ -8076,12 +8171,12 @@ th_ssl_client_unref(th_ssl_client* client)
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 struct th_header_id_mapping;
 
-#define TH_HEADER_ID_TOTAL_KEYWORDS 4
-#define TH_HEADER_ID_MIN_WORD_LENGTH 6
-#define TH_HEADER_ID_MAX_WORD_LENGTH 14
-#define TH_HEADER_ID_MIN_HASH_VALUE 6
-#define TH_HEADER_ID_MAX_HASH_VALUE 14
-/* maximum key range = 9, duplicates = 0 */
+#define TH_HEADER_ID_TOTAL_KEYWORDS 6
+#define TH_HEADER_ID_MIN_WORD_LENGTH 5
+#define TH_HEADER_ID_MAX_WORD_LENGTH 17
+#define TH_HEADER_ID_MIN_HASH_VALUE 5
+#define TH_HEADER_ID_MAX_HASH_VALUE 17
+/* maximum key range = 13, duplicates = 0 */
 
 #ifdef __GNUC__
 __inline
@@ -8102,14 +8197,17 @@ th_header_id_mapping_find (register const char *str, register size_t len)
 {
   static struct th_header_id_mapping wordlist[] =
     {
-      {""}, {""}, {""}, {""}, {""}, {""},
+      {""}, {""}, {""}, {""}, {""},
+      {"range", TH_HEADER_ID_RANGE},
       {"cookie", TH_HEADER_ID_COOKIE},
       {""}, {""}, {""},
       {"connection", TH_HEADER_ID_CONNECTION},
       {""},
       {"content-type", TH_HEADER_ID_CONTENT_TYPE},
       {""},
-      {"content-length", TH_HEADER_ID_CONTENT_LENGTH}
+      {"content-length", TH_HEADER_ID_CONTENT_LENGTH},
+      {""}, {""},
+      {"transfer-encoding", TH_HEADER_ID_TRANSFER_ENCODING}
     };
 
   if (len <= TH_HEADER_ID_MAX_WORD_LENGTH && len >= TH_HEADER_ID_MIN_WORD_LENGTH)
@@ -8397,7 +8495,7 @@ th_fcache_entry_open(th_fcache_entry* entry, th_string root, th_string path)
         return TH_ERR_INVALID_ARG;
     th_open_opt opt = {.read = true};
     if ((err = th_file_openat(&entry->stream, dir, path, opt)) != TH_ERR_OK) {
-        TH_LOG_ERROR("Failed to open file at %.*s: %s", (int)path.len, path.ptr, th_strerror(err));
+        TH_LOG_INFO("Failed to open file at %.*s: %s", (int)path.len, path.ptr, th_strerror(err));
         goto cleanup;
     }
     if ((err = th_heap_string_set(&entry->path, path)) != TH_ERR_OK) {
@@ -8491,7 +8589,6 @@ th_fcache_get(th_fcache* cache, th_string root, th_string path, th_fcache_entry*
     th_fcache_entry_init(entry, cache, cache->allocator);
     th_err err = TH_ERR_OK;
     if ((err = th_fcache_entry_open(entry, root, path)) != TH_ERR_OK) {
-        TH_LOG_ERROR("Failed to open fcache entry");
         th_allocator_free(cache->allocator, entry);
         return err;
     }
@@ -8645,10 +8742,10 @@ th_dir_mgr_add(th_dir_mgr* mgr, th_string label, th_string path)
     if ((err = th_dir_map_set(&mgr->map, th_dir_mgr_get_last_string(mgr), dir)) != TH_ERR_OK)
         goto cleanup_string;
     return TH_ERR_OK;
-cleanup_dir:
-    th_dir_deinit(&dir);
 cleanup_string:
     th_dir_mgr_remove_last_string(mgr);
+cleanup_dir:
+    th_dir_deinit(&dir);
     return err;
 }
 
@@ -8755,6 +8852,10 @@ th_client_acceptor_accept_handler_fn(void* self, size_t result, th_err err)
         th_client_unref(client_acceptor->client);
     } else if (err == TH_ERR_OK) {
         th_socket_set_fd(th_client_get_socket(client_acceptor->client), (int)result);
+        if (th_client_tracker_count(&client_acceptor->client_tracker) > TH_CONFIG_MAX_CONNECTIONS) {
+            TH_LOG_WARN("Too many connections, rejecting new connection");
+            th_client_set_mode(client_acceptor->client, TH_EXCHANGE_MODE_REJECT_UNAVAILABLE);
+        }
         th_client_start(client_acceptor->client);
     }
     if (!client_acceptor->running) {
@@ -8825,6 +8926,10 @@ th_client_acceptor_ssl_accept_handler_fn(void* self, size_t result, th_err err)
         th_client_unref(client_acceptor->client);
     } else if (err == TH_ERR_OK) {
         th_socket_set_fd(th_client_get_socket(client_acceptor->client), (int)result);
+        if (th_client_tracker_count(&client_acceptor->client_tracker) > TH_CONFIG_MAX_CONNECTIONS) {
+            TH_LOG_WARN("Too many connections, rejecting new connection");
+            th_client_set_mode(client_acceptor->client, TH_EXCHANGE_MODE_REJECT_UNAVAILABLE);
+        }
         th_client_start(client_acceptor->client);
     }
     if (!client_acceptor->running) {
@@ -9368,7 +9473,7 @@ on_error:
 
 
 #undef TH_LOG_TAG
-#define TH_LOG_TAG "h1_exchange"
+#define TH_LOG_TAG "exchange"
 
 /**
  * @brief th_exchange receives a http messages, processes it and sends a response.
@@ -9392,14 +9497,14 @@ TH_LOCAL(void)
 th_exchange_destroy(void* self)
 {
     th_exchange* handler = self;
-    TH_LOG_DEBUG("Destroying %p", handler);
+    TH_LOG_TRACE("%p: Destroying", handler);
     th_request_deinit(&handler->request);
     th_response_deinit(&handler->response);
     th_allocator_free(handler->allocator, handler);
 }
 
 TH_LOCAL(void)
-th_exchange_handle_error(th_exchange* handler, th_err err)
+th_exchange_write_error_response(th_exchange* handler, th_err err)
 {
     th_err http_error = th_http_error(err);
     th_response_set_code(&handler->response, TH_ERR_CODE(http_error));
@@ -9407,7 +9512,7 @@ th_exchange_handle_error(th_exchange* handler, th_err err)
     th_response_add_header(&handler->response, TH_STRING("Connection"), TH_STRING("close"));
     handler->close = true;
     handler->state = TH_EXCHANGE_STATE_HANDLE;
-    th_response_async_write(&handler->response, handler->socket, (th_io_handler*)th_io_composite_ref(&handler->base));
+    th_response_async_write(&handler->response, handler->socket, (th_io_handler*)handler);
 }
 
 TH_LOCAL(void)
@@ -9421,7 +9526,7 @@ th_exchange_handle_request(th_exchange* handler)
     th_response* response = &handler->response;
     // Find the handler for the request
     if ((err = th_router_handle(router, request, response)) != TH_ERR_OK) {
-        th_exchange_handle_error(handler, err);
+        th_exchange_write_error_response((th_exchange*)th_io_composite_ref(&handler->base), err);
         return;
     }
 
@@ -9432,7 +9537,7 @@ th_exchange_handle_request(th_exchange* handler)
         th_response_add_header(response, TH_STRING("Connection"), TH_STRING("keep-alive"));
     }
 
-    TH_LOG_DEBUG("Object: %p : Write response %p", handler, response);
+    TH_LOG_TRACE("%p: Write response %p", handler, response);
     handler->state = TH_EXCHANGE_STATE_HANDLE;
     th_response_async_write(response, socket, (th_io_handler*)th_io_composite_ref(&handler->base));
 }
@@ -9445,25 +9550,26 @@ th_exchange_fn(void* self, size_t len, th_err err)
     switch (handler->state) {
     case TH_EXCHANGE_STATE_START: {
         if (err != TH_ERR_OK) {
-            TH_LOG_DEBUG("Object: %p Failed to read request: %s", handler, th_strerror(err));
             if (TH_ERR_CATEGORY(err) == TH_ERR_CATEGORY_HTTP) {
-                th_exchange_handle_error(handler, err);
+                TH_LOG_DEBUG("%p: Rejecting request with error %s", handler, th_strerror(err));
+                th_exchange_write_error_response((th_exchange*)th_io_composite_ref(&handler->base), err);
             } else {
+                TH_LOG_DEBUG("%p: Failed to read request: %s", handler, th_strerror(err));
                 th_io_composite_complete(&handler->base, TH_EXCHANGE_CLOSE, err);
             }
             return;
         }
-        TH_LOG_DEBUG("Object: %p Read request %p of length %zu", handler, &handler->request, len);
+        TH_LOG_TRACE("%p: Read request %p of length %zu", handler, &handler->request, len);
         th_exchange_handle_request(handler);
         break;
     }
     case TH_EXCHANGE_STATE_HANDLE: {
         if (err != TH_ERR_OK) {
-            TH_LOG_ERROR("Object: %p Failed to write response: %s", handler, th_strerror(err));
+            TH_LOG_ERROR("%p: Failed to write response: %s", handler, th_strerror(err));
             th_io_composite_complete(&handler->base, TH_EXCHANGE_CLOSE, err);
             return;
         }
-        TH_LOG_DEBUG("Object: %p Wrote response %p of length %zu", handler, &handler->response, len);
+        TH_LOG_TRACE("%p: Wrote response %p of length %zu", handler, &handler->response, len);
         size_t result = handler->close ? TH_EXCHANGE_CLOSE : TH_EXCHANGE_CONTINUE;
         th_io_composite_complete(&handler->base, result, TH_ERR_OK);
         break;
@@ -9473,8 +9579,8 @@ th_exchange_fn(void* self, size_t len, th_err err)
 
 TH_LOCAL(void)
 th_exchange_init(th_exchange* exchange, th_socket* socket,
-                    th_router* router, th_fcache* fcache,
-                    th_allocator* allocator, th_io_handler* on_complete)
+                 th_router* router, th_fcache* fcache,
+                 th_allocator* allocator, th_io_handler* on_complete)
 {
     th_io_composite_init(&exchange->base, th_exchange_fn, th_exchange_destroy, on_complete);
     exchange->socket = socket;
@@ -9488,8 +9594,8 @@ th_exchange_init(th_exchange* exchange, th_socket* socket,
 
 TH_PRIVATE(th_err)
 th_exchange_create(th_exchange** out, th_socket* socket,
-                      th_router* router, th_fcache* fcache,
-                      th_allocator* allocator, th_io_handler* on_complete)
+                   th_router* router, th_fcache* fcache,
+                   th_allocator* allocator, th_io_handler* on_complete)
 {
     th_exchange* handler = th_allocator_alloc(allocator, sizeof(th_exchange));
     if (!handler) {
@@ -9501,10 +9607,15 @@ th_exchange_create(th_exchange** out, th_socket* socket,
 }
 
 TH_PRIVATE(void)
-th_exchange_start(th_exchange* handler)
+th_exchange_start(th_exchange* handler, th_exchange_mode mode)
 {
     handler->state = TH_EXCHANGE_STATE_START;
-    TH_LOG_DEBUG("Object: %p : Reading request %p", handler, &handler->request);
+    if (mode != TH_EXCHANGE_MODE_NORMAL) {
+        TH_LOG_DEBUG("%p: Rejecting request with error %s", handler, th_strerror((th_err)mode));
+        th_exchange_write_error_response(handler, (th_err)mode);
+        return;
+    }
+    TH_LOG_TRACE("%p: Reading request %p", handler, &handler->request);
     th_request_async_read(handler->socket, handler->allocator, &handler->request, (th_io_handler*)handler);
 }
 /* End of src/th_exchange.c */
@@ -10384,6 +10495,9 @@ th_smem_ctrl(BIO* bio, int cmd, long num, void* ptr)
 #include <openssl/err.h>
 #include <openssl/ssl.h>
 
+#undef TH_LOG_TAG
+#define TH_LOG_TAG "ssl_context"
+
 TH_PRIVATE(th_err)
 th_ssl_context_init(th_ssl_context* context, const char* key, const char* cert)
 {
@@ -10392,27 +10506,27 @@ th_ssl_context_init(th_ssl_context* context, const char* key, const char* cert)
 
     context->ctx = SSL_CTX_new(TLS_server_method());
     if (!context->ctx) {
-        TH_LOG_FATAL("[ssl_context] failed to create SSL context");
+        TH_LOG_FATAL("Failed to create SSL context");
         goto cleanup;
     }
 
     if (SSL_CTX_use_certificate_chain_file(context->ctx, cert) <= 0) {
-        TH_LOG_FATAL("[ssl_context] failed to load certificate file");
+        TH_LOG_FATAL("Failed to load certificate file");
         goto cleanup;
     }
 
     if (SSL_CTX_use_PrivateKey_file(context->ctx, key, SSL_FILETYPE_PEM) <= 0) {
-        TH_LOG_FATAL("[ssl_context] failed to load private key file");
+        TH_LOG_FATAL("Failed to load private key file");
         goto cleanup;
     }
 
     if (!SSL_CTX_set_min_proto_version(context->ctx, TLS1_3_VERSION)) {
-        TH_LOG_FATAL("[ssl_context] failed to set minimum protocol version");
+        TH_LOG_FATAL("Failed to set minimum protocol version");
         goto cleanup;
     }
 
     if (SSL_CTX_set_cipher_list(context->ctx, "MEDIUM:HIGH:!aNULL!MD5:!RC4!3DES") <= 0) {
-        TH_LOG_FATAL("[ssl_context] failed to set cipher list");
+        TH_LOG_FATAL("Failed to set cipher list");
         goto cleanup;
     }
 
@@ -10760,7 +10874,7 @@ th_ssl_socket_io_handler_writev_with_file(th_ssl_socket_io_handler* handler, th_
                                               stream, offset, len, &result))
         != TH_ERR_OK) {
         if (TH_ERR_CODE(err) == SSL_ERROR_WANT_READ) {
-            TH_LOG_DEBUG("SSL_write wants read, switching to async read");
+            TH_LOG_TRACE("SSL_write wants read, switching to async read");
             handler->state = TH_SSL_IO_STATE_READ;
             th_smem_bio_get_wbuf(socket->rbio, &handler->buffer);
             th_tcp_socket_async_read(&socket->tcp_socket, handler->buffer.base, handler->buffer.len,
@@ -10769,7 +10883,7 @@ th_ssl_socket_io_handler_writev_with_file(th_ssl_socket_io_handler* handler, th_
             th_ssl_socket_io_handler_complete(handler, result, err);
         }
     } else {
-        TH_LOG_DEBUG("SSL_write %d bytes", (int)result);
+        TH_LOG_TRACE("SSL_write %d bytes", (int)result);
         handler->result = result;
         handler->state = TH_SSL_IO_STATE_WRITE;
         th_smem_bio_get_rdata(socket->wbio, &handler->buffer);
@@ -10789,20 +10903,20 @@ th_ssl_socket_io_handler_readv(th_ssl_socket_io_handler* handler, th_iov* iov, s
         || (BIO_pending(socket->wbio) > 0)) {
         if (BIO_pending(socket->wbio) > 0) {
             th_smem_bio_get_rdata(socket->wbio, &handler->buffer);
-            TH_LOG_DEBUG("[th_ssl_socket] SSL_read wants write, switching to async write");
+            TH_LOG_TRACE("SSL_read wants write, switching to async write");
             handler->state = TH_SSL_IO_STATE_WRITE;
             if (result > 0)
                 handler->result = result;
             th_socket_async_write_exact(&socket->tcp_socket.base, handler->buffer.base, handler->buffer.len,
                                         (th_socket_handler*)th_io_composite_forward(&handler->base, type));
         } else if (TH_ERR_CODE(err) == SSL_ERROR_WANT_READ) {
-            TH_LOG_DEBUG("[th_ssl_socket] SSL_read wants read, switching to async read");
+            TH_LOG_TRACE("SSL_read wants read, switching to async read");
             handler->state = TH_SSL_IO_STATE_READ;
             th_smem_bio_get_wbuf(socket->rbio, &handler->buffer);
             th_tcp_socket_async_read(&socket->tcp_socket, handler->buffer.base, handler->buffer.len,
                                      (th_socket_handler*)th_io_composite_forward(&handler->base, type));
         } else if (TH_ERR_CODE(err) == SSL_ERROR_ZERO_RETURN) {
-            TH_LOG_DEBUG("[th_ssl_socket] SSL_read zero return");
+            TH_LOG_TRACE("SSL_read zero return");
             th_ssl_socket_io_handler_complete(handler, 0, TH_ERR_EOF);
         } else {
             th_ssl_log_error_stack();
@@ -10825,18 +10939,18 @@ th_ssl_socket_io_handler_handshake(th_ssl_socket_io_handler* handler,
             if (err == TH_ERR_OK)
                 handler->result = 1; // handshake done
             th_smem_bio_get_rdata(socket->wbio, &handler->buffer);
-            TH_LOG_DEBUG("SSL_handshake wants write, switching to async write");
+            TH_LOG_TRACE("SSL_handshake wants write, switching to async write");
             handler->state = TH_SSL_IO_STATE_WRITE;
             th_socket_async_write_exact(&socket->tcp_socket.base, handler->buffer.base, handler->buffer.len,
                                         (th_socket_handler*)th_io_composite_forward(&handler->base, type));
         } else if (TH_ERR_CODE(err) == SSL_ERROR_WANT_READ) {
-            TH_LOG_DEBUG("SSL_handshake wants read, switching to async read");
+            TH_LOG_TRACE("SSL_handshake wants read, switching to async read");
             handler->state = TH_SSL_IO_STATE_READ;
             th_smem_bio_get_wbuf(socket->rbio, &handler->buffer);
             th_tcp_socket_async_read(&socket->tcp_socket, handler->buffer.base, handler->buffer.len,
                                      (th_socket_handler*)th_io_composite_forward(&handler->base, type));
         } else if (TH_ERR_CODE(err) == SSL_ERROR_ZERO_RETURN) {
-            TH_LOG_DEBUG("SSL_handshake zero return");
+            TH_LOG_TRACE("SSL_handshake zero return");
             th_ssl_socket_io_handler_complete(handler, 0, TH_ERR_EOF);
         } else {
             th_ssl_log_error_stack();

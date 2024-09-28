@@ -84,12 +84,13 @@ const char* th_strerror(th_err err);
 /* error related declarations end */
 /* log declarations begin */
 
-#define TH_LOG_LEVEL_DEBUG 0
-#define TH_LOG_LEVEL_INFO 1
-#define TH_LOG_LEVEL_WARN 2
-#define TH_LOG_LEVEL_ERROR 3
-#define TH_LOG_LEVEL_FATAL 4
-#define TH_LOG_LEVEL_NONE 5
+#define TH_LOG_LEVEL_TRACE 0
+#define TH_LOG_LEVEL_DEBUG 1
+#define TH_LOG_LEVEL_INFO 2
+#define TH_LOG_LEVEL_WARN 3
+#define TH_LOG_LEVEL_ERROR 4
+#define TH_LOG_LEVEL_FATAL 5
+#define TH_LOG_LEVEL_NONE 6
 
 /** th_log
  * @brief Log interface. Library user can implement this interface and pass it to th_log_set
@@ -137,9 +138,13 @@ typedef enum th_code {
     TH_CODE_REQUEST_TIMEOUT = 408,
     TH_CODE_PAYLOAD_TOO_LARGE = 413,
     TH_CODE_URI_TOO_LONG = 414,
-    TH_CODE_REQUEST_HEADER_TOO_LARGE = 431,
+    TH_CODE_UNSUPPORTED_MEDIA_TYPE = 415,
+    TH_CODE_RANGE_NOT_SATISFIABLE = 416,
+    TH_CODE_TOO_MANY_REQUESTS = 429,
+    TH_CODE_REQUEST_HEADER_FIELDS_TOO_LARGE = 431,
     TH_CODE_INTERNAL_SERVER_ERROR = 500,
     TH_CODE_NOT_IMPLEMENTED = 501,
+    TH_CODE_SERVICE_UNAVAILABLE = 503,
 } th_code;
 
 /** th_listener_opt

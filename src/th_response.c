@@ -236,9 +236,7 @@ th_response_set_start_line(th_response* response)
     }
     char int_buffer[256]; // Buffer for the integer to string conversion
     size_t pos = 0;
-    pos += th_fmt_str_append(ptr, pos, default_header_buf_len, "HTTP/1.");
-    pos += th_fmt_str_append(ptr, pos, default_header_buf_len, th_fmt_uint_to_str(int_buffer, sizeof(int_buffer), response->minor_version));
-    pos += th_fmt_str_append(ptr, pos, default_header_buf_len, " ");
+    pos += th_fmt_str_append(ptr, pos, default_header_buf_len, "HTTP/1.1 ");
     pos += th_fmt_str_append(ptr, pos, default_header_buf_len, th_fmt_uint_to_str(int_buffer, sizeof(int_buffer), response->code));
     pos += th_fmt_str_append(ptr, pos, default_header_buf_len, " ");
     pos += th_fmt_str_append(ptr, pos, default_header_buf_len, th_http_strerror(response->code));

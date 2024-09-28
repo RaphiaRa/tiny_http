@@ -44,7 +44,6 @@ struct th_response {
     size_t file_len;
     th_last_chunk_type last_chunk_type;
     th_code code;
-    int minor_version;
 };
 
 TH_PRIVATE(void)

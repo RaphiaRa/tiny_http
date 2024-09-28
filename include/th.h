@@ -119,10 +119,6 @@ typedef enum th_method {
     TH_METHOD_PUT,
     TH_METHOD_DELETE,
     TH_METHOD_PATCH,
-    TH_METHOD_HEAD,
-    TH_METHOD_OPTIONS,
-    TH_METHOD_CONNECT,
-    TH_METHOD_TRACE,
     TH_METHOD_ANY,
     TH_METHOD_MAX,
 } th_method;

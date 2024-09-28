@@ -6,6 +6,7 @@
 #include "th_config.h"
 #include "th_hashmap.h"
 #include "th_heap_string.h"
+#include "th_method.h"
 #include "th_socket.h"
 
 #define TH_REQUEST_MAP_ARENA_LEN 512
@@ -39,6 +40,7 @@ struct th_request {
     size_t content_buf_len;
     size_t content_buf_pos;
     char* content_buf;
+    th_method_internal method_internal;
     th_method method;
     int minor_version;
     bool close;

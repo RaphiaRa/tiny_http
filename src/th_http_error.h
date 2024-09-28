@@ -14,6 +14,8 @@
 TH_INLINE(th_err)
 th_http_error(th_err err)
 {
+    if (err == TH_ERR_OK)
+        return TH_ERR_HTTP(TH_CODE_OK);
     switch (TH_ERR_CATEGORY(err)) {
     case TH_ERR_CATEGORY_SYSTEM:
         switch (TH_ERR_CODE(err)) {
@@ -96,6 +98,27 @@ th_http_strerror(int code)
         return "Unknown";
         break;
     }
+}
+
+typedef enum th_http_code_type {
+    TH_HTTP_CODE_TYPE_INFORMATIONAL,
+    TH_HTTP_CODE_TYPE_SUCCESS,
+    TH_HTTP_CODE_TYPE_REDIRECT,
+    TH_HTTP_CODE_TYPE_ERROR,
+} th_http_code_type;
+
+TH_INLINE(th_http_code_type)
+th_http_code_get_type(int code)
+{
+    if (code >= 100 && code < 200)
+        return TH_HTTP_CODE_TYPE_INFORMATIONAL;
+    if (code >= 200 && code < 300)
+        return TH_HTTP_CODE_TYPE_SUCCESS;
+    if (code >= 300 && code < 400)
+        return TH_HTTP_CODE_TYPE_REDIRECT;
+    if (code >= 400)
+        return TH_HTTP_CODE_TYPE_ERROR;
+    return TH_HTTP_CODE_TYPE_ERROR;
 }
 
 #endif

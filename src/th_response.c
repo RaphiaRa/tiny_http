@@ -185,7 +185,7 @@ cleanup_fcache_entry:
     return err;
 }
 
-TH_LOCAL(th_err)
+TH_PRIVATE(th_err)
 th_response_set_body(th_response* response, th_string body)
 {
     if (response->last_chunk_type == TH_CHUNK_TYPE_HEADER) {

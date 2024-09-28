@@ -56,6 +56,9 @@ th_response_set_code(th_response* response, th_code code);
 TH_PRIVATE(th_err)
 th_response_add_header(th_response* response, th_string key, th_string value);
 
+TH_PRIVATE(th_err)
+th_response_set_body(th_response* response, th_string body);
+
 TH_PRIVATE(void)
 th_response_deinit(th_response* response);
 

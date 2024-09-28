@@ -5,6 +5,8 @@
 #include "th_request.h"
 #include "th_response.h"
 
+#include <th.h>
+
 #undef TH_LOG_TAG
 #define TH_LOG_TAG "exchange"
 
@@ -49,31 +51,50 @@ th_exchange_write_error_response(th_exchange* handler, th_err err)
 }
 
 TH_LOCAL(void)
+th_exchange_write_require_1_1_response(th_exchange* handler)
+{
+    TH_LOG_ERROR("%p: Trying send a HTTP/1.1 response to a HTTP/1.0 client, sending 400 Bad Request instead", handler);
+    th_response_set_code(&handler->response, TH_CODE_BAD_REQUEST);
+    th_response_set_body(&handler->response, TH_STRING("HTTP/1.1 required for this request"));
+    th_response_add_header(&handler->response, TH_STRING("Connection"), TH_STRING("close"));
+    handler->close = true;
+    handler->state = TH_EXCHANGE_STATE_HANDLE;
+    th_response_async_write(&handler->response, handler->socket, (th_io_handler*)handler);
+}
+
+TH_LOCAL(void)
 th_exchange_handle_request(th_exchange* handler)
 {
-    th_err err = TH_ERR_OK;
+    handler = (th_exchange*)th_io_composite_ref(&handler->base);
     th_socket* socket = handler->socket;
-    // We got a request, let's process it
     th_request* request = &handler->request;
     th_router* router = handler->router;
     th_response* response = &handler->response;
-    // Find the handler for the request
-    if ((err = th_router_handle(router, request, response)) != TH_ERR_OK) {
-        th_exchange_write_error_response((th_exchange*)th_io_composite_ref(&handler->base), err);
+    th_err err = th_http_error(th_router_handle(router, request, response));
+    switch (th_http_code_get_type(TH_ERR_CODE(err))) {
+    case TH_HTTP_CODE_TYPE_INFORMATIONAL:
+        if (request->minor_version == 0) {
+            th_exchange_write_require_1_1_response(handler);
+            return;
+        }
+        break;
+    case TH_HTTP_CODE_TYPE_ERROR:
+        th_exchange_write_error_response(handler, err);
         return;
+    default:
+        // All other types don't require any special handling
+        break;
     }
     response->minor_version = request->minor_version;
-
     if (request->close) {
         th_response_add_header(response, TH_STRING("Connection"), TH_STRING("close"));
         handler->close = true;
     } else {
         th_response_add_header(response, TH_STRING("Connection"), TH_STRING("keep-alive"));
     }
-
     TH_LOG_TRACE("%p: Write response %p", handler, response);
     handler->state = TH_EXCHANGE_STATE_HANDLE;
-    th_response_async_write(response, socket, (th_io_handler*)th_io_composite_ref(&handler->base));
+    th_response_async_write(response, socket, (th_io_handler*)handler);
 }
 
 TH_LOCAL(void)

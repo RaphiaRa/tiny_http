@@ -130,7 +130,7 @@ th_response_finalize_header_buf(th_response* response)
     // Shrink the buffer to the actual needed size
     size_t pos = response->cur_header_buf_pos;
     void* new_buf = th_allocator_realloc(response->allocator, response->header_buf[pos].base, response->header_buf[pos].len);
-    assert(new_buf && "Reallocation with smaller size should always succeed");
+    TH_ASSERT(new_buf && "Reallocation with smaller size should always succeed");
     if (!new_buf) {
         return TH_ERR_BAD_ALLOC;
     }

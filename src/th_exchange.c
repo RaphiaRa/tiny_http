@@ -6,7 +6,7 @@
 #include "th_response.h"
 
 #undef TH_LOG_TAG
-#define TH_LOG_TAG "h1_exchange"
+#define TH_LOG_TAG "exchange"
 
 /**
  * @brief th_exchange receives a http messages, processes it and sends a response.
@@ -30,7 +30,7 @@ TH_LOCAL(void)
 th_exchange_destroy(void* self)
 {
     th_exchange* handler = self;
-    TH_LOG_DEBUG("Destroying %p", handler);
+    TH_LOG_TRACE("%p: Destroying", handler);
     th_request_deinit(&handler->request);
     th_response_deinit(&handler->response);
     th_allocator_free(handler->allocator, handler);
@@ -70,7 +70,7 @@ th_exchange_handle_request(th_exchange* handler)
         th_response_add_header(response, TH_STRING("Connection"), TH_STRING("keep-alive"));
     }
 
-    TH_LOG_DEBUG("Object: %p : Write response %p", handler, response);
+    TH_LOG_TRACE("%p: Write response %p", handler, response);
     handler->state = TH_EXCHANGE_STATE_HANDLE;
     th_response_async_write(response, socket, (th_io_handler*)th_io_composite_ref(&handler->base));
 }
@@ -83,25 +83,26 @@ th_exchange_fn(void* self, size_t len, th_err err)
     switch (handler->state) {
     case TH_EXCHANGE_STATE_START: {
         if (err != TH_ERR_OK) {
-            TH_LOG_DEBUG("Object: %p Failed to read request: %s", handler, th_strerror(err));
             if (TH_ERR_CATEGORY(err) == TH_ERR_CATEGORY_HTTP) {
+                TH_LOG_DEBUG("%p: Rejecting request with error %s", handler, th_strerror(err));
                 th_exchange_write_error_response((th_exchange*)th_io_composite_ref(&handler->base), err);
             } else {
+                TH_LOG_DEBUG("%p: Failed to read request: %s", handler, th_strerror(err));
                 th_io_composite_complete(&handler->base, TH_EXCHANGE_CLOSE, err);
             }
             return;
         }
-        TH_LOG_DEBUG("Object: %p Read request %p of length %zu", handler, &handler->request, len);
+        TH_LOG_TRACE("%p: Read request %p of length %zu", handler, &handler->request, len);
         th_exchange_handle_request(handler);
         break;
     }
     case TH_EXCHANGE_STATE_HANDLE: {
         if (err != TH_ERR_OK) {
-            TH_LOG_ERROR("Object: %p Failed to write response: %s", handler, th_strerror(err));
+            TH_LOG_ERROR("%p: Failed to write response: %s", handler, th_strerror(err));
             th_io_composite_complete(&handler->base, TH_EXCHANGE_CLOSE, err);
             return;
         }
-        TH_LOG_DEBUG("Object: %p Wrote response %p of length %zu", handler, &handler->response, len);
+        TH_LOG_TRACE("%p: Wrote response %p of length %zu", handler, &handler->response, len);
         size_t result = handler->close ? TH_EXCHANGE_CLOSE : TH_EXCHANGE_CONTINUE;
         th_io_composite_complete(&handler->base, result, TH_ERR_OK);
         break;
@@ -143,10 +144,10 @@ th_exchange_start(th_exchange* handler, th_exchange_mode mode)
 {
     handler->state = TH_EXCHANGE_STATE_START;
     if (mode != TH_EXCHANGE_MODE_NORMAL) {
-        TH_LOG_DEBUG("%p : Rejecting request with error %s", handler, th_strerror((th_err)mode));
+        TH_LOG_DEBUG("%p: Rejecting request with error %s", handler, th_strerror((th_err)mode));
         th_exchange_write_error_response(handler, (th_err)mode);
         return;
     }
-    TH_LOG_DEBUG("Object: %p : Reading request %p", handler, &handler->request);
+    TH_LOG_TRACE("%p: Reading request %p", handler, &handler->request);
     th_request_async_read(handler->socket, handler->allocator, &handler->request, (th_io_handler*)handler);
 }

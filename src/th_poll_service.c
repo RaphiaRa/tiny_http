@@ -204,11 +204,10 @@ th_poll_service_run(void* self, int timeout_ms)
 {
     th_poll_service* service = (th_poll_service*)self;
 
-    TH_LOG_DEBUG("Waiting for %d fds", service->nfds);
     int ret = poll(service->fds, service->nfds, timeout_ms);
     if (ret <= 0) {
         if (ret == -1)
-            TH_LOG_ERROR("poll failed: %s", strerror(errno));
+            TH_LOG_WARN("poll failed: %s", strerror(errno));
         return;
     }
 

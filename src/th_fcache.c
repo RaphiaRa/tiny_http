@@ -45,7 +45,7 @@ th_fcache_entry_open(th_fcache_entry* entry, th_string root, th_string path)
         return TH_ERR_INVALID_ARG;
     th_open_opt opt = {.read = true};
     if ((err = th_file_openat(&entry->stream, dir, path, opt)) != TH_ERR_OK) {
-        TH_LOG_ERROR("Failed to open file at %.*s: %s", (int)path.len, path.ptr, th_strerror(err));
+        TH_LOG_INFO("Failed to open file at %.*s: %s", (int)path.len, path.ptr, th_strerror(err));
         goto cleanup;
     }
     if ((err = th_heap_string_set(&entry->path, path)) != TH_ERR_OK) {
@@ -139,7 +139,6 @@ th_fcache_get(th_fcache* cache, th_string root, th_string path, th_fcache_entry*
     th_fcache_entry_init(entry, cache, cache->allocator);
     th_err err = TH_ERR_OK;
     if ((err = th_fcache_entry_open(entry, root, path)) != TH_ERR_OK) {
-        TH_LOG_ERROR("Failed to open fcache entry");
         th_allocator_free(cache->allocator, entry);
         return err;
     }

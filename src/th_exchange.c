@@ -85,7 +85,6 @@ th_exchange_handle_request(th_exchange* handler)
         // All other types don't require any special handling
         break;
     }
-    response->minor_version = request->minor_version;
     if (request->close) {
         th_response_add_header(response, TH_STRING("Connection"), TH_STRING("close"));
         handler->close = true;

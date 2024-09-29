@@ -162,6 +162,7 @@ th_poll_handle_destroy(void* self)
 {
     th_poll_handle* handle = (th_poll_handle*)self;
     th_poll_handle_map_remove(&handle->service->handles, handle->fd);
+    close(handle->fd);
     th_allocator_free(handle->allocator, handle);
 }
 

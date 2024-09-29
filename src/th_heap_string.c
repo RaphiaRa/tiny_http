@@ -56,7 +56,8 @@ th_heap_string_small_to_large(th_heap_string* self, size_t capacity)
 {
     TH_ASSERT(self->impl.small.small);
     th_detail_large_string large = {0};
-    large.capacity = TH_HEAP_STRING_ALIGNUP(capacity);
+    capacity = TH_HEAP_STRING_ALIGNUP(capacity);
+    large.capacity = capacity;
     large.len = self->impl.small.len;
     large.ptr = th_allocator_alloc(self->impl.small.allocator, capacity);
     if (large.ptr == NULL) {

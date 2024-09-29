@@ -118,7 +118,13 @@ th_request_parse_path(th_request* request, th_string path)
     th_string uri_query = th_string_trim(th_string_substr(path, query_start + 1, path.len - query_start - 1));
     if ((err = th_request_store_uri_query(request, uri_query)) != TH_ERR_OK)
         return err;
-    return th_request_parse_path_query(request, uri_query);
+    if (th_request_parse_path_query(request, uri_query) != TH_ERR_OK) {
+        // If we can't parse the query, that's ok, we just ignore it
+        // restore the original state and continue
+        th_cstr_map_reset(&request->query_params);
+        // TODO, clean up the allocated strings
+    }
+    return TH_ERR_OK;
 }
 
 TH_LOCAL(th_err)
@@ -286,6 +292,7 @@ th_request_read_handle_header(th_request_read_handler* handler, size_t len)
     int pret = phr_parse_request(th_buf_vec_at(&request->buffer, 0), data_len, &method.ptr, &method.len, &path.ptr, &path.len, &request->minor_version, headers, &num_headers, request->data_len);
     request->data_len = data_len;
     if (pret == -1) {
+        TH_LOG_DEBUG("%p: Failed to parse request", request);
         th_request_read_handler_complete(handler, 0, TH_ERR_HTTP(TH_CODE_BAD_REQUEST));
         return;
     } else if (pret == -2) { // we need more data
@@ -325,18 +332,21 @@ th_request_read_handle_header(th_request_read_handler* handler, size_t len)
     // find path query
     th_err err = TH_ERR_OK;
     if ((err = th_request_parse_path(request, path)) != TH_ERR_OK) {
-        th_request_read_handler_complete(handler, 0, err);
+        TH_LOG_DEBUG("%p: Failed to parse uri: %s", request, th_strerror(err));
+        th_request_read_handler_complete(handler, 0, TH_ERR_HTTP(TH_CODE_BAD_REQUEST));
         return;
     }
 
     // handle headers
     if ((err = th_request_handle_headers(request, headers, num_headers)) != TH_ERR_OK) {
+        TH_LOG_DEBUG("%p: Failed to handle headers: %s", request, th_strerror(err));
         th_request_read_handler_complete(handler, 0, err);
         return;
     }
 
     // Get is not allowed to have a body
     if (request->method == TH_METHOD_GET && request->content_len > 0) {
+        TH_LOG_DEBUG("%p: Rejecting GET request with body", request);
         th_request_read_handler_complete(handler, 0, TH_ERR_HTTP(TH_CODE_BAD_REQUEST));
         return;
     }
@@ -359,6 +369,7 @@ th_request_read_handle_header(th_request_read_handler* handler, size_t len)
 
     // check whether the content length is ok
     if (request->content_len > TH_CONFIG_MAX_CONTENT_LEN) {
+        TH_LOG_DEBUG("%p: Rejecting request with too large content length", request);
         th_request_read_handler_complete(handler, 0, TH_ERR_HTTP(TH_CODE_PAYLOAD_TOO_LARGE));
         return;
     }

@@ -5,7 +5,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-static th_server* server = NULL;
 static bool running = true;
 
 static void
@@ -30,7 +29,7 @@ int main(int argc, char** argv)
     (void)argc;
     (void)argv;
     signal(SIGINT, sigint_handler);
-
+    th_server* server = NULL;
     th_err err = TH_ERR_OK;
     if ((err = th_server_create(&server, NULL)) != TH_ERR_OK)
         goto cleanup;

@@ -5,8 +5,7 @@
 [![MacOS](https://github.com/RaphiaRa/tiny_http/actions/workflows/macos.yml/badge.svg?branch=main)](https://github.com/RaphiaRa/tiny_http/actions/workflows/macos.yml)
 
 </div>
-tiny_http is my attempt at creating a lightweight, easy-to-use, and embeddable HTTP server library in C99.
-It is not designed to be a full-fledged web server, but rather a simple tool to build small web applications or to serve static files. No threading or forking is used, so it's not suitable for high-traffic applications.
+tiny_http is my attempt at creating a lightweight, easy-to-use, and embeddable HTTP server library in C99. It is not designed to be a full-fledged web server, but rather a simple tool to build small web applications or to serve static files. No threading or forking is used, so it's not suitable for high-traffic applications.
 
 Hello, World! example:
 ```c
@@ -147,3 +146,14 @@ int main()
 ```
 
 More detailed examples can be found in the `examples` directory.
+
+## Performance
+Although tiny_http is not designed to be high-performance, it's still quite fast for a single-threaded server.
+Here are some benchmark results from my cloud server (2 dedicated AMD Epyc vCPUs):
+[![Benchmark](benchmark/result.png)](benchmark/benchmark.md)
+
+Notes:
+- Of course, libraries like Drogon will scale much better with multiple threads. This is just to give a rough idea of tiny_http's performance.
+
+- The slower static file test is probably because of tiny_http not using sendfile on Linux yet.
+

@@ -12,6 +12,7 @@
 #include "th_io_task.h"
 #include "th_runner.h"
 #include "th_timer.h"
+#include "th_vec.h"
 
 #include <poll.h>
 #include <stddef.h>
@@ -66,6 +67,11 @@ TH_DEFINE_OBJ_POOL_ALLOCATOR(th_poll_handle_pool, th_poll_handle, prev, next)
 TH_DEFINE_QUEUE(th_poll_handle_list, th_poll_handle)
 #endif
 
+#ifndef TH_POLLFD_VEC
+#define TH_POLLFD_VEC
+TH_DEFINE_VEC(th_pollfd_vec, struct pollfd, (void))
+#endif
+
 /* th_poll_handle end */
 /* th_poll_handle_map begin */
 
@@ -85,8 +91,7 @@ struct th_poll_service {
     th_runner* runner;
     th_poll_handle_pool handle_allocator;
     th_poll_handle_map handles;
-    struct pollfd fds[512];
-    nfds_t nfds;
+    th_pollfd_vec fds;
 };
 
 TH_PRIVATE(th_err)

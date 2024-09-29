@@ -3,6 +3,7 @@
 
 #include "th_http_error.h"
 #include "th_ssl_error.h"
+#include "th_utility.h"
 
 TH_PUBLIC(const char*)
 th_strerror(th_err err)
@@ -28,7 +29,7 @@ th_strerror(th_err err)
 #if TH_WITH_SSL
         return th_ssl_strerror(TH_ERR_CODE(err));
 #else
-        assert(0 && "SSL not enabled");
+        TH_ASSERT(0 && "SSL not enabled");
         return NULL;
 #endif
     }

@@ -7,7 +7,7 @@
 </div>
 tiny_http is my attempt at creating a lightweight, easy-to-use, and embeddable HTTP server library in C99.
 
-Hello, World! example:
+##### Hello, World! Example:
 ```c
 #include "th.h"
 
@@ -158,5 +158,5 @@ Here is a comparison with [Drogon](https://github.com/drogonframework/drogon) (O
 [![Benchmark](benchmark/result.png)](benchmark/benchmark.md)
 
 Notes:
-- Of course, libraries Drogon will scale much better with multiple threads. This is just to give a rough idea of tiny_http's performance.
-- The slower static file test is probably because of tiny_http not using sendfile on Linux yet.
+- Drogon will, of course scale much better with more threads. This is just to give a rough idea of tiny_http's performance.
+- The slower static file test is probably because of tiny_http not using `sendfile` on Linux yet.

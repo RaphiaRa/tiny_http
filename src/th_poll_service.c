@@ -126,7 +126,12 @@ th_poll_handle_submit(void* self, th_io_task* task)
             handle->timeout_enabled = false;
         }
     }
-    service->fds[service->nfds++] = pfd;
+    th_err err = TH_ERR_OK;
+    if ((err = th_pollfd_vec_push_back(&service->fds, pfd)) != TH_ERR_OK) {
+        TH_LOG_ERROR("Failed to push back pollfd");
+        th_runner_push_task(service->runner, (th_task*)th_io_task_abort(task, err));
+        return;
+    }
     th_runner_increase_task_count(service->runner);
 }
 
@@ -204,8 +209,8 @@ TH_LOCAL(void)
 th_poll_service_run(void* self, int timeout_ms)
 {
     th_poll_service* service = (th_poll_service*)self;
-
-    int ret = poll(service->fds, service->nfds, timeout_ms);
+    nfds_t nfds = th_pollfd_vec_size(&service->fds);
+    int ret = poll(th_pollfd_vec_begin(&service->fds), nfds, timeout_ms);
     if (ret <= 0) {
         if (ret == -1)
             TH_LOG_WARN("poll failed: %s", strerror(errno));
@@ -213,12 +218,12 @@ th_poll_service_run(void* self, int timeout_ms)
     }
 
     size_t reenqueue = 0;
-    for (size_t i = 0; i < service->nfds; ++i) {
-        th_poll_handle* handle = th_poll_handle_map_try_get(&service->handles, service->fds[i].fd);
+    for (size_t i = 0; i < nfds; ++i) {
+        th_poll_handle* handle = th_poll_handle_map_try_get(&service->handles, th_pollfd_vec_at(&service->fds, i)->fd);
         if (!handle) // handle was removed
             continue;
-        short revents = service->fds[i].revents;
-        short events = service->fds[i].events & (POLLIN | POLLOUT);
+        short revents = th_pollfd_vec_at(&service->fds, i)->revents;
+        short events = th_pollfd_vec_at(&service->fds, i)->events & (POLLIN | POLLOUT);
         int op_index = 0;
         switch (events) {
         case POLLIN:
@@ -253,13 +258,13 @@ th_poll_service_run(void* self, int timeout_ms)
                 handle->iot[op_index] = NULL;
             } else {
                 if (reenqueue < i)
-                    service->fds[reenqueue] = service->fds[i];
+                    *th_pollfd_vec_at(&service->fds, reenqueue) = *th_pollfd_vec_at(&service->fds, i);
                 ++reenqueue;
             }
         }
         // handles without iot were cancelled, so we don't need to reenqueue them
     }
-    service->nfds = reenqueue;
+    th_pollfd_vec_resize(&service->fds, reenqueue);
     return;
 }
 
@@ -268,6 +273,7 @@ th_poll_service_deinit(th_poll_service* service)
 {
     th_poll_handle_map_deinit(&service->handles);
     th_poll_handle_pool_deinit(&service->handle_allocator);
+    th_pollfd_vec_deinit(&service->fds);
 }
 
 TH_LOCAL(void)
@@ -286,7 +292,7 @@ th_poll_service_init(th_poll_service* service, th_runner* runner, th_allocator* 
     service->base.create_handle = th_poll_service_create_handle;
     service->allocator = allocator;
     service->runner = runner;
-    service->nfds = 0;
+    th_pollfd_vec_init(&service->fds, allocator);
     th_poll_handle_map_init(&service->handles, allocator);
     th_poll_handle_pool_init(&service->handle_allocator, allocator, 16, 8 * 1024);
     return TH_ERR_OK;

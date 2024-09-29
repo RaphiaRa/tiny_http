@@ -1,5 +1,8 @@
 #ifndef TH_SSL_SOCKET_H
 #define TH_SSL_SOCKET_H
+
+#include "th_config.h"
+
 #if TH_WITH_SSL
 
 #include "th_socket.h"

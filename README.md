@@ -5,7 +5,7 @@
 [![MacOS](https://github.com/RaphiaRa/tiny_http/actions/workflows/macos.yml/badge.svg?branch=main)](https://github.com/RaphiaRa/tiny_http/actions/workflows/macos.yml)
 
 </div>
-tiny_http is my attempt at creating a lightweight, easy-to-use, and embeddable HTTP server library in C99. It is not designed to be a full-fledged web server, but rather a simple tool to build small web applications or to serve static files. No threading or forking is used, so it's not suitable for high-traffic applications.
+tiny_http is my attempt at creating a lightweight, easy-to-use, and embeddable HTTP server library in C99.
 
 Hello, World! example:
 ```c
@@ -40,31 +40,28 @@ Then run the server with:
 $ ./hello
 ```
 
-I wrote this library because I wanted a simple drop-in solution for the legacy C and C++ codebases I work with, hence the lack of dependencies and new language features. It lacks lots of important features and is not production-ready,
-but I'll be adding more features and fixing bugs if I have the time.
+I wrote this library because I wanted a simple drop-in solution for the legacy C and C++ codebases I work with, hence the lack of dependencies and new language features. It is not designed to be a full-fledged web server, but rather a simple tool to build small web applications or to serve static files. No threading or forking is used.
 
 ## Features
 
 - Simple integration (just copy the `th.h` and `th.c` files to your project)
-- Simple API
 - HTTPS support (via OpenSSL) (Works, but still needs to be optimized as it's quite slow)
-- File serving
 - Path capturing (e.g. `/user/{id}`)
 - Supports Linux and MacOS (Windows support is planned)
 - Fully customizable memory allocation and logging
-
-## Dependencies
-- OpenSSL (optional, for HTTPS support)
-- gperf (optinal, for binary builds and amalgamation)
-- python3 (optional, for running the amalgamation script)
-- picohttpparser (included) - a small, fast HTTP parser
-- The C standard library
 
 ## Planned features
 
 - File Uploads
 - Websockets
-- Windows support
+
+## Dependencies
+
+- OpenSSL (optional, for HTTPS support)
+- gperf (optinal, for binary builds and amalgamation)
+- python3 (optional, for running the amalgamation script)
+- picohttpparser (included) - a small, fast HTTP parser
+- The C standard library
 
 ## Enabling HTTPS
 
@@ -72,8 +69,15 @@ To enable HTTPS support, you need to link against OpenSSL and set `TH_WITH_SSL=1
 ```sh
 $ gcc -o myserver myserver.c th.c -lssl -lcrypto -DTH_WITH_SSL=1
 ```
-
-## Building the project and CMake integration
+Pass the certificate and private key file paths to `th_bind`:
+```c
+th_listen_opt opt = {
+    .cert_file = "cert.pem", 
+    .key_file = "key.pem",
+};
+th_bind(server, "0.0.0.0", "433", &opt);
+```
+## Building binaries, examples, and tests
 
 Library builds, examples, and tests can be built using CMake (This requires gperf to be installed).
 ```sh
@@ -148,12 +152,11 @@ int main()
 More detailed examples can be found in the `examples` directory.
 
 ## Performance
-Although tiny_http is not designed to be high-performance, it's still quite fast for a single-threaded server.
-Here are some benchmark results from my cloud server (2 dedicated AMD Epyc vCPUs):
+
+Although tiny_http is not designed to be high-performance, it's still quite fast.
+Here is a comparison with [Drogon](https://github.com/drogonframework/drogon) (One of my favorite C++ web frameworks) on my cloud server (2 dedicated AMD Epyc vCPUs).
 [![Benchmark](benchmark/result.png)](benchmark/benchmark.md)
 
 Notes:
-- Of course, libraries like Drogon will scale much better with multiple threads. This is just to give a rough idea of tiny_http's performance.
-
+- Of course, libraries Drogon will scale much better with multiple threads. This is just to give a rough idea of tiny_http's performance.
 - The slower static file test is probably because of tiny_http not using sendfile on Linux yet.
-

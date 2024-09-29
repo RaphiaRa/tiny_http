@@ -27,6 +27,9 @@
     TH_INLINE(void)                                                                                                                 \
     NAME##_init(NAME* map, th_allocator* allocator) TH_MAYBE_UNUSED;                                                                \
                                                                                                                                     \
+    TH_INLINE(void)                                                                                                                 \
+    NAME##_reset(NAME* map) TH_MAYBE_UNUSED;                                                                                        \
+                                                                                                                                    \
     TH_INLINE(th_err)                                                                                                               \
     NAME##_reserve(NAME* map, size_t capacity) TH_MAYBE_UNUSED;                                                                     \
                                                                                                                                     \
@@ -76,6 +79,19 @@
         if (map->entries) {                                                                                                         \
             th_allocator_free(map->allocator, map->entries);                                                                        \
         }                                                                                                                           \
+    }                                                                                                                               \
+                                                                                                                                    \
+    TH_INLINE(void)                                                                                                                 \
+    NAME##_reset(NAME* map)                                                                                                         \
+    {                                                                                                                               \
+        if (map->entries) {                                                                                                         \
+            th_allocator_free(map->allocator, map->entries);                                                                        \
+        }                                                                                                                           \
+        map->entries = NULL;                                                                                                        \
+        map->size = 0;                                                                                                              \
+        map->capacity = 0;                                                                                                          \
+        map->begin = 0;                                                                                                             \
+        map->end = 0;                                                                                                               \
     }                                                                                                                               \
                                                                                                                                     \
     TH_INLINE(th_err)                                                                                                               \

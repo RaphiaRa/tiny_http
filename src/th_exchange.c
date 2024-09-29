@@ -96,6 +96,12 @@ th_exchange_handle_request(th_exchange* handler)
     th_response_async_write(response, socket, (th_io_handler*)handler);
 }
 
+TH_LOCAL(bool)
+th_exchange_is_io_error(th_err err)
+{
+    return err == TH_ERR_EOF || err == TH_EBADF || err == TH_EIO;
+}
+
 TH_LOCAL(void)
 th_exchange_fn(void* self, size_t len, th_err err)
 {
@@ -104,7 +110,8 @@ th_exchange_fn(void* self, size_t len, th_err err)
     switch (handler->state) {
     case TH_EXCHANGE_STATE_START: {
         if (err != TH_ERR_OK) {
-            if (TH_ERR_CATEGORY(err) == TH_ERR_CATEGORY_HTTP) {
+            if (!th_exchange_is_io_error(err)) {
+                // Unless it's an I/O error, we should send a response
                 TH_LOG_DEBUG("%p: Rejecting request with error %s", handler, th_strerror(err));
                 th_exchange_write_error_response((th_exchange*)th_io_composite_ref(&handler->base), err);
             } else {

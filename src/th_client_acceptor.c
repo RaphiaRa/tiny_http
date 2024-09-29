@@ -39,7 +39,7 @@ th_client_acceptor_enable_ssl(th_client_acceptor* client_acceptor, const char* k
     (void)client_acceptor;
     (void)key_file;
     (void)cert_file;
-    TH_LOG_ERROR(&th_log, "SSL is not not enabled in this build.");
+    TH_LOG_ERROR("SSL is not not enabled in this build.");
     return TH_ERR_NOSUPPORT;
 #endif
 }

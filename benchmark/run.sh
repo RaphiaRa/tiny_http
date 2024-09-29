@@ -7,7 +7,7 @@ printUsage() {
 
 ADDR=$1
 TOOL="wrk"
-OPTIONS="-d 5s"
+OPTIONS="-d 5s -c 512"
 
 
 if [ -z "$ADDR" ]; then
@@ -16,14 +16,10 @@ if [ -z "$ADDR" ]; then
 fi
 
 # Output is in csv format
-output="256,512,1024\n"
-size="50000"
-for i in 256 512 1024
-do
-    report=$($TOOL $OPTIONS -c $i $ADDR/test_$size)
-    rps=$(echo -e "$report" | awk -F': ' '$1 == "Requests/sec" {print $2}' | xargs)
-    output="$output$rps,"
-done
-output=${output%,}
+output="Requests/sec: "
+size="50000" # 50kb
+report=$($TOOL $OPTIONS $ADDR/test_$size)
+rps=$(echo -e "$report" | awk -F': ' '$1 == "Requests/sec" {print $2}' | xargs)
+output="$output$rps"
 echo -e $output
 

@@ -183,6 +183,353 @@
 /* Server related config end */
 
 /* End of th_config.h */
+/* Start of th_fmt.h */
+
+
+#include <stddef.h>
+#include <stdint.h>
+#include <time.h>
+
+
+TH_PRIVATE(const char*)
+th_fmt_uint_to_str(char* buf, size_t len, unsigned int val);
+
+TH_PRIVATE(const char*)
+th_fmt_uint_to_str_ex(char* buf, size_t len, unsigned int val, size_t* out_len);
+
+/** th_fmt_str_append
+ * @brief Append a string to a buffer.
+ * @param buf The buffer to append to.
+ * @param pos The current position in the buffer (where to append).
+ * @param len The length of the buffer.
+ * @param str The string to append.
+ * @return The number of characters appended.
+ */
+TH_PRIVATE(size_t)
+th_fmt_str_append(char* buf, size_t pos, size_t len, const char* str);
+
+TH_PRIVATE(size_t)
+th_fmt_strn_append(char* buf, size_t pos, size_t len, const char* str, size_t n);
+
+TH_PRIVATE(size_t)
+th_fmt_strtime(char* buf, size_t len, th_date date);
+/* End of th_fmt.h */
+/* Start of th_io_op_bsd.h */
+
+
+#if defined(TH_CONFIG_WITH_BSD_SENDFILE)
+TH_PRIVATE(th_err)
+th_io_op_bsd_sendfile(void* self, size_t* result) TH_MAYBE_UNUSED;
+#endif
+
+/* End of th_io_op_bsd.h */
+/* Start of th_system_error.h */
+
+
+#if defined(TH_CONFIG_OS_POSIX)
+#include <errno.h>
+#include <string.h>
+#elif defined(TH_CONFIG_OS_WIN)
+#include <windows.h>
+#endif
+
+TH_INLINE(const char*)
+th_system_strerror(int errc) TH_MAYBE_UNUSED;
+
+TH_INLINE(const char*)
+th_system_strerror(int errc)
+{
+#if defined(TH_CONFIG_OS_POSIX)
+    return strerror(errc);
+#elif defined(TH_CONFIG_OS_WIN)
+    static char buf[256];
+    FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, NULL, errc, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), buf, sizeof(buf), NULL);
+    return buf;
+#elif defined(TH_CONFIG_OS_MOCK)
+    (void)errc;
+    return "mock error";
+#endif
+}
+
+/* Define the system error codes that we use */
+#if defined(TH_CONFIG_OS_POSIX)
+#define TH_ENOENT ENOENT
+#define TH_EINTR EINTR
+#define TH_EIO EIO
+#define TH_EBADF EBADF
+#define TH_EBUSY EBUSY
+#define TH_EAGAIN EAGAIN
+#define TH_EWOULDBLOCK EWOULDBLOCK
+#define TH_ENOMEM ENOMEM
+#define TH_ENOSYS ENOSYS
+#define TH_ETIMEDOUT ETIMEDOUT
+#define TH_ECANCELED ECANCELED
+#elif defined(TH_CONFIG_OS_WIN)
+#define TH_ENOENT ERROR_FILE_NOT_FOUND
+#define TH_EINTR ERROR_INTERRUPT
+#define TH_EIO ERROR_IO_DEVICE
+#define TH_EBADF ERROR_BAD_FORMAT
+#define TH_EBUSY ERROR_BUSY
+#define TH_EAGAIN ERROR_RETRY
+#define TH_EWOULDBLOCK ERROR_RETRY
+#define TH_ENOMEM ERROR_OUTOFMEMORY
+#define TH_ENOSYS ERROR_NOT_SUPPORTED
+#define TH_ETIMEDOUT ERROR_TIMEOUT
+#define TH_ECANCELED ERROR_CANCELLED
+#elif defined(TH_CONFIG_OS_MOCK)
+#define TH_ENOENT 1
+#define TH_EINTR 2
+#define TH_EIO 3
+#define TH_EBUSY 4
+#define TH_EAGAIN 5
+#define TH_EWOULDBLOCK 6
+#define TH_ENOMEM 7
+#define TH_ENOSYS 8
+#define TH_ETIMEDOUT 9
+#define TH_ECANCELED 10
+#define TH_EBADF 11
+#endif
+
+/* End of th_system_error.h */
+/* Start of th_iov.h */
+
+#include <stddef.h>
+#include <sys/uio.h>
+
+
+/** th_iov
+ *@brief I/O vector.
+ */
+
+typedef struct th_iov {
+    void* base;
+    size_t len;
+} th_iov;
+
+/** th_iov_consume
+ *@brief Consume the I/O vector and
+ * return the number of bytes that were not consumed.
+ */
+TH_INLINE(size_t)
+th_iov_consume(th_iov** iov, size_t* iov_len, size_t consume)
+{
+    size_t zeroed = 0;
+    for (size_t i = 0; i < *iov_len; i++) {
+        if (consume < (*iov)[i].len) {
+            (*iov)[i].base = (char*)(*iov)[i].base + consume;
+            (*iov)[i].len -= consume;
+            consume = 0;
+            break;
+        }
+        consume -= (*iov)[i].len;
+        (*iov)[i].len = 0;
+        zeroed++;
+    }
+    *iov_len -= zeroed;
+    (*iov) += zeroed;
+    return consume;
+}
+
+TH_INLINE(size_t)
+th_iov_bytes(th_iov* iov, size_t iov_len)
+{
+    size_t bytes = 0;
+    for (size_t i = 0; i < iov_len; i++) {
+        bytes += iov[i].len;
+    }
+    return bytes;
+}
+
+/* End of th_iov.h */
+/* Start of th_mock_syscall.h */
+
+#include <stddef.h>
+
+
+typedef struct th_mock_syscall {
+    int (*accept)(void);
+    int (*open)(void);
+    int (*lseek)(void);
+    int (*close)(void);
+    int (*read)(void* buf, size_t len);
+    int (*write)(size_t len);
+    int (*settime)(void);
+} th_mock_syscall;
+
+th_mock_syscall* th_mock_syscall_get(void);
+void th_mock_syscall_reset(void);
+
+int th_mock_accept(void);
+
+int th_mock_open(void);
+
+int th_mock_lseek(void);
+
+int th_mock_close(void);
+
+int th_mock_read(void* buf, size_t len);
+
+int th_mock_write(size_t len);
+
+int th_mock_settime(void);
+
+/* End of th_mock_syscall.h */
+/* Start of th_string.h */
+
+#include <stdint.h>
+#include <string.h>
+
+
+
+extern size_t th_string_npos;
+
+typedef struct th_string {
+    const char* ptr;
+    size_t len;
+} th_string;
+
+/** th_string_make
+ * @brief Helper function to create a th_string from a pointer and a length.
+ */
+TH_INLINE(th_string)
+th_string_make(const char* ptr, size_t len)
+{
+    return (th_string){ptr, len};
+}
+
+/** th_string_from_cstr
+ * @brief Helper function to create a th_string from a null-terminated string.
+ */
+TH_INLINE(th_string)
+th_string_from_cstr(const char* str)
+{
+    return th_string_make(str, strlen(str));
+}
+
+/** th_string_eq
+ * @brief Helper function to compare two th_strings.
+ * @return 1 if the strings are equal, 0 otherwise.
+ */
+TH_PRIVATE(bool)
+th_string_eq(th_string a, th_string b);
+
+/** th_string_empty
+ * @brief Helper function to check if a th_string is empty.
+ * @return true if the string is empty, false otherwise.
+ */
+TH_INLINE(bool)
+th_string_empty(th_string str)
+{
+    return str.len == 0;
+}
+
+/** TH_STRING_INIT
+ * @brief Helper macro to initialize a th_string from string literal.
+ */
+#define TH_STRING_INIT(str) {"" str, sizeof(str) - 1}
+
+/** TH_STRING
+ * @brief Helper macro to create a th_string compound literal from a string literal.
+ */
+#define TH_STRING(str) ((th_string){"" str, sizeof(str) - 1})
+
+/** TH_STRING_EQ
+ * @brief Helper macro to compare a th_string with a string literal.
+ */
+#define TH_STRING_EQ(str, cmp) (th_string_eq(str, TH_STRING(cmp)))
+
+TH_PRIVATE(bool)
+th_string_is_uint(th_string str);
+
+TH_PRIVATE(th_err)
+th_string_to_uint(th_string str, unsigned int* out);
+
+TH_PRIVATE(size_t)
+th_string_find_first(th_string str, size_t start, char c);
+
+TH_PRIVATE(size_t)
+th_string_find_first_not(th_string str, size_t start, char c);
+
+TH_PRIVATE(size_t)
+th_string_find_last_not(th_string str, size_t start, char c);
+
+TH_PRIVATE(size_t)
+th_string_find_first_of(th_string str, size_t start, const char* chars);
+
+/*
+TH_PRIVATE(size_t)
+th_string_find_last(th_string str, size_t start, char c);
+*/
+
+TH_PRIVATE(th_string)
+th_string_substr(th_string str, size_t start, size_t len);
+
+/** th_string_trim
+ * @brief Removes leading and trailing whitespace from a string.
+ * This doesn't modify the original string, just returns a new view of it.
+ * @param str The string to trim.
+ * @return A new string view with leading and trailing whitespace removed.
+ */
+TH_PRIVATE(th_string)
+th_string_trim(th_string str);
+
+TH_PRIVATE(uint32_t)
+th_string_hash(th_string str);
+
+typedef struct th_mut_string {
+    char* ptr;
+    size_t len;
+} th_mut_string;
+
+TH_PRIVATE(void)
+th_mut_string_tolower(th_mut_string str);
+
+/* End of th_string.h */
+/* Start of th_mime.h */
+
+
+
+struct th_mime_mapping {
+    const char* name;
+    th_string mime;
+};
+
+struct th_mime_mapping* th_mime_mapping_find(const char* ext, size_t len);
+
+/* End of th_mime.h */
+/* Start of th_io_op_mock.h */
+
+
+
+#if defined(TH_CONFIG_OS_MOCK)
+
+TH_PRIVATE(th_err)
+th_io_op_mock_read(void* self, size_t* result);
+
+TH_PRIVATE(th_err)
+th_io_op_mock_readv(void* self, size_t* result);
+
+TH_PRIVATE(th_err)
+th_io_op_mock_write(void* self, size_t* result);
+
+TH_PRIVATE(th_err)
+th_io_op_mock_writev(void* self, size_t* result);
+
+TH_PRIVATE(th_err)
+th_io_op_mock_send(void* self, size_t* result);
+
+TH_PRIVATE(th_err)
+th_io_op_mock_sendv(void* self, size_t* result);
+
+TH_PRIVATE(th_err)
+th_io_op_mock_accept(void* self, size_t* result);
+
+TH_PRIVATE(th_err)
+th_io_op_mock_sendfile(void* self, size_t* result);
+
+#endif
+
+/* End of th_io_op_mock.h */
 /* Start of th_log.h */
 
 
@@ -555,348 +902,6 @@ th_pool_allocator_deinit(th_pool_allocator* pool);
     }
 
 /* End of th_allocator.h */
-/* Start of th_hash.h */
-
-#include <stddef.h>
-#include <stdint.h>
-#include <string.h>
-
-
-/** th_hash_bytes
- * @brief Fowler-Noll-Vo hash function (FNV-1a).
- * See https://en.wikipedia.org/wiki/Fowler%E2%80%93Noll%E2%80%93Vo_hash_function
- */
-TH_INLINE(uint32_t)
-th_hash_bytes(const void* data, size_t len)
-{
-    uint32_t hash = 2166136261u;
-    const uint8_t* bytes = (const uint8_t*)data;
-    for (size_t i = 0; i < len; ++i) {
-        hash ^= bytes[i];
-        hash *= 16777619;
-    }
-    return hash;
-}
-
-TH_INLINE(uint32_t)
-th_hash_cstr(const char* str)
-{
-    return th_hash_bytes(str, strlen(str));
-}
-
-/* End of th_hash.h */
-/* Start of th_hashmap.h */
-
-
-
-#include <string.h>
-
-#define TH_DEFINE_HASHMAP(NAME, K, V, HASH, K_EQ, K_NULL)                                                                           \
-    typedef struct NAME##_entry {                                                                                                   \
-        K key;                                                                                                                      \
-        V value;                                                                                                                    \
-    } NAME##_entry;                                                                                                                 \
-                                                                                                                                    \
-    typedef struct NAME {                                                                                                           \
-        NAME##_entry* entries;                                                                                                      \
-        size_t size;                                                                                                                \
-        size_t capacity;                                                                                                            \
-        size_t end;                                                                                                                 \
-        size_t begin;                                                                                                               \
-        th_allocator* allocator;                                                                                                    \
-    } NAME;                                                                                                                         \
-                                                                                                                                    \
-    TH_INLINE(void)                                                                                                                 \
-    NAME##_init(NAME* map, th_allocator* allocator) TH_MAYBE_UNUSED;                                                                \
-                                                                                                                                    \
-    TH_INLINE(th_err)                                                                                                               \
-    NAME##_reserve(NAME* map, size_t capacity) TH_MAYBE_UNUSED;                                                                     \
-                                                                                                                                    \
-    TH_INLINE(void)                                                                                                                 \
-    NAME##_deinit(NAME* map) TH_MAYBE_UNUSED;                                                                                       \
-                                                                                                                                    \
-    TH_INLINE(th_err)                                                                                                               \
-    NAME##_set(NAME* map, K key, V value) TH_MAYBE_UNUSED;                                                                          \
-                                                                                                                                    \
-    TH_INLINE(V*)                                                                                                                   \
-    NAME##_try_get(const NAME* map, K key) TH_MAYBE_UNUSED;                                                                         \
-                                                                                                                                    \
-    typedef NAME##_entry* NAME##_iter;                                                                                              \
-                                                                                                                                    \
-    TH_INLINE(NAME##_entry*)                                                                                                        \
-    NAME##_find(const NAME* map, K key) TH_MAYBE_UNUSED;                                                                            \
-                                                                                                                                    \
-    TH_INLINE(void)                                                                                                                 \
-    NAME##_erase(NAME* map, NAME##_entry* entry) TH_MAYBE_UNUSED;                                                                   \
-                                                                                                                                    \
-    TH_INLINE(NAME##_entry*)                                                                                                        \
-    NAME##_begin(NAME* map) TH_MAYBE_UNUSED;                                                                                        \
-                                                                                                                                    \
-    TH_INLINE(NAME##_entry*)                                                                                                        \
-    NAME##_next(NAME* map, NAME##_entry* entry) TH_MAYBE_UNUSED;                                                                    \
-                                                                                                                                    \
-    TH_INLINE(NAME##_entry*)                                                                                                        \
-    NAME##_prev(NAME* map, NAME##_entry* entry) TH_MAYBE_UNUSED;                                                                    \
-                                                                                                                                    \
-    TH_INLINE(void)                                                                                                                 \
-    NAME##_init(NAME* map, th_allocator* allocator)                                                                                 \
-    {                                                                                                                               \
-        map->allocator = allocator;                                                                                                 \
-        if (map->allocator == NULL) {                                                                                               \
-            map->allocator = th_default_allocator_get();                                                                            \
-        }                                                                                                                           \
-        map->entries = NULL;                                                                                                        \
-        map->size = 0;                                                                                                              \
-        map->capacity = 0;                                                                                                          \
-        map->begin = 0;                                                                                                             \
-        map->end = 0;                                                                                                               \
-    }                                                                                                                               \
-                                                                                                                                    \
-    TH_INLINE(void)                                                                                                                 \
-    NAME##_deinit(NAME* map)                                                                                                        \
-    {                                                                                                                               \
-        if (map->entries) {                                                                                                         \
-            th_allocator_free(map->allocator, map->entries);                                                                        \
-        }                                                                                                                           \
-    }                                                                                                                               \
-                                                                                                                                    \
-    TH_INLINE(th_err)                                                                                                               \
-    NAME##_reserve(NAME* map, size_t capacity)                                                                                      \
-    {                                                                                                                               \
-        if (map->capacity >= capacity) {                                                                                            \
-            return TH_ERR_OK;                                                                                                       \
-        }                                                                                                                           \
-        capacity = th_next_pow2(capacity);                                                                                          \
-        NAME##_entry* entries = (NAME##_entry*)th_allocator_realloc(map->allocator, map->entries, capacity * sizeof(NAME##_entry)); \
-        if (entries == NULL) {                                                                                                      \
-            return TH_ERR_BAD_ALLOC;                                                                                                \
-        }                                                                                                                           \
-        for (size_t i = map->capacity; i < capacity; i++) {                                                                         \
-            entries[i] = (NAME##_entry){.key = K_NULL};                                                                             \
-        }                                                                                                                           \
-        map->entries = entries;                                                                                                     \
-        map->capacity = capacity;                                                                                                   \
-        return TH_ERR_OK;                                                                                                           \
-    }                                                                                                                               \
-                                                                                                                                    \
-    TH_LOCAL(void)                                                                                                                  \
-    NAME##_update_begin_end(NAME* map, size_t new_index)                                                                            \
-    {                                                                                                                               \
-        if (map->size == 1) {                                                                                                       \
-            map->begin = new_index;                                                                                                 \
-            map->end = new_index + 1;                                                                                               \
-        } else {                                                                                                                    \
-            if (new_index < map->begin) {                                                                                           \
-                map->begin = new_index;                                                                                             \
-            }                                                                                                                       \
-            if (new_index + 1 > map->end) {                                                                                         \
-                map->end = new_index + 1;                                                                                           \
-            }                                                                                                                       \
-        }                                                                                                                           \
-    }                                                                                                                               \
-                                                                                                                                    \
-    TH_LOCAL(th_err)                                                                                                                \
-    NAME##_do_set(NAME* map, uint32_t hash, K key, V value)                                                                         \
-    {                                                                                                                               \
-        for (size_t i = hash; i < map->capacity; i++) {                                                                             \
-            NAME##_entry* entry = &map->entries[i];                                                                                 \
-            if (K_EQ(entry->key, K_NULL)) {                                                                                         \
-                entry->key = key;                                                                                                   \
-                entry->value = value;                                                                                               \
-                map->size++;                                                                                                        \
-                NAME##_update_begin_end(map, i);                                                                                    \
-                return TH_ERR_OK;                                                                                                   \
-            }                                                                                                                       \
-            if (K_EQ(entry->key, key)) {                                                                                            \
-                entry->value = value;                                                                                               \
-                return TH_ERR_OK;                                                                                                   \
-            }                                                                                                                       \
-        }                                                                                                                           \
-        for (size_t i = 0; i < hash; i++) {                                                                                         \
-            NAME##_entry* entry = &map->entries[i];                                                                                 \
-            if (K_EQ(entry->key, K_NULL)) {                                                                                         \
-                entry->key = key;                                                                                                   \
-                entry->value = value;                                                                                               \
-                map->size++;                                                                                                        \
-                NAME##_update_begin_end(map, i);                                                                                    \
-                return TH_ERR_OK;                                                                                                   \
-            }                                                                                                                       \
-            if (K_EQ(entry->key, key)) {                                                                                            \
-                entry->value = value;                                                                                               \
-                return TH_ERR_OK;                                                                                                   \
-            }                                                                                                                       \
-        }                                                                                                                           \
-        return TH_ERR_BAD_ALLOC;                                                                                                    \
-    }                                                                                                                               \
-                                                                                                                                    \
-    TH_INLINE(th_err)                                                                                                               \
-    NAME##_expand(NAME* map)                                                                                                        \
-    {                                                                                                                               \
-        th_err err = TH_ERR_OK;                                                                                                     \
-        size_t old_capacity = map->capacity;                                                                                        \
-        size_t new_capacity = old_capacity * 2;                                                                                     \
-        if (new_capacity == 0) {                                                                                                    \
-            new_capacity = 1;                                                                                                       \
-        }                                                                                                                           \
-        if ((err = NAME##_reserve(map, new_capacity)) != TH_ERR_OK) {                                                               \
-            return err;                                                                                                             \
-        }                                                                                                                           \
-        /* Reset size, begin and end */                                                                                             \
-        map->size = 0;                                                                                                              \
-        map->begin = 0;                                                                                                             \
-        map->end = 0;                                                                                                               \
-        /* Need to rehash all entries */                                                                                            \
-        for (size_t i = 0; i < old_capacity; i++) {                                                                                 \
-            NAME##_entry* entry = &map->entries[i];                                                                                 \
-            if (K_EQ(entry->key, K_NULL)) {                                                                                         \
-                /* rearranged == 0; */                                                                                              \
-                continue;                                                                                                           \
-            }                                                                                                                       \
-            uint32_t hash = HASH(entry->key);                                                                                       \
-            /* Don't need to rehash every entry */                                                                                  \
-            hash &= (new_capacity - 1);                                                                                             \
-            NAME##_entry e = *entry;                                                                                                \
-            *entry = (NAME##_entry){.key = K_NULL};                                                                                 \
-            if ((err = NAME##_do_set(map, hash, e.key, e.value)) != TH_ERR_OK) {                                                    \
-                return err;                                                                                                         \
-            }                                                                                                                       \
-        }                                                                                                                           \
-        return TH_ERR_OK;                                                                                                           \
-    }                                                                                                                               \
-                                                                                                                                    \
-    TH_INLINE(th_err)                                                                                                               \
-    NAME##_set(NAME* map, K key, V value)                                                                                           \
-    {                                                                                                                               \
-        if (map->size >= map->capacity / 2) {                                                                                       \
-            th_err err = NAME##_expand(map);                                                                                        \
-            if (err != TH_ERR_OK) {                                                                                                 \
-                return err;                                                                                                         \
-            }                                                                                                                       \
-        }                                                                                                                           \
-        uint32_t hash = HASH(key) & (map->capacity - 1);                                                                            \
-        return NAME##_do_set(map, hash, key, value);                                                                                \
-    }                                                                                                                               \
-                                                                                                                                    \
-    TH_INLINE(NAME##_entry*)                                                                                                        \
-    NAME##_find(const NAME* map, K key)                                                                                             \
-    {                                                                                                                               \
-        uint32_t hash = HASH(key) & (map->capacity - 1);                                                                            \
-        if (map->size == 0) {                                                                                                       \
-            return NULL;                                                                                                            \
-        }                                                                                                                           \
-        for (size_t i = hash; i < map->end; i++) {                                                                                  \
-            NAME##_entry* entry = &map->entries[i];                                                                                 \
-            if (K_EQ(entry->key, K_NULL)) {                                                                                         \
-                return NULL;                                                                                                        \
-            }                                                                                                                       \
-            if (K_EQ(entry->key, key)) {                                                                                            \
-                return entry;                                                                                                       \
-            }                                                                                                                       \
-        }                                                                                                                           \
-        for (size_t i = map->begin; i < hash; i++) {                                                                                \
-            NAME##_entry* entry = &map->entries[i];                                                                                 \
-            if (K_EQ(entry->key, K_NULL)) {                                                                                         \
-                return NULL;                                                                                                        \
-            }                                                                                                                       \
-            if (K_EQ(entry->key, key)) {                                                                                            \
-                return entry;                                                                                                       \
-            }                                                                                                                       \
-        }                                                                                                                           \
-        return NULL;                                                                                                                \
-    }                                                                                                                               \
-                                                                                                                                    \
-    TH_INLINE(void)                                                                                                                 \
-    NAME##_erase(NAME* map, NAME##_entry* entry)                                                                                    \
-    {                                                                                                                               \
-        entry->key = K_NULL;                                                                                                        \
-        map->size--;                                                                                                                \
-        /* Need to fix possible holes */                                                                                            \
-        size_t last_zeroed = entry - map->entries;                                                                                  \
-        for (size_t i = entry - map->entries + 1; i < map->end; i++) {                                                              \
-            if (K_EQ(map->entries[i].key, K_NULL)                                                                                   \
-                || ((HASH(map->entries[i].key) & (map->capacity - 1)) == i)) {                                                      \
-                break;                                                                                                              \
-            }                                                                                                                       \
-            map->entries[i - 1] = map->entries[i];                                                                                  \
-            map->entries[i] = (NAME##_entry){.key = K_NULL};                                                                        \
-            last_zeroed = i;                                                                                                        \
-        }                                                                                                                           \
-        if (map->size == 0) {                                                                                                       \
-            map->begin = 0;                                                                                                         \
-            map->end = 0;                                                                                                           \
-        } else if (last_zeroed == map->end - 1) {                                                                                   \
-            map->end = NAME##_prev(map, &map->entries[last_zeroed]) - map->entries + 1;                                             \
-        } else if (last_zeroed == map->begin) {                                                                                     \
-            map->begin = NAME##_next(map, &map->entries[last_zeroed]) - map->entries;                                               \
-        }                                                                                                                           \
-    }                                                                                                                               \
-                                                                                                                                    \
-    TH_INLINE(V*)                                                                                                                   \
-    NAME##_try_get(const NAME* map, K key)                                                                                          \
-    {                                                                                                                               \
-        NAME##_entry* entry = NAME##_find(map, key);                                                                                \
-        if (entry) {                                                                                                                \
-            return &entry->value;                                                                                                   \
-        }                                                                                                                           \
-        return NULL;                                                                                                                \
-    }                                                                                                                               \
-                                                                                                                                    \
-    TH_INLINE(NAME##_entry*)                                                                                                        \
-    NAME##_begin(NAME* map)                                                                                                         \
-    {                                                                                                                               \
-        if (map->begin == map->end)                                                                                                 \
-            return NULL;                                                                                                            \
-        return &map->entries[map->begin];                                                                                           \
-    }                                                                                                                               \
-                                                                                                                                    \
-    TH_INLINE(NAME##_entry*)                                                                                                        \
-    NAME##_next(NAME* map, NAME##_entry* entry)                                                                                     \
-    {                                                                                                                               \
-        size_t i = entry - map->entries;                                                                                            \
-        for (size_t j = i + 1; j < map->end; j++) {                                                                                 \
-            NAME##_entry* e = &map->entries[j];                                                                                     \
-            if (!K_EQ(e->key, K_NULL)) {                                                                                            \
-                return e;                                                                                                           \
-            }                                                                                                                       \
-        }                                                                                                                           \
-        return NULL;                                                                                                                \
-    }                                                                                                                               \
-                                                                                                                                    \
-    TH_INLINE(NAME##_entry*)                                                                                                        \
-    NAME##_prev(NAME* map, NAME##_entry* entry)                                                                                     \
-    {                                                                                                                               \
-        size_t i = entry - map->entries;                                                                                            \
-        for (size_t j = i - 1; j >= map->begin; j--) {                                                                              \
-            NAME##_entry* e = &map->entries[j];                                                                                     \
-            if (!K_EQ(e->key, K_NULL)) {                                                                                            \
-                return e;                                                                                                           \
-            }                                                                                                                       \
-        }                                                                                                                           \
-        return NAME##_begin(map);                                                                                                   \
-    }
-
-/* default hash maps begin */
-/* th_cstr_map begin */
-
-TH_INLINE(uint32_t)
-th_cstr_hash(const char* str)
-{
-    return th_hash_cstr(str);
-}
-
-TH_INLINE(bool)
-th_cstr_eq(const char* a, const char* b)
-{
-    if (!a || !b)
-        return a == b;
-    return *a == *b && (strcmp(a, b) == 0);
-}
-
-TH_DEFINE_HASHMAP(th_cstr_map, const char*, const char*, th_cstr_hash, th_cstr_eq, NULL)
-
-/* th_cstr_map end */
-
-/* End of th_hashmap.h */
 /* Start of th_vec.h */
 
 
@@ -1048,117 +1053,6 @@ TH_DEFINE_HASHMAP(th_cstr_map, const char*, const char*, th_cstr_hash, th_cstr_e
 TH_DEFINE_VEC(th_buf_vec, char, (void))
 
 /* End of th_vec.h */
-/* Start of th_string.h */
-
-#include <stdint.h>
-#include <string.h>
-
-
-
-extern size_t th_string_npos;
-
-typedef struct th_string {
-    const char* ptr;
-    size_t len;
-} th_string;
-
-/** th_string_make
- * @brief Helper function to create a th_string from a pointer and a length.
- */
-TH_INLINE(th_string)
-th_string_make(const char* ptr, size_t len)
-{
-    return (th_string){ptr, len};
-}
-
-/** th_string_from_cstr
- * @brief Helper function to create a th_string from a null-terminated string.
- */
-TH_INLINE(th_string)
-th_string_from_cstr(const char* str)
-{
-    return th_string_make(str, strlen(str));
-}
-
-/** th_string_eq
- * @brief Helper function to compare two th_strings.
- * @return 1 if the strings are equal, 0 otherwise.
- */
-TH_PRIVATE(bool)
-th_string_eq(th_string a, th_string b);
-
-/** th_string_empty
- * @brief Helper function to check if a th_string is empty.
- * @return true if the string is empty, false otherwise.
- */
-TH_INLINE(bool)
-th_string_empty(th_string str)
-{
-    return str.len == 0;
-}
-
-/** TH_STRING_INIT
- * @brief Helper macro to initialize a th_string from string literal.
- */
-#define TH_STRING_INIT(str) {"" str, sizeof(str) - 1}
-
-/** TH_STRING
- * @brief Helper macro to create a th_string compound literal from a string literal.
- */
-#define TH_STRING(str) ((th_string){"" str, sizeof(str) - 1})
-
-/** TH_STRING_EQ
- * @brief Helper macro to compare a th_string with a string literal.
- */
-#define TH_STRING_EQ(str, cmp) (th_string_eq(str, TH_STRING(cmp)))
-
-TH_PRIVATE(bool)
-th_string_is_uint(th_string str);
-
-TH_PRIVATE(th_err)
-th_string_to_uint(th_string str, unsigned int* out);
-
-TH_PRIVATE(size_t)
-th_string_find_first(th_string str, size_t start, char c);
-
-TH_PRIVATE(size_t)
-th_string_find_first_not(th_string str, size_t start, char c);
-
-TH_PRIVATE(size_t)
-th_string_find_last_not(th_string str, size_t start, char c);
-
-TH_PRIVATE(size_t)
-th_string_find_first_of(th_string str, size_t start, const char* chars);
-
-/*
-TH_PRIVATE(size_t)
-th_string_find_last(th_string str, size_t start, char c);
-*/
-
-TH_PRIVATE(th_string)
-th_string_substr(th_string str, size_t start, size_t len);
-
-/** th_string_trim
- * @brief Removes leading and trailing whitespace from a string.
- * This doesn't modify the original string, just returns a new view of it.
- * @param str The string to trim.
- * @return A new string view with leading and trailing whitespace removed.
- */
-TH_PRIVATE(th_string)
-th_string_trim(th_string str);
-
-TH_PRIVATE(uint32_t)
-th_string_hash(th_string str);
-
-typedef struct th_mut_string {
-    char* ptr;
-    size_t len;
-} th_mut_string;
-
-TH_PRIVATE(void)
-th_mut_string_tolower(th_mut_string str);
-
-/* End of th_string.h */
 /* Start of th_heap_string.h */
 
 
@@ -1226,125 +1120,26 @@ th_heap_string_hash(th_heap_string* self);
 TH_DEFINE_VEC(th_heap_string_vec, th_heap_string, th_heap_string_deinit)
 
 /* End of th_heap_string.h */
-/* Start of th_dir.h */
+/* Start of th_url_decode.h */
 
 
-
-typedef struct th_dir {
-    th_allocator* allocator;
-    th_heap_string path;
-    int fd;
-} th_dir;
-
-TH_PRIVATE(void)
-th_dir_init(th_dir* dir, th_allocator* allocator);
-
-TH_PRIVATE(th_err)
-th_dir_open(th_dir* dir, th_string path);
-
-TH_PRIVATE(th_string)
-th_dir_get_path(th_dir* dir);
-
-TH_PRIVATE(void)
-th_dir_deinit(th_dir* dir);
-
-/* End of th_dir.h */
-/* Start of th_file.h */
-
-
-
-typedef struct th_file_mmap {
-    void* addr;
-    size_t offset;
-    size_t len;
-} th_file_mmap;
-
-typedef struct th_file {
-    int fd;
-    size_t size;
-    th_file_mmap view;
-} th_file;
-
-TH_PRIVATE(void)
-th_file_init(th_file* stream);
-
-typedef struct th_open_opt {
-    bool read;
-    bool write;
-    bool create;
-} th_open_opt;
-
-TH_PRIVATE(th_err)
-th_file_openat(th_file* stream, th_dir* dir, th_string path, th_open_opt opt);
-
-TH_PRIVATE(th_err)
-th_file_read(th_file* stream, void* addr, size_t len, size_t offset, size_t* read) TH_MAYBE_UNUSED;
-
-typedef struct th_fileview {
-    void* ptr;
-    size_t len;
-} th_fileview;
-
-TH_PRIVATE(th_err)
-th_file_get_view(th_file* stream, th_fileview* view, size_t offset, size_t len);
-
-TH_PRIVATE(void)
-th_file_close(th_file* stream);
-
-TH_PRIVATE(void)
-th_file_deinit(th_file* stream);
-
-/* End of th_file.h */
-/* Start of th_iov.h */
 
 #include <stddef.h>
-#include <sys/uio.h>
 
+typedef enum th_url_decode_type {
+    TH_URL_DECODE_TYPE_PATH = 0,
+    TH_URL_DECODE_TYPE_QUERY
+} th_url_decode_type;
 
-/** th_iov
- *@brief I/O vector.
- */
+/*
+TH_PRIVATE(th_err)
+th_url_decode_inplace(char* str, size_t* in_out_len, th_url_decode_type type);
+*/
 
-typedef struct th_iov {
-    void* base;
-    size_t len;
-} th_iov;
+TH_PRIVATE(th_err)
+th_url_decode_string(th_string input, th_heap_string* output, th_url_decode_type type);
 
-/** th_iov_consume
- *@brief Consume the I/O vector and
- * return the number of bytes that were not consumed.
- */
-TH_INLINE(size_t)
-th_iov_consume(th_iov** iov, size_t* iov_len, size_t consume)
-{
-    size_t zeroed = 0;
-    for (size_t i = 0; i < *iov_len; i++) {
-        if (consume < (*iov)[i].len) {
-            (*iov)[i].base = (char*)(*iov)[i].base + consume;
-            (*iov)[i].len -= consume;
-            consume = 0;
-            break;
-        }
-        consume -= (*iov)[i].len;
-        (*iov)[i].len = 0;
-        zeroed++;
-    }
-    *iov_len -= zeroed;
-    (*iov) += zeroed;
-    return consume;
-}
-
-TH_INLINE(size_t)
-th_iov_bytes(th_iov* iov, size_t iov_len)
-{
-    size_t bytes = 0;
-    for (size_t i = 0; i < iov_len; i++) {
-        bytes += iov[i].len;
-    }
-    return bytes;
-}
-
-/* End of th_iov.h */
+/* End of th_url_decode.h */
 /* Start of th_queue.h */
 
 
@@ -1472,6 +1267,75 @@ TH_DEFINE_QUEUE(th_task_queue, th_task)
 /* th_task_queue declarations end */
 
 /* End of th_task.h */
+/* Start of th_dir.h */
+
+
+
+typedef struct th_dir {
+    th_allocator* allocator;
+    th_heap_string path;
+    int fd;
+} th_dir;
+
+TH_PRIVATE(void)
+th_dir_init(th_dir* dir, th_allocator* allocator);
+
+TH_PRIVATE(th_err)
+th_dir_open(th_dir* dir, th_string path);
+
+TH_PRIVATE(th_string)
+th_dir_get_path(th_dir* dir);
+
+TH_PRIVATE(void)
+th_dir_deinit(th_dir* dir);
+
+/* End of th_dir.h */
+/* Start of th_file.h */
+
+
+
+typedef struct th_file_mmap {
+    void* addr;
+    size_t offset;
+    size_t len;
+} th_file_mmap;
+
+typedef struct th_file {
+    int fd;
+    size_t size;
+    th_file_mmap view;
+} th_file;
+
+TH_PRIVATE(void)
+th_file_init(th_file* stream);
+
+typedef struct th_open_opt {
+    bool read;
+    bool write;
+    bool create;
+} th_open_opt;
+
+TH_PRIVATE(th_err)
+th_file_openat(th_file* stream, th_dir* dir, th_string path, th_open_opt opt);
+
+TH_PRIVATE(th_err)
+th_file_read(th_file* stream, void* addr, size_t len, size_t offset, size_t* read) TH_MAYBE_UNUSED;
+
+typedef struct th_fileview {
+    void* ptr;
+    size_t len;
+} th_fileview;
+
+TH_PRIVATE(th_err)
+th_file_get_view(th_file* stream, th_fileview* view, size_t offset, size_t len);
+
+TH_PRIVATE(void)
+th_file_close(th_file* stream);
+
+TH_PRIVATE(void)
+th_file_deinit(th_file* stream);
+
+/* End of th_file.h */
 /* Start of th_io_task.h */
 
 
@@ -1745,153 +1609,112 @@ TH_PRIVATE(void)
 th_runner_deinit(th_runner* runner);
 
 /* End of th_runner.h */
-/* Start of th_timer.h */
+/* Start of th_mock_service.h */
 
 
-#include <stdbool.h>
-#include <stddef.h>
-#include <stdint.h>
+
+#if defined(TH_CONFIG_OS_MOCK)
 
 
-typedef struct th_timer {
-    uint32_t expire;
-} th_timer;
+typedef struct th_mock_service th_mock_service;
+typedef struct th_mock_handle th_mock_handle;
+struct th_mock_handle {
+    th_io_handle base;
+    th_mock_service* service;
+    int fd;
+};
+
+struct th_mock_service {
+    th_io_service base;
+    th_runner* runner;
+};
+
+TH_PRIVATE(th_err)
+th_mock_service_create(th_io_service** out, th_runner* runner);
+
+#endif
+/* End of th_mock_service.h */
+/* Start of th_ssl_context.h */
+
+
+#if TH_WITH_SSL
+
+#include <openssl/ssl.h>
+
+typedef struct th_ssl_context {
+    SSL_CTX* ctx;
+    BIO_METHOD* smem_method;
+} th_ssl_context;
+
+TH_PRIVATE(th_err)
+th_ssl_context_init(th_ssl_context* context, const char* key, const char* cert);
 
 TH_PRIVATE(void)
-th_timer_init(th_timer* timer);
+th_ssl_context_deinit(th_ssl_context* context);
+
+#endif
+/* End of th_ssl_context.h */
+/* Start of th_ssl_smem_bio.h */
+
+
+#if TH_WITH_SSL
+
+#include <openssl/bio.h>
+
+
+TH_PRIVATE(BIO_METHOD*)
+th_smem_bio(th_ssl_context* ssl_context);
+
+TH_PRIVATE(void)
+th_smem_bio_setup_buf(BIO* bio, th_allocator* allocator, size_t max_len);
+
+TH_PRIVATE(size_t)
+th_smem_ensure_buf_size(BIO* bio, size_t size);
+
+TH_PRIVATE(void)
+th_smem_bio_set_eof(BIO* bio);
+
+TH_PRIVATE(void)
+th_smem_bio_get_rdata(BIO* bio, th_iov* buf);
+
+TH_PRIVATE(void)
+th_smem_bio_get_wbuf(BIO* bio, th_iov* buf);
+
+TH_PRIVATE(void)
+th_smem_bio_inc_read_pos(BIO* bio, size_t len);
+
+TH_PRIVATE(void)
+th_smem_bio_inc_write_pos(BIO* bio, size_t len);
+
+#endif
+/* End of th_ssl_smem_bio.h */
+/* Start of th_path.h */
+
+
+/**
+ * @brief th_path provides a bunch of helper functions to work with paths.
+ */
+
+/**
+ * @brief th_path_resolve resolves a path to a absolute path.
+ * @param dir The directory to resolve the path against.
+ * @param path The path to resolve.
+ * @param out The resolved path.
+ * @return TH_ERR_OK on success, otherwise an error code.
+ */
+TH_PRIVATE(th_err)
+th_path_resolve_against(th_string path, th_dir* dir, th_heap_string* out);
 
 TH_PRIVATE(th_err)
-th_timer_set(th_timer* timer, th_duration duration);
+th_path_resolve(th_string path, th_heap_string* out);
 
 TH_PRIVATE(bool)
-th_timer_expired(th_timer* timer);
+th_path_is_within(th_string path, th_dir* dir);
 
-/* End of th_timer.h */
-/* Start of th_kqueue_service.h */
+TH_PRIVATE(bool)
+th_path_is_hidden(th_string path);
 
-
-
-#ifdef TH_CONFIG_WITH_KQUEUE
-
-#include <sys/event.h>
-#include <sys/time.h>
-#include <sys/types.h>
-
-/* Forward declarations begin */
-
-typedef struct th_kqueue_service th_kqueue_service;
-typedef struct th_kqueue_handle th_kqueue_handle;
-typedef struct th_kqueue_handle_cleaner th_kqueue_handle_cleaner;
-
-/* Forward declarations end */
-
-struct th_kqueue_handle {
-    th_io_handle base;
-    th_timer timer;
-    th_allocator* allocator;
-    th_kqueue_handle* pool_next;
-    th_kqueue_handle* pool_prev;
-    th_kqueue_handle* timer_next;
-    th_kqueue_handle* timer_prev;
-    th_kqueue_service* service;
-    th_io_task* iot[TH_IO_OP_TYPE_MAX];
-    int fd;
-    th_io_op_type active;
-    bool timeout_enabled;
-};
-
-#ifndef TH_KQUEUE_HANDLE_POOL
-#define TH_KQUEUE_HANDLE_POOL
-TH_DEFINE_OBJ_POOL_ALLOCATOR(th_kqueue_handle_pool, th_kqueue_handle, pool_prev, pool_next)
-#endif
-
-#ifndef TH_KQUEUE_HANDLE_TIMER_LIST
-#define TH_KQUEUE_HANDLE_TIMER_LIST
-TH_DEFINE_LIST(th_kqueue_timer_list, th_kqueue_handle, timer_prev, timer_next)
-#endif
-
-struct th_kqueue_service {
-    th_io_service base;
-    th_allocator* allocator;
-    th_runner* runner;
-    th_kqueue_handle_pool handle_allocator;
-    th_kqueue_timer_list timer_list;
-    int kq;
-};
-
-TH_PRIVATE(th_err)
-th_kqueue_service_create(th_io_service** out, th_runner* runner, th_allocator* allocator);
-
-#endif /* TH_HAVE_KQUEUE */
-/* End of th_kqueue_service.h */
-/* Start of th_system_error.h */
-
-
-#if defined(TH_CONFIG_OS_POSIX)
-#include <errno.h>
-#include <string.h>
-#elif defined(TH_CONFIG_OS_WIN)
-#include <windows.h>
-#endif
-
-TH_INLINE(const char*)
-th_system_strerror(int errc) TH_MAYBE_UNUSED;
-
-TH_INLINE(const char*)
-th_system_strerror(int errc)
-{
-#if defined(TH_CONFIG_OS_POSIX)
-    return strerror(errc);
-#elif defined(TH_CONFIG_OS_WIN)
-    static char buf[256];
-    FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, NULL, errc, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), buf, sizeof(buf), NULL);
-    return buf;
-#elif defined(TH_CONFIG_OS_MOCK)
-    (void)errc;
-    return "mock error";
-#endif
-}
-
-/* Define the system error codes that we use */
-#if defined(TH_CONFIG_OS_POSIX)
-#define TH_ENOENT ENOENT
-#define TH_EINTR EINTR
-#define TH_EIO EIO
-#define TH_EBADF EBADF
-#define TH_EBUSY EBUSY
-#define TH_EAGAIN EAGAIN
-#define TH_EWOULDBLOCK EWOULDBLOCK
-#define TH_ENOMEM ENOMEM
-#define TH_ENOSYS ENOSYS
-#define TH_ETIMEDOUT ETIMEDOUT
-#define TH_ECANCELED ECANCELED
-#elif defined(TH_CONFIG_OS_WIN)
-#define TH_ENOENT ERROR_FILE_NOT_FOUND
-#define TH_EINTR ERROR_INTERRUPT
-#define TH_EIO ERROR_IO_DEVICE
-#define TH_EBADF ERROR_BAD_FORMAT
-#define TH_EBUSY ERROR_BUSY
-#define TH_EAGAIN ERROR_RETRY
-#define TH_EWOULDBLOCK ERROR_RETRY
-#define TH_ENOMEM ERROR_OUTOFMEMORY
-#define TH_ENOSYS ERROR_NOT_SUPPORTED
-#define TH_ETIMEDOUT ERROR_TIMEOUT
-#define TH_ECANCELED ERROR_CANCELLED
-#elif defined(TH_CONFIG_OS_MOCK)
-#define TH_ENOENT 1
-#define TH_EINTR 2
-#define TH_EIO 3
-#define TH_EBUSY 4
-#define TH_EAGAIN 5
-#define TH_EWOULDBLOCK 6
-#define TH_ENOMEM 7
-#define TH_ENOSYS 8
-#define TH_ETIMEDOUT 9
-#define TH_ECANCELED 10
-#define TH_EBADF 11
-#endif
-
-/* End of th_system_error.h */
+/* End of th_path.h */
 /* Start of th_http_error.h */
 
 
@@ -2012,97 +1835,6 @@ th_http_code_get_type(int code)
 }
 
 /* End of th_http_error.h */
-/* Start of th_poll_service.h */
-
-
-
-#ifdef TH_CONFIG_WITH_POLL
-
-#include <poll.h>
-#include <stddef.h>
-#include <stdint.h>
-#include <sys/types.h>
-
-/* Forward declarations begin */
-
-typedef struct th_poll_service th_poll_service;
-typedef struct th_poll_handle th_poll_handle;
-typedef struct th_poll_handle_map th_poll_handle_map;
-
-/* Forward declarations end */
-/* th_fd_to_idx_map implementation begin */
-
-TH_INLINE(uint32_t)
-th_fd_hash(int fd)
-{
-    return (uint32_t)fd;
-}
-
-TH_INLINE(bool)
-th_int_eq(int a, int b)
-{
-    return a == b;
-}
-
-TH_DEFINE_HASHMAP(th_fd_to_idx_map, int, size_t, th_fd_hash, th_int_eq, -1)
-
-/* th_fd_to_idx_map implementation end */
-/* th_poll_handle begin */
-
-struct th_poll_handle {
-    th_io_handle base;
-    th_timer timer;
-    th_poll_handle* next;
-    th_poll_handle* prev;
-    th_allocator* allocator;
-    th_poll_service* service;
-    th_io_task* iot[TH_IO_OP_TYPE_MAX];
-    int fd;
-    bool timeout_enabled;
-};
-
-#ifndef TH_POLL_HANDLE_POOL
-#define TH_POLL_HANDLE_POOL
-TH_DEFINE_OBJ_POOL_ALLOCATOR(th_poll_handle_pool, th_poll_handle, prev, next)
-#endif
-
-#ifndef TH_POLL_HANDLE_LIST
-#define TH_POLL_HANDLE_LIST
-TH_DEFINE_QUEUE(th_poll_handle_list, th_poll_handle)
-#endif
-
-#ifndef TH_POLLFD_VEC
-#define TH_POLLFD_VEC
-TH_DEFINE_VEC(th_pollfd_vec, struct pollfd, (void))
-#endif
-
-/* th_poll_handle end */
-/* th_poll_handle_map begin */
-
-struct th_poll_handle_map {
-    th_fd_to_idx_map fd_to_idx_map;
-    th_allocator* allocator;
-    th_poll_handle** handles;
-    size_t size;
-    size_t capacity;
-};
-
-/* th_poll_handle_map end */
-
-struct th_poll_service {
-    th_io_service base;
-    th_allocator* allocator;
-    th_runner* runner;
-    th_poll_handle_pool handle_allocator;
-    th_poll_handle_map handles;
-    th_pollfd_vec fds;
-};
-
-TH_PRIVATE(th_err)
-th_poll_service_create(th_io_service** out, th_runner* runner, th_allocator* allocator);
-
-#endif /* TH_HAVE_POLL */
-/* End of th_poll_service.h */
 /* Start of th_io_op_posix.h */
 
 
@@ -2138,6 +1870,443 @@ th_io_op_posix_sendfile_buffered(void* self, size_t* result) TH_MAYBE_UNUSED;
 
 #endif
 /* End of th_io_op_posix.h */
+/* Start of th_timer.h */
+
+
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+
+
+typedef struct th_timer {
+    uint32_t expire;
+} th_timer;
+
+TH_PRIVATE(void)
+th_timer_init(th_timer* timer);
+
+TH_PRIVATE(th_err)
+th_timer_set(th_timer* timer, th_duration duration);
+
+TH_PRIVATE(bool)
+th_timer_expired(th_timer* timer);
+
+/* End of th_timer.h */
+/* Start of th_hash.h */
+
+#include <stddef.h>
+#include <stdint.h>
+#include <string.h>
+
+
+/** th_hash_bytes
+ * @brief Fowler-Noll-Vo hash function (FNV-1a).
+ * See https://en.wikipedia.org/wiki/Fowler%E2%80%93Noll%E2%80%93Vo_hash_function
+ */
+TH_INLINE(uint32_t)
+th_hash_bytes(const void* data, size_t len)
+{
+    uint32_t hash = 2166136261u;
+    const uint8_t* bytes = (const uint8_t*)data;
+    for (size_t i = 0; i < len; ++i) {
+        hash ^= bytes[i];
+        hash *= 16777619;
+    }
+    return hash;
+}
+
+TH_INLINE(uint32_t)
+th_hash_cstr(const char* str)
+{
+    return th_hash_bytes(str, strlen(str));
+}
+
+/* End of th_hash.h */
+/* Start of th_hashmap.h */
+
+
+
+#include <string.h>
+
+#define TH_DEFINE_HASHMAP(NAME, K, V, HASH, K_EQ, K_NULL)                                                                           \
+    typedef struct NAME##_entry {                                                                                                   \
+        K key;                                                                                                                      \
+        V value;                                                                                                                    \
+    } NAME##_entry;                                                                                                                 \
+                                                                                                                                    \
+    typedef struct NAME {                                                                                                           \
+        NAME##_entry* entries;                                                                                                      \
+        size_t size;                                                                                                                \
+        size_t capacity;                                                                                                            \
+        size_t end;                                                                                                                 \
+        size_t begin;                                                                                                               \
+        th_allocator* allocator;                                                                                                    \
+    } NAME;                                                                                                                         \
+                                                                                                                                    \
+    TH_INLINE(void)                                                                                                                 \
+    NAME##_init(NAME* map, th_allocator* allocator) TH_MAYBE_UNUSED;                                                                \
+                                                                                                                                    \
+    TH_INLINE(void)                                                                                                                 \
+    NAME##_reset(NAME* map) TH_MAYBE_UNUSED;                                                                                        \
+                                                                                                                                    \
+    TH_INLINE(th_err)                                                                                                               \
+    NAME##_reserve(NAME* map, size_t capacity) TH_MAYBE_UNUSED;                                                                     \
+                                                                                                                                    \
+    TH_INLINE(void)                                                                                                                 \
+    NAME##_deinit(NAME* map) TH_MAYBE_UNUSED;                                                                                       \
+                                                                                                                                    \
+    TH_INLINE(th_err)                                                                                                               \
+    NAME##_set(NAME* map, K key, V value) TH_MAYBE_UNUSED;                                                                          \
+                                                                                                                                    \
+    TH_INLINE(V*)                                                                                                                   \
+    NAME##_try_get(const NAME* map, K key) TH_MAYBE_UNUSED;                                                                         \
+                                                                                                                                    \
+    typedef NAME##_entry* NAME##_iter;                                                                                              \
+                                                                                                                                    \
+    TH_INLINE(NAME##_entry*)                                                                                                        \
+    NAME##_find(const NAME* map, K key) TH_MAYBE_UNUSED;                                                                            \
+                                                                                                                                    \
+    TH_INLINE(void)                                                                                                                 \
+    NAME##_erase(NAME* map, NAME##_entry* entry) TH_MAYBE_UNUSED;                                                                   \
+                                                                                                                                    \
+    TH_INLINE(NAME##_entry*)                                                                                                        \
+    NAME##_begin(NAME* map) TH_MAYBE_UNUSED;                                                                                        \
+                                                                                                                                    \
+    TH_INLINE(NAME##_entry*)                                                                                                        \
+    NAME##_next(NAME* map, NAME##_entry* entry) TH_MAYBE_UNUSED;                                                                    \
+                                                                                                                                    \
+    TH_INLINE(NAME##_entry*)                                                                                                        \
+    NAME##_prev(NAME* map, NAME##_entry* entry) TH_MAYBE_UNUSED;                                                                    \
+                                                                                                                                    \
+    TH_INLINE(void)                                                                                                                 \
+    NAME##_init(NAME* map, th_allocator* allocator)                                                                                 \
+    {                                                                                                                               \
+        map->allocator = allocator;                                                                                                 \
+        if (map->allocator == NULL) {                                                                                               \
+            map->allocator = th_default_allocator_get();                                                                            \
+        }                                                                                                                           \
+        map->entries = NULL;                                                                                                        \
+        map->size = 0;                                                                                                              \
+        map->capacity = 0;                                                                                                          \
+        map->begin = 0;                                                                                                             \
+        map->end = 0;                                                                                                               \
+    }                                                                                                                               \
+                                                                                                                                    \
+    TH_INLINE(void)                                                                                                                 \
+    NAME##_deinit(NAME* map)                                                                                                        \
+    {                                                                                                                               \
+        if (map->entries) {                                                                                                         \
+            th_allocator_free(map->allocator, map->entries);                                                                        \
+        }                                                                                                                           \
+    }                                                                                                                               \
+                                                                                                                                    \
+    TH_INLINE(void)                                                                                                                 \
+    NAME##_reset(NAME* map)                                                                                                         \
+    {                                                                                                                               \
+        if (map->entries) {                                                                                                         \
+            th_allocator_free(map->allocator, map->entries);                                                                        \
+        }                                                                                                                           \
+        map->entries = NULL;                                                                                                        \
+        map->size = 0;                                                                                                              \
+        map->capacity = 0;                                                                                                          \
+        map->begin = 0;                                                                                                             \
+        map->end = 0;                                                                                                               \
+    }                                                                                                                               \
+                                                                                                                                    \
+    TH_INLINE(th_err)                                                                                                               \
+    NAME##_reserve(NAME* map, size_t capacity)                                                                                      \
+    {                                                                                                                               \
+        if (map->capacity >= capacity) {                                                                                            \
+            return TH_ERR_OK;                                                                                                       \
+        }                                                                                                                           \
+        capacity = th_next_pow2(capacity);                                                                                          \
+        NAME##_entry* entries = (NAME##_entry*)th_allocator_realloc(map->allocator, map->entries, capacity * sizeof(NAME##_entry)); \
+        if (entries == NULL) {                                                                                                      \
+            return TH_ERR_BAD_ALLOC;                                                                                                \
+        }                                                                                                                           \
+        for (size_t i = map->capacity; i < capacity; i++) {                                                                         \
+            entries[i] = (NAME##_entry){.key = K_NULL};                                                                             \
+        }                                                                                                                           \
+        map->entries = entries;                                                                                                     \
+        map->capacity = capacity;                                                                                                   \
+        return TH_ERR_OK;                                                                                                           \
+    }                                                                                                                               \
+                                                                                                                                    \
+    TH_LOCAL(void)                                                                                                                  \
+    NAME##_update_begin_end(NAME* map, size_t new_index)                                                                            \
+    {                                                                                                                               \
+        if (map->size == 1) {                                                                                                       \
+            map->begin = new_index;                                                                                                 \
+            map->end = new_index + 1;                                                                                               \
+        } else {                                                                                                                    \
+            if (new_index < map->begin) {                                                                                           \
+                map->begin = new_index;                                                                                             \
+            }                                                                                                                       \
+            if (new_index + 1 > map->end) {                                                                                         \
+                map->end = new_index + 1;                                                                                           \
+            }                                                                                                                       \
+        }                                                                                                                           \
+    }                                                                                                                               \
+                                                                                                                                    \
+    TH_LOCAL(th_err)                                                                                                                \
+    NAME##_do_set(NAME* map, uint32_t hash, K key, V value)                                                                         \
+    {                                                                                                                               \
+        for (size_t i = hash; i < map->capacity; i++) {                                                                             \
+            NAME##_entry* entry = &map->entries[i];                                                                                 \
+            if (K_EQ(entry->key, K_NULL)) {                                                                                         \
+                entry->key = key;                                                                                                   \
+                entry->value = value;                                                                                               \
+                map->size++;                                                                                                        \
+                NAME##_update_begin_end(map, i);                                                                                    \
+                return TH_ERR_OK;                                                                                                   \
+            }                                                                                                                       \
+            if (K_EQ(entry->key, key)) {                                                                                            \
+                entry->value = value;                                                                                               \
+                return TH_ERR_OK;                                                                                                   \
+            }                                                                                                                       \
+        }                                                                                                                           \
+        for (size_t i = 0; i < hash; i++) {                                                                                         \
+            NAME##_entry* entry = &map->entries[i];                                                                                 \
+            if (K_EQ(entry->key, K_NULL)) {                                                                                         \
+                entry->key = key;                                                                                                   \
+                entry->value = value;                                                                                               \
+                map->size++;                                                                                                        \
+                NAME##_update_begin_end(map, i);                                                                                    \
+                return TH_ERR_OK;                                                                                                   \
+            }                                                                                                                       \
+            if (K_EQ(entry->key, key)) {                                                                                            \
+                entry->value = value;                                                                                               \
+                return TH_ERR_OK;                                                                                                   \
+            }                                                                                                                       \
+        }                                                                                                                           \
+        return TH_ERR_BAD_ALLOC;                                                                                                    \
+    }                                                                                                                               \
+                                                                                                                                    \
+    TH_INLINE(th_err)                                                                                                               \
+    NAME##_expand(NAME* map)                                                                                                        \
+    {                                                                                                                               \
+        th_err err = TH_ERR_OK;                                                                                                     \
+        size_t old_capacity = map->capacity;                                                                                        \
+        size_t new_capacity = old_capacity * 2;                                                                                     \
+        if (new_capacity == 0) {                                                                                                    \
+            new_capacity = 1;                                                                                                       \
+        }                                                                                                                           \
+        if ((err = NAME##_reserve(map, new_capacity)) != TH_ERR_OK) {                                                               \
+            return err;                                                                                                             \
+        }                                                                                                                           \
+        /* Reset size, begin and end */                                                                                             \
+        map->size = 0;                                                                                                              \
+        map->begin = 0;                                                                                                             \
+        map->end = 0;                                                                                                               \
+        /* Need to rehash all entries */                                                                                            \
+        for (size_t i = 0; i < old_capacity; i++) {                                                                                 \
+            NAME##_entry* entry = &map->entries[i];                                                                                 \
+            if (K_EQ(entry->key, K_NULL)) {                                                                                         \
+                /* rearranged == 0; */                                                                                              \
+                continue;                                                                                                           \
+            }                                                                                                                       \
+            uint32_t hash = HASH(entry->key);                                                                                       \
+            /* Don't need to rehash every entry */                                                                                  \
+            hash &= (new_capacity - 1);                                                                                             \
+            NAME##_entry e = *entry;                                                                                                \
+            *entry = (NAME##_entry){.key = K_NULL};                                                                                 \
+            if ((err = NAME##_do_set(map, hash, e.key, e.value)) != TH_ERR_OK) {                                                    \
+                return err;                                                                                                         \
+            }                                                                                                                       \
+        }                                                                                                                           \
+        return TH_ERR_OK;                                                                                                           \
+    }                                                                                                                               \
+                                                                                                                                    \
+    TH_INLINE(th_err)                                                                                                               \
+    NAME##_set(NAME* map, K key, V value)                                                                                           \
+    {                                                                                                                               \
+        if (map->size >= map->capacity / 2) {                                                                                       \
+            th_err err = NAME##_expand(map);                                                                                        \
+            if (err != TH_ERR_OK) {                                                                                                 \
+                return err;                                                                                                         \
+            }                                                                                                                       \
+        }                                                                                                                           \
+        uint32_t hash = HASH(key) & (map->capacity - 1);                                                                            \
+        return NAME##_do_set(map, hash, key, value);                                                                                \
+    }                                                                                                                               \
+                                                                                                                                    \
+    TH_INLINE(NAME##_entry*)                                                                                                        \
+    NAME##_find(const NAME* map, K key)                                                                                             \
+    {                                                                                                                               \
+        uint32_t hash = HASH(key) & (map->capacity - 1);                                                                            \
+        if (map->size == 0) {                                                                                                       \
+            return NULL;                                                                                                            \
+        }                                                                                                                           \
+        for (size_t i = hash; i < map->end; i++) {                                                                                  \
+            NAME##_entry* entry = &map->entries[i];                                                                                 \
+            if (K_EQ(entry->key, K_NULL)) {                                                                                         \
+                return NULL;                                                                                                        \
+            }                                                                                                                       \
+            if (K_EQ(entry->key, key)) {                                                                                            \
+                return entry;                                                                                                       \
+            }                                                                                                                       \
+        }                                                                                                                           \
+        for (size_t i = map->begin; i < hash; i++) {                                                                                \
+            NAME##_entry* entry = &map->entries[i];                                                                                 \
+            if (K_EQ(entry->key, K_NULL)) {                                                                                         \
+                return NULL;                                                                                                        \
+            }                                                                                                                       \
+            if (K_EQ(entry->key, key)) {                                                                                            \
+                return entry;                                                                                                       \
+            }                                                                                                                       \
+        }                                                                                                                           \
+        return NULL;                                                                                                                \
+    }                                                                                                                               \
+                                                                                                                                    \
+    TH_INLINE(void)                                                                                                                 \
+    NAME##_erase(NAME* map, NAME##_entry* entry)                                                                                    \
+    {                                                                                                                               \
+        entry->key = K_NULL;                                                                                                        \
+        map->size--;                                                                                                                \
+        /* Need to fix possible holes */                                                                                            \
+        size_t last_zeroed = entry - map->entries;                                                                                  \
+        for (size_t i = entry - map->entries + 1; i < map->end; i++) {                                                              \
+            if (K_EQ(map->entries[i].key, K_NULL)                                                                                   \
+                || ((HASH(map->entries[i].key) & (map->capacity - 1)) == i)) {                                                      \
+                break;                                                                                                              \
+            }                                                                                                                       \
+            map->entries[i - 1] = map->entries[i];                                                                                  \
+            map->entries[i] = (NAME##_entry){.key = K_NULL};                                                                        \
+            last_zeroed = i;                                                                                                        \
+        }                                                                                                                           \
+        if (map->size == 0) {                                                                                                       \
+            map->begin = 0;                                                                                                         \
+            map->end = 0;                                                                                                           \
+        } else if (last_zeroed == map->end - 1) {                                                                                   \
+            map->end = NAME##_prev(map, &map->entries[last_zeroed]) - map->entries + 1;                                             \
+        } else if (last_zeroed == map->begin) {                                                                                     \
+            map->begin = NAME##_next(map, &map->entries[last_zeroed]) - map->entries;                                               \
+        }                                                                                                                           \
+    }                                                                                                                               \
+                                                                                                                                    \
+    TH_INLINE(V*)                                                                                                                   \
+    NAME##_try_get(const NAME* map, K key)                                                                                          \
+    {                                                                                                                               \
+        NAME##_entry* entry = NAME##_find(map, key);                                                                                \
+        if (entry) {                                                                                                                \
+            return &entry->value;                                                                                                   \
+        }                                                                                                                           \
+        return NULL;                                                                                                                \
+    }                                                                                                                               \
+                                                                                                                                    \
+    TH_INLINE(NAME##_entry*)                                                                                                        \
+    NAME##_begin(NAME* map)                                                                                                         \
+    {                                                                                                                               \
+        if (map->begin == map->end)                                                                                                 \
+            return NULL;                                                                                                            \
+        return &map->entries[map->begin];                                                                                           \
+    }                                                                                                                               \
+                                                                                                                                    \
+    TH_INLINE(NAME##_entry*)                                                                                                        \
+    NAME##_next(NAME* map, NAME##_entry* entry)                                                                                     \
+    {                                                                                                                               \
+        size_t i = entry - map->entries;                                                                                            \
+        for (size_t j = i + 1; j < map->end; j++) {                                                                                 \
+            NAME##_entry* e = &map->entries[j];                                                                                     \
+            if (!K_EQ(e->key, K_NULL)) {                                                                                            \
+                return e;                                                                                                           \
+            }                                                                                                                       \
+        }                                                                                                                           \
+        return NULL;                                                                                                                \
+    }                                                                                                                               \
+                                                                                                                                    \
+    TH_INLINE(NAME##_entry*)                                                                                                        \
+    NAME##_prev(NAME* map, NAME##_entry* entry)                                                                                     \
+    {                                                                                                                               \
+        size_t i = entry - map->entries;                                                                                            \
+        for (size_t j = i - 1; j >= map->begin; j--) {                                                                              \
+            NAME##_entry* e = &map->entries[j];                                                                                     \
+            if (!K_EQ(e->key, K_NULL)) {                                                                                            \
+                return e;                                                                                                           \
+            }                                                                                                                       \
+        }                                                                                                                           \
+        return NAME##_begin(map);                                                                                                   \
+    }
+
+/* default hash maps begin */
+/* th_cstr_map begin */
+
+TH_INLINE(uint32_t)
+th_cstr_hash(const char* str)
+{
+    return th_hash_cstr(str);
+}
+
+TH_INLINE(bool)
+th_cstr_eq(const char* a, const char* b)
+{
+    if (!a || !b)
+        return a == b;
+    return *a == *b && (strcmp(a, b) == 0);
+}
+
+TH_DEFINE_HASHMAP(th_cstr_map, const char*, const char*, th_cstr_hash, th_cstr_eq, NULL)
+
+/* th_cstr_map end */
+
+/* End of th_hashmap.h */
+/* Start of th_kqueue_service.h */
+
+
+
+#ifdef TH_CONFIG_WITH_KQUEUE
+
+#include <sys/event.h>
+#include <sys/time.h>
+#include <sys/types.h>
+
+/* Forward declarations begin */
+
+typedef struct th_kqueue_service th_kqueue_service;
+typedef struct th_kqueue_handle th_kqueue_handle;
+typedef struct th_kqueue_handle_cleaner th_kqueue_handle_cleaner;
+
+/* Forward declarations end */
+
+struct th_kqueue_handle {
+    th_io_handle base;
+    th_timer timer;
+    th_allocator* allocator;
+    th_kqueue_handle* pool_next;
+    th_kqueue_handle* pool_prev;
+    th_kqueue_handle* timer_next;
+    th_kqueue_handle* timer_prev;
+    th_kqueue_service* service;
+    th_io_task* iot[TH_IO_OP_TYPE_MAX];
+    int fd;
+    th_io_op_type active;
+    bool timeout_enabled;
+};
+
+#ifndef TH_KQUEUE_HANDLE_POOL
+#define TH_KQUEUE_HANDLE_POOL
+TH_DEFINE_OBJ_POOL_ALLOCATOR(th_kqueue_handle_pool, th_kqueue_handle, pool_prev, pool_next)
+#endif
+
+#ifndef TH_KQUEUE_HANDLE_TIMER_LIST
+#define TH_KQUEUE_HANDLE_TIMER_LIST
+TH_DEFINE_LIST(th_kqueue_timer_list, th_kqueue_handle, timer_prev, timer_next)
+#endif
+
+struct th_kqueue_service {
+    th_io_service base;
+    th_allocator* allocator;
+    th_runner* runner;
+    th_kqueue_handle_pool handle_allocator;
+    th_kqueue_timer_list timer_list;
+    int kq;
+};
+
+TH_PRIVATE(th_err)
+th_kqueue_service_create(th_io_service** out, th_runner* runner, th_allocator* allocator);
+
+#endif /* TH_HAVE_KQUEUE */
+/* End of th_kqueue_service.h */
 /* Start of th_io_composite.h */
 
 
@@ -2388,121 +2557,6 @@ TH_PRIVATE(void)
 th_acceptor_deinit(th_acceptor* acceptor);
 
 /* End of th_acceptor.h */
-/* Start of th_tcp_socket.h */
-
-
-/* th_tcp_socket begin */
-
-typedef struct th_tcp_socket {
-    th_socket base;
-    th_context* context;
-    th_allocator* allocator;
-    th_io_handle* handle;
-} th_tcp_socket;
-
-TH_PRIVATE(void)
-th_tcp_socket_init(th_tcp_socket* socket, th_context* context, th_allocator* allocator);
-
-/** th_socket_close
- * @brief Closes the underlying file descriptor of the socket.
- * while the socket object is still valid and can be reused.
- */
-TH_PRIVATE(void)
-th_tcp_socket_close(th_tcp_socket* socket);
-
-TH_PRIVATE(void)
-th_tcp_socket_deinit(th_tcp_socket* socket);
-
-#define th_tcp_socket_set_fd(socket, fd) ((socket)->base.set_fd((socket), (fd)))
-
-#define th_tcp_socket_cancel(socket) ((socket)->base.cancel((socket)))
-
-#define th_tcp_socket_get_allocator(socket) ((socket)->base.get_allocator((socket)))
-
-#define th_tcp_socket_get_context(socket) ((socket)->base.get_context((socket)))
-
-#define th_tcp_socket_async_write(socket, addr, len, handler) ((socket)->base.async_write((socket), (addr), (len), (handler)))
-
-#define th_tcp_socket_async_writev(socket, iov, iovcnt, handler) ((socket)->base.async_writev((socket), (iov), (iovcnt), (handler)))
-
-#define th_tcp_socket_async_read(socket, addr, len, handler) ((socket)->base.async_read((socket), (addr), (len), (handler)))
-
-#define th_tcp_socket_async_readv(socket, iov, iovcnt, handler) ((socket)->base.async_readv((socket), (iov), (iovcnt), (handler)))
-
-#define th_tcp_socket_async_sendfile(socket, header, iovcnt, stream, offset, len, handler) ((socket)->base.async_sendfile((socket), (header), (iovcnt), (stream), (offset), (len), (handler)))
-
-/* th_tcp_socket end */
-
-/* End of th_tcp_socket.h */
-/* Start of th_ssl_context.h */
-
-
-#if TH_WITH_SSL
-
-#include <openssl/ssl.h>
-
-typedef struct th_ssl_context {
-    SSL_CTX* ctx;
-    BIO_METHOD* smem_method;
-} th_ssl_context;
-
-TH_PRIVATE(th_err)
-th_ssl_context_init(th_ssl_context* context, const char* key, const char* cert);
-
-TH_PRIVATE(void)
-th_ssl_context_deinit(th_ssl_context* context);
-
-#endif
-/* End of th_ssl_context.h */
-/* Start of th_ssl_socket.h */
-
-
-#if TH_WITH_SSL
-
-
-#include <openssl/ssl.h>
-
-/* th_ssl_socket begin */
-
-typedef struct th_ssl_socket {
-    th_socket base;
-    th_tcp_socket tcp_socket;
-    SSL* ssl;
-    BIO* wbio; // ssl output buffer
-    BIO* rbio; // ssl input buffer
-} th_ssl_socket;
-
-typedef enum th_ssl_socket_mode {
-    TH_SSL_SOCKET_MODE_SERVER,
-    TH_SSL_SOCKET_MODE_CLIENT
-} th_ssl_socket_mode;
-
-TH_PRIVATE(th_err)
-th_ssl_socket_init(th_ssl_socket* socket, th_context* context, th_ssl_context* ssl_context, th_allocator* allocator);
-
-/** ssl socket specific functions */
-
-TH_PRIVATE(void)
-th_ssl_socket_set_mode(th_ssl_socket* socket, th_ssl_socket_mode mode);
-
-TH_PRIVATE(void)
-th_ssl_socket_async_handshake(th_ssl_socket* socket, th_socket_handler* handler);
-
-TH_PRIVATE(void)
-th_ssl_socket_async_shutdown(th_ssl_socket* socket, th_socket_handler* handler);
-
-/** th_socket_close
- * @brief Closes the underlying file descriptor of the socket.
- * while the socket object is still valid and can be reused.
- */
-TH_PRIVATE(void)
-th_ssl_socket_close(th_ssl_socket* socket);
-
-TH_PRIVATE(void)
-th_ssl_socket_deinit(th_ssl_socket* socket);
-
-#endif
-/* End of th_ssl_socket.h */
 /* Start of th_method.h */
 
 
@@ -2892,6 +2946,101 @@ TH_PRIVATE(void)
 th_exchange_start(th_exchange* exchange, th_exchange_mode mode);
 
 /* End of th_exchange.h */
+/* Start of th_tcp_socket.h */
+
+
+/* th_tcp_socket begin */
+
+typedef struct th_tcp_socket {
+    th_socket base;
+    th_context* context;
+    th_allocator* allocator;
+    th_io_handle* handle;
+} th_tcp_socket;
+
+TH_PRIVATE(void)
+th_tcp_socket_init(th_tcp_socket* socket, th_context* context, th_allocator* allocator);
+
+/** th_socket_close
+ * @brief Closes the underlying file descriptor of the socket.
+ * while the socket object is still valid and can be reused.
+ */
+TH_PRIVATE(void)
+th_tcp_socket_close(th_tcp_socket* socket);
+
+TH_PRIVATE(void)
+th_tcp_socket_deinit(th_tcp_socket* socket);
+
+#define th_tcp_socket_set_fd(socket, fd) ((socket)->base.set_fd((socket), (fd)))
+
+#define th_tcp_socket_cancel(socket) ((socket)->base.cancel((socket)))
+
+#define th_tcp_socket_get_allocator(socket) ((socket)->base.get_allocator((socket)))
+
+#define th_tcp_socket_get_context(socket) ((socket)->base.get_context((socket)))
+
+#define th_tcp_socket_async_write(socket, addr, len, handler) ((socket)->base.async_write((socket), (addr), (len), (handler)))
+
+#define th_tcp_socket_async_writev(socket, iov, iovcnt, handler) ((socket)->base.async_writev((socket), (iov), (iovcnt), (handler)))
+
+#define th_tcp_socket_async_read(socket, addr, len, handler) ((socket)->base.async_read((socket), (addr), (len), (handler)))
+
+#define th_tcp_socket_async_readv(socket, iov, iovcnt, handler) ((socket)->base.async_readv((socket), (iov), (iovcnt), (handler)))
+
+#define th_tcp_socket_async_sendfile(socket, header, iovcnt, stream, offset, len, handler) ((socket)->base.async_sendfile((socket), (header), (iovcnt), (stream), (offset), (len), (handler)))
+
+/* th_tcp_socket end */
+
+/* End of th_tcp_socket.h */
+/* Start of th_ssl_socket.h */
+
+
+#if TH_WITH_SSL
+
+
+#include <openssl/ssl.h>
+
+/* th_ssl_socket begin */
+
+typedef struct th_ssl_socket {
+    th_socket base;
+    th_tcp_socket tcp_socket;
+    SSL* ssl;
+    BIO* wbio; // ssl output buffer
+    BIO* rbio; // ssl input buffer
+} th_ssl_socket;
+
+typedef enum th_ssl_socket_mode {
+    TH_SSL_SOCKET_MODE_SERVER,
+    TH_SSL_SOCKET_MODE_CLIENT
+} th_ssl_socket_mode;
+
+TH_PRIVATE(th_err)
+th_ssl_socket_init(th_ssl_socket* socket, th_context* context, th_ssl_context* ssl_context, th_allocator* allocator);
+
+/** ssl socket specific functions */
+
+TH_PRIVATE(void)
+th_ssl_socket_set_mode(th_ssl_socket* socket, th_ssl_socket_mode mode);
+
+TH_PRIVATE(void)
+th_ssl_socket_async_handshake(th_ssl_socket* socket, th_socket_handler* handler);
+
+TH_PRIVATE(void)
+th_ssl_socket_async_shutdown(th_ssl_socket* socket, th_socket_handler* handler);
+
+/** th_socket_close
+ * @brief Closes the underlying file descriptor of the socket.
+ * while the socket object is still valid and can be reused.
+ */
+TH_PRIVATE(void)
+th_ssl_socket_close(th_ssl_socket* socket);
+
+TH_PRIVATE(void)
+th_ssl_socket_deinit(th_ssl_socket* socket);
+
+#endif
+/* End of th_ssl_socket.h */
 /* Start of th_client.h */
 
 
@@ -3199,93 +3348,124 @@ TH_PRIVATE(void)
 th_listener_destroy(th_listener* listener);
 
 /* End of th_listener.h */
-/* Start of th_io_op_bsd.h */
+/* Start of th_poll_service.h */
 
 
-#if defined(TH_CONFIG_WITH_BSD_SENDFILE)
-TH_PRIVATE(th_err)
-th_io_op_bsd_sendfile(void* self, size_t* result) TH_MAYBE_UNUSED;
-#endif
 
-/* End of th_io_op_bsd.h */
-/* Start of th_mock_syscall.h */
+#ifdef TH_CONFIG_WITH_POLL
 
+#include <poll.h>
 #include <stddef.h>
+#include <stdint.h>
+#include <sys/types.h>
 
+/* Forward declarations begin */
 
-typedef struct th_mock_syscall {
-    int (*accept)(void);
-    int (*open)(void);
-    int (*lseek)(void);
-    int (*close)(void);
-    int (*read)(void* buf, size_t len);
-    int (*write)(size_t len);
-    int (*settime)(void);
-} th_mock_syscall;
+typedef struct th_poll_service th_poll_service;
+typedef struct th_poll_handle th_poll_handle;
+typedef struct th_poll_handle_map th_poll_handle_map;
 
-th_mock_syscall* th_mock_syscall_get(void);
-void th_mock_syscall_reset(void);
+/* Forward declarations end */
+/* th_fd_to_idx_map implementation begin */
 
-int th_mock_accept(void);
+TH_INLINE(uint32_t)
+th_fd_hash(int fd)
+{
+    return (uint32_t)fd;
+}
 
-int th_mock_open(void);
+TH_INLINE(bool)
+th_int_eq(int a, int b)
+{
+    return a == b;
+}
 
-int th_mock_lseek(void);
+TH_DEFINE_HASHMAP(th_fd_to_idx_map, int, size_t, th_fd_hash, th_int_eq, -1)
 
-int th_mock_close(void);
+/* th_fd_to_idx_map implementation end */
+/* th_poll_handle begin */
 
-int th_mock_read(void* buf, size_t len);
-
-int th_mock_write(size_t len);
-
-int th_mock_settime(void);
-
-/* End of th_mock_syscall.h */
-/* Start of th_mime.h */
-
-
-
-struct th_mime_mapping {
-    const char* name;
-    th_string mime;
+struct th_poll_handle {
+    th_io_handle base;
+    th_timer timer;
+    th_poll_handle* next;
+    th_poll_handle* prev;
+    th_allocator* allocator;
+    th_poll_service* service;
+    th_io_task* iot[TH_IO_OP_TYPE_MAX];
+    int fd;
+    bool timeout_enabled;
 };
 
-struct th_mime_mapping* th_mime_mapping_find(const char* ext, size_t len);
-
-/* End of th_mime.h */
-/* Start of th_io_op_mock.h */
-
-
-
-#if defined(TH_CONFIG_OS_MOCK)
-
-TH_PRIVATE(th_err)
-th_io_op_mock_read(void* self, size_t* result);
-
-TH_PRIVATE(th_err)
-th_io_op_mock_readv(void* self, size_t* result);
-
-TH_PRIVATE(th_err)
-th_io_op_mock_write(void* self, size_t* result);
-
-TH_PRIVATE(th_err)
-th_io_op_mock_writev(void* self, size_t* result);
-
-TH_PRIVATE(th_err)
-th_io_op_mock_send(void* self, size_t* result);
-
-TH_PRIVATE(th_err)
-th_io_op_mock_sendv(void* self, size_t* result);
-
-TH_PRIVATE(th_err)
-th_io_op_mock_accept(void* self, size_t* result);
-
-TH_PRIVATE(th_err)
-th_io_op_mock_sendfile(void* self, size_t* result);
-
+#ifndef TH_POLL_HANDLE_POOL
+#define TH_POLL_HANDLE_POOL
+TH_DEFINE_OBJ_POOL_ALLOCATOR(th_poll_handle_pool, th_poll_handle, prev, next)
 #endif
 
-/* End of th_io_op_mock.h */
+#ifndef TH_POLL_HANDLE_LIST
+#define TH_POLL_HANDLE_LIST
+TH_DEFINE_QUEUE(th_poll_handle_list, th_poll_handle)
+#endif
+
+#ifndef TH_POLLFD_VEC
+#define TH_POLLFD_VEC
+TH_DEFINE_VEC(th_pollfd_vec, struct pollfd, (void))
+#endif
+
+/* th_poll_handle end */
+/* th_poll_handle_map begin */
+
+struct th_poll_handle_map {
+    th_fd_to_idx_map fd_to_idx_map;
+    th_allocator* allocator;
+    th_poll_handle** handles;
+    size_t size;
+    size_t capacity;
+};
+
+/* th_poll_handle_map end */
+
+struct th_poll_service {
+    th_io_service base;
+    th_allocator* allocator;
+    th_runner* runner;
+    th_poll_handle_pool handle_allocator;
+    th_poll_handle_map handles;
+    th_pollfd_vec fds;
+};
+
+TH_PRIVATE(th_err)
+th_poll_service_create(th_io_service** out, th_runner* runner, th_allocator* allocator);
+
+#endif /* TH_HAVE_POLL */
+/* End of th_poll_service.h */
+/* Start of th_ssl_error.h */
+
+
+#if TH_WITH_SSL
+
+
+TH_PRIVATE(void)
+th_ssl_log_error_stack(void);
+
+TH_PRIVATE(const char*)
+th_ssl_strerror(int code);
+
+TH_PRIVATE(th_err)
+th_ssl_handle_error_stack(void);
+
+#endif // TH_WITH_SSL
+/* End of th_ssl_error.h */
+/* Start of th_io_op_linux.h */
+
+
+
+#if defined(TH_CONFIG_WITH_LINUX_SENDFILE)
+TH_PRIVATE(th_err)
+th_io_op_linux_sendfile(void* self, size_t* result) TH_MAYBE_UNUSED;
+#endif
+
+/* End of th_io_op_linux.h */
 /* Start of th_io_op.h */
 
 
@@ -3317,182 +3497,6 @@ TH_PRIVATE(th_err)
 th_io_op_sendfile(void* self, size_t* result) TH_MAYBE_UNUSED;
 
 /* End of th_io_op.h */
-/* Start of th_ssl_error.h */
-
-
-#if TH_WITH_SSL
-
-
-TH_PRIVATE(void)
-th_ssl_log_error_stack(void);
-
-TH_PRIVATE(const char*)
-th_ssl_strerror(int code);
-
-TH_PRIVATE(th_err)
-th_ssl_handle_error_stack(void);
-
-#endif // TH_WITH_SSL
-/* End of th_ssl_error.h */
-/* Start of th_io_op_linux.h */
-
-
-
-#if defined(TH_CONFIG_WITH_LINUX_SENDFILE)
-TH_PRIVATE(th_err)
-th_io_op_linux_sendfile(void* self, size_t* result) TH_MAYBE_UNUSED;
-#endif
-
-/* End of th_io_op_linux.h */
-/* Start of th_mock_service.h */
-
-
-
-#if defined(TH_CONFIG_OS_MOCK)
-
-
-typedef struct th_mock_service th_mock_service;
-typedef struct th_mock_handle th_mock_handle;
-struct th_mock_handle {
-    th_io_handle base;
-    th_mock_service* service;
-    int fd;
-};
-
-struct th_mock_service {
-    th_io_service base;
-    th_runner* runner;
-};
-
-TH_PRIVATE(th_err)
-th_mock_service_create(th_io_service** out, th_runner* runner);
-
-#endif
-/* End of th_mock_service.h */
-/* Start of th_fmt.h */
-
-
-#include <stddef.h>
-#include <stdint.h>
-#include <time.h>
-
-
-TH_PRIVATE(const char*)
-th_fmt_uint_to_str(char* buf, size_t len, unsigned int val);
-
-TH_PRIVATE(const char*)
-th_fmt_uint_to_str_ex(char* buf, size_t len, unsigned int val, size_t* out_len);
-
-/** th_fmt_str_append
- * @brief Append a string to a buffer.
- * @param buf The buffer to append to.
- * @param pos The current position in the buffer (where to append).
- * @param len The length of the buffer.
- * @param str The string to append.
- * @return The number of characters appended.
- */
-TH_PRIVATE(size_t)
-th_fmt_str_append(char* buf, size_t pos, size_t len, const char* str);
-
-TH_PRIVATE(size_t)
-th_fmt_strn_append(char* buf, size_t pos, size_t len, const char* str, size_t n);
-
-TH_PRIVATE(size_t)
-th_fmt_strtime(char* buf, size_t len, th_date date);
-/* End of th_fmt.h */
-/* Start of th_path.h */
-
-
-/**
- * @brief th_path provides a bunch of helper functions to work with paths.
- */
-
-/**
- * @brief th_path_resolve resolves a path to a absolute path.
- * @param dir The directory to resolve the path against.
- * @param path The path to resolve.
- * @param out The resolved path.
- * @return TH_ERR_OK on success, otherwise an error code.
- */
-TH_PRIVATE(th_err)
-th_path_resolve_against(th_string path, th_dir* dir, th_heap_string* out);
-
-TH_PRIVATE(th_err)
-th_path_resolve(th_string path, th_heap_string* out);
-
-TH_PRIVATE(bool)
-th_path_is_within(th_string path, th_dir* dir);
-
-TH_PRIVATE(bool)
-th_path_is_hidden(th_string path);
-
-/* End of th_path.h */
-/* Start of th_ssl_smem_bio.h */
-
-
-#if TH_WITH_SSL
-
-#include <openssl/bio.h>
-
-
-TH_PRIVATE(BIO_METHOD*)
-th_smem_bio(th_ssl_context* ssl_context);
-
-TH_PRIVATE(void)
-th_smem_bio_setup_buf(BIO* bio, th_allocator* allocator, size_t max_len);
-
-TH_PRIVATE(size_t)
-th_smem_ensure_buf_size(BIO* bio, size_t size);
-
-TH_PRIVATE(void)
-th_smem_bio_set_eof(BIO* bio);
-
-TH_PRIVATE(void)
-th_smem_bio_get_rdata(BIO* bio, th_iov* buf);
-
-TH_PRIVATE(void)
-th_smem_bio_get_wbuf(BIO* bio, th_iov* buf);
-
-TH_PRIVATE(void)
-th_smem_bio_inc_read_pos(BIO* bio, size_t len);
-
-TH_PRIVATE(void)
-th_smem_bio_inc_write_pos(BIO* bio, size_t len);
-
-#endif
-/* End of th_ssl_smem_bio.h */
-/* Start of th_url_decode.h */
-
-
-
-#include <stddef.h>
-
-typedef enum th_url_decode_type {
-    TH_URL_DECODE_TYPE_PATH = 0,
-    TH_URL_DECODE_TYPE_QUERY
-} th_url_decode_type;
-
-/*
-TH_PRIVATE(th_err)
-th_url_decode_inplace(char* str, size_t* in_out_len, th_url_decode_type type);
-*/
-
-TH_PRIVATE(th_err)
-th_url_decode_string(th_string input, th_heap_string* output, th_url_decode_type type);
-
-/* End of th_url_decode.h */
-/* Start of th_align.h */
-
-#include <stdint.h>
-
-#define TH_ALIGNOF(type) offsetof(struct { char c; type member; }, member)
-#define TH_ALIGNAS(align, ptr) ((void*)(((uintptr_t)(ptr) + ((align) - 1)) & ~((align) - 1)))
-#define TH_ALIGNUP(n, align) (((n) + (align) - 1) & ~((align) - 1))
-#define TH_ALIGNDOWN(n, align) ((n) & ~((align) - 1))
-
-typedef long double th_max_align;
-
-/* End of th_align.h */
 /* Start of picohttpparser.h */
 /*
  * Copyright (c) 2009-2014 Kazuho Oku, Tokuhiro Matsuno, Daisuke Murase,
@@ -3579,6 +3583,18 @@ int phr_decode_chunked_is_in_data(struct phr_chunked_decoder *decoder);
 #endif
 
 /* End of picohttpparser.h */
+/* Start of th_align.h */
+
+#include <stdint.h>
+
+#define TH_ALIGNOF(type) offsetof(struct { char c; type member; }, member)
+#define TH_ALIGNAS(align, ptr) ((void*)(((uintptr_t)(ptr) + ((align) - 1)) & ~((align) - 1)))
+#define TH_ALIGNUP(n, align) (((n) + (align) - 1) & ~((align) - 1))
+#define TH_ALIGNDOWN(n, align) ((n) & ~((align) - 1))
+
+typedef long double th_max_align;
+
+/* End of th_align.h */
 /* Start of src/th_server.c */
 
 #include <stdint.h>
@@ -6732,7 +6748,13 @@ th_request_parse_path(th_request* request, th_string path)
     th_string uri_query = th_string_trim(th_string_substr(path, query_start + 1, path.len - query_start - 1));
     if ((err = th_request_store_uri_query(request, uri_query)) != TH_ERR_OK)
         return err;
-    return th_request_parse_path_query(request, uri_query);
+    if (th_request_parse_path_query(request, uri_query) != TH_ERR_OK) {
+        // If we can't parse the query, that's ok, we just ignore it
+        // restore the original state and continue
+        th_cstr_map_reset(&request->query_params);
+        // TODO, clean up the allocated strings
+    }
+    return TH_ERR_OK;
 }
 
 TH_LOCAL(th_err)
@@ -6900,6 +6922,7 @@ th_request_read_handle_header(th_request_read_handler* handler, size_t len)
     int pret = phr_parse_request(th_buf_vec_at(&request->buffer, 0), data_len, &method.ptr, &method.len, &path.ptr, &path.len, &request->minor_version, headers, &num_headers, request->data_len);
     request->data_len = data_len;
     if (pret == -1) {
+        TH_LOG_DEBUG("%p: Failed to parse request", request);
         th_request_read_handler_complete(handler, 0, TH_ERR_HTTP(TH_CODE_BAD_REQUEST));
         return;
     } else if (pret == -2) { // we need more data
@@ -6939,18 +6962,21 @@ th_request_read_handle_header(th_request_read_handler* handler, size_t len)
     // find path query
     th_err err = TH_ERR_OK;
     if ((err = th_request_parse_path(request, path)) != TH_ERR_OK) {
-        th_request_read_handler_complete(handler, 0, err);
+        TH_LOG_DEBUG("%p: Failed to parse uri: %s", request, th_strerror(err));
+        th_request_read_handler_complete(handler, 0, TH_ERR_HTTP(TH_CODE_BAD_REQUEST));
         return;
     }
 
     // handle headers
     if ((err = th_request_handle_headers(request, headers, num_headers)) != TH_ERR_OK) {
+        TH_LOG_DEBUG("%p: Failed to handle headers: %s", request, th_strerror(err));
         th_request_read_handler_complete(handler, 0, err);
         return;
     }
 
     // Get is not allowed to have a body
     if (request->method == TH_METHOD_GET && request->content_len > 0) {
+        TH_LOG_DEBUG("%p: Rejecting GET request with body", request);
         th_request_read_handler_complete(handler, 0, TH_ERR_HTTP(TH_CODE_BAD_REQUEST));
         return;
     }
@@ -6973,6 +6999,7 @@ th_request_read_handle_header(th_request_read_handler* handler, size_t len)
 
     // check whether the content length is ok
     if (request->content_len > TH_CONFIG_MAX_CONTENT_LEN) {
+        TH_LOG_DEBUG("%p: Rejecting request with too large content length", request);
         th_request_read_handler_complete(handler, 0, TH_ERR_HTTP(TH_CODE_PAYLOAD_TOO_LARGE));
         return;
     }
@@ -9264,7 +9291,8 @@ th_heap_string_small_to_large(th_heap_string* self, size_t capacity)
 {
     TH_ASSERT(self->impl.small.small);
     th_detail_large_string large = {0};
-    large.capacity = TH_HEAP_STRING_ALIGNUP(capacity);
+    capacity = TH_HEAP_STRING_ALIGNUP(capacity);
+    large.capacity = capacity;
     large.len = self->impl.small.len;
     large.ptr = th_allocator_alloc(self->impl.small.allocator, capacity);
     if (large.ptr == NULL) {
@@ -9632,6 +9660,12 @@ th_exchange_handle_request(th_exchange* handler)
     th_response_async_write(response, socket, (th_io_handler*)handler);
 }
 
+TH_LOCAL(bool)
+th_exchange_is_io_error(th_err err)
+{
+    return err == TH_ERR_EOF || err == TH_EBADF || err == TH_EIO;
+}
+
 TH_LOCAL(void)
 th_exchange_fn(void* self, size_t len, th_err err)
 {
@@ -9640,7 +9674,8 @@ th_exchange_fn(void* self, size_t len, th_err err)
     switch (handler->state) {
     case TH_EXCHANGE_STATE_START: {
         if (err != TH_ERR_OK) {
-            if (TH_ERR_CATEGORY(err) == TH_ERR_CATEGORY_HTTP) {
+            if (!th_exchange_is_io_error(err)) {
+                // Unless it's an I/O error, we should send a response
                 TH_LOG_DEBUG("%p: Rejecting request with error %s", handler, th_strerror(err));
                 th_exchange_write_error_response((th_exchange*)th_io_composite_ref(&handler->base), err);
             } else {

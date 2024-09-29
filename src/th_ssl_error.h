@@ -1,6 +1,8 @@
 #ifndef TH_SSL_ERROR_H
 #define TH_SSL_ERROR_H
 
+#include "th_config.h"
+
 #if TH_WITH_SSL
 #include <th.h>
 

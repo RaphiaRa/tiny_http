@@ -168,14 +168,9 @@ th_exchange_create(th_exchange** out, th_socket* socket,
 }
 
 TH_PRIVATE(void)
-th_exchange_start(th_exchange* handler, th_exchange_mode mode)
+th_exchange_start(th_exchange* handler, th_request_read_mode mode)
 {
     handler->state = TH_EXCHANGE_STATE_START;
-    if (mode != TH_EXCHANGE_MODE_NORMAL) {
-        TH_LOG_DEBUG("%p: Rejecting request with error %s", handler, th_strerror((th_err)mode));
-        th_exchange_write_error_response(handler, (th_err)mode);
-        return;
-    }
     TH_LOG_TRACE("%p: Reading request %p", handler, &handler->request);
-    th_request_async_read(handler->socket, handler->allocator, &handler->request, (th_io_handler*)handler);
+    th_request_async_read(handler->socket, handler->allocator, &handler->request, mode, (th_io_handler*)handler);
 }

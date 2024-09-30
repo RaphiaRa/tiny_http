@@ -27,6 +27,7 @@ typedef struct th_request_read_handler {
     th_allocator* allocator;
     th_socket* sock;
     th_request* request;
+    th_request_read_mode mode;
     th_request_read_state state;
 } th_request_read_handler;
 
@@ -47,7 +48,7 @@ th_request_read_handler_complete(th_request_read_handler* handler, size_t len, t
 }
 
 TH_LOCAL(th_err)
-th_request_read_handler_create(th_request_read_handler** handler, th_allocator* allocator, th_socket* sock, th_request* request, th_io_handler* on_complete)
+th_request_read_handler_create(th_request_read_handler** handler, th_allocator* allocator, th_socket* sock, th_request* request, th_request_read_mode mode, th_io_handler* on_complete)
 {
     *handler = th_allocator_alloc(allocator, sizeof(th_request_read_handler));
     if (!*handler)
@@ -56,6 +57,7 @@ th_request_read_handler_create(th_request_read_handler** handler, th_allocator* 
     (*handler)->allocator = allocator;
     (*handler)->sock = sock;
     (*handler)->request = request;
+    (*handler)->mode = mode;
     (*handler)->state = TH_REQUEST_READ_STATE_HEADER;
     return TH_ERR_OK;
 }
@@ -284,6 +286,7 @@ TH_LOCAL(void)
 th_request_read_handle_header(th_request_read_handler* handler, size_t len)
 {
     th_request* request = handler->request;
+    th_request_read_mode mode = handler->mode;
     th_string path;
     th_string method;
     size_t num_headers = TH_CONFIG_MAX_HEADER_NUM;
@@ -310,6 +313,11 @@ th_request_read_handle_header(th_request_read_handler* handler, size_t len)
     }
     size_t header_len = (size_t)pret;
     TH_LOG_DEBUG("%p: Parsed request: %.*s %.*s HTTP/%d.%d", request, (int)method.len, method.ptr, (int)path.len, path.ptr, 1, request->minor_version);
+    if (mode != TH_REQUEST_READ_MODE_NORMAL) {
+        // Unless we are in normal mode, we don't need to parse the request further
+        th_request_read_handler_complete(handler, 0, (th_err)mode);
+        return;
+    }
     if (request->minor_version == 0)
         request->close = true; // HTTP/1.0 defaults to close
     // find method
@@ -426,11 +434,11 @@ th_request_read_handler_fn(void* self, size_t len, th_err err)
 }
 
 TH_PRIVATE(void)
-th_request_async_read(th_socket* sock, th_allocator* allocator, th_request* request, th_io_handler* on_complete)
+th_request_async_read(th_socket* sock, th_allocator* allocator, th_request* request, th_request_read_mode mode, th_io_handler* on_complete)
 {
     th_request_read_handler* handler = NULL;
     th_err err = TH_ERR_OK;
-    if ((err = th_request_read_handler_create(&handler, allocator, sock, request, on_complete)) != TH_ERR_OK) {
+    if ((err = th_request_read_handler_create(&handler, allocator, sock, request, mode, on_complete)) != TH_ERR_OK) {
         th_context_dispatch_handler(th_socket_get_context(sock), on_complete, 0, err);
         return;
     }

@@ -43,6 +43,8 @@ def build_include_graph(dir, includes):
     graph = nx.DiGraph()
     for include in includes:
         dependencies = extract_includes(read_file(dir + "/" + include))
+        # Order the dependencies lexicographically to ensure a deterministic order
+        dependencies = sorted(dependencies)
         log(f"Dependencies for {include}: {dependencies}")
         for dependency in dependencies:
             graph.add_edge(include, dependency)
@@ -70,6 +72,9 @@ def find_local_headers(source_files):
         content = read_file(dir + "/" + include)
         includes = extract_includes(content)
         all_includes.update(includes)
+    # First, order the includes lexicographically, to ensure a deterministic order
+    all_includes = sorted(all_includes)
+    log("All includes: " + str(all_includes))
     log("Finding ordered includes in " + dir)
     ordered = get_ordered_includes(dir, all_includes)
     log("Ordered includes: " + str(ordered))

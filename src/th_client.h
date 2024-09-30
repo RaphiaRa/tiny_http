@@ -20,7 +20,7 @@ struct th_client {
     th_socket* (*get_socket)(void* self);
     th_address* (*get_address)(void* self);
     th_err (*start)(void* self);
-    void (*set_mode)(void* self, th_exchange_mode mode);
+    void (*set_mode)(void* self, th_request_read_mode mode);
 };
 
 /** th_client_init
@@ -32,7 +32,7 @@ th_client_init(th_client* client,
                th_socket* (*get_socket)(void* self),
                th_address* (*get_address)(void* self),
                th_err (*start)(void* self),
-               void (*set_mode)(void* self, th_exchange_mode mode),
+               void (*set_mode)(void* self, th_request_read_mode mode),
                void (*destroy)(void* self))
 {
     th_refcounted_init(&client->base, destroy);
@@ -61,7 +61,7 @@ th_client_start(th_client* client)
 }
 
 TH_INLINE(void)
-th_client_set_mode(th_client* client, th_exchange_mode mode)
+th_client_set_mode(th_client* client, th_request_read_mode mode)
 {
     client->set_mode(client, mode);
 }
@@ -133,7 +133,7 @@ struct th_tcp_client {
     th_allocator* allocator;
     th_router* router;
     th_fcache* fcache;
-    th_exchange_mode mode;
+    th_request_read_mode mode;
 };
 
 TH_PRIVATE(th_err)
@@ -162,7 +162,7 @@ struct th_ssl_client {
     th_allocator* allocator;
     th_router* router;
     th_fcache* fcache;
-    th_exchange_mode mode;
+    th_request_read_mode mode;
 };
 
 TH_PRIVATE(th_err)

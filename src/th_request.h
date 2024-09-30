@@ -9,6 +9,12 @@
 #include "th_method.h"
 #include "th_socket.h"
 
+typedef enum th_request_read_mode {
+    TH_REQUEST_READ_MODE_NORMAL = 0,
+    TH_REQUEST_READ_MODE_REJECT_UNAVAILABLE = (int)TH_ERR_HTTP(TH_CODE_SERVICE_UNAVAILABLE),
+    TH_REQUEST_READ_MODE_REJECT_TOO_MANY_REQUESTS = (int)TH_ERR_HTTP(TH_CODE_TOO_MANY_REQUESTS),
+} th_request_read_mode;
+
 #define TH_REQUEST_MAP_ARENA_LEN 512
 #define TH_REQUEST_STRING_ARENA_LEN 512
 #define TH_REQUEST_VEC_ARENA_LEN 1024
@@ -54,7 +60,7 @@ TH_PRIVATE(void)
 th_request_deinit(th_request* request);
 
 TH_PRIVATE(void)
-th_request_async_read(th_socket* sock, th_allocator* allocator, th_request* request, th_io_handler* on_complete);
+th_request_async_read(th_socket* sock, th_allocator* allocator, th_request* request, th_request_read_mode mode, th_io_handler* on_complete);
 
 TH_PRIVATE(th_err)
 th_request_store_cookie(th_request* request, th_string key, th_string value);

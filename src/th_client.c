@@ -26,7 +26,7 @@ th_client_observable_init(th_client_observable* observable,
                           th_socket* (*get_socket)(void* self),
                           th_address* (*get_address)(void* self),
                           th_err (*start)(void* self),
-                          void (*set_mode)(void* self, th_exchange_mode mode),
+                          void (*set_mode)(void* self, th_request_read_mode mode),
                           void (*destroy)(void* self),
                           th_client_observer* observer)
 {
@@ -52,7 +52,7 @@ TH_LOCAL(th_err)
 th_tcp_client_start(void* self);
 
 TH_LOCAL(void)
-th_tcp_client_set_mode(void* self, th_exchange_mode mode);
+th_tcp_client_set_mode(void* self, th_request_read_mode mode);
 
 TH_LOCAL(th_err)
 th_tcp_client_exchange_next_msg(th_tcp_client* client);
@@ -118,7 +118,7 @@ th_tcp_client_init(th_tcp_client* client, th_context* context,
     client->fcache = fcache;
     th_tcp_socket_init(&client->socket, context, client->allocator);
     th_address_init(&client->addr);
-    client->mode = TH_EXCHANGE_MODE_NORMAL;
+    client->mode = TH_REQUEST_READ_MODE_NORMAL;
 }
 
 TH_PRIVATE(th_err)
@@ -158,7 +158,7 @@ th_tcp_client_start(void* self)
 }
 
 TH_LOCAL(void)
-th_tcp_client_set_mode(void* self, th_exchange_mode mode)
+th_tcp_client_set_mode(void* self, th_request_read_mode mode)
 {
     th_tcp_client* client = (th_tcp_client*)self;
     client->mode = mode;
@@ -217,7 +217,7 @@ TH_LOCAL(th_err)
 th_ssl_client_start(void* self);
 
 TH_LOCAL(void)
-th_ssl_client_set_mode(void* self, th_exchange_mode mode);
+th_ssl_client_set_mode(void* self, th_request_read_mode mode);
 
 TH_LOCAL(th_err)
 th_ssl_client_exchange_next_msg(th_ssl_client* client);
@@ -336,7 +336,7 @@ th_ssl_client_init(th_ssl_client* client, th_context* context, th_ssl_context* s
     client->fcache = fcache;
     th_ssl_socket_init(&client->socket, context, ssl_context, client->allocator);
     th_address_init(&client->addr);
-    client->mode = TH_EXCHANGE_MODE_NORMAL;
+    client->mode = TH_REQUEST_READ_MODE_NORMAL;
 }
 
 TH_PRIVATE(th_err)
@@ -384,7 +384,7 @@ th_ssl_client_start(void* self)
 }
 
 TH_LOCAL(void)
-th_ssl_client_set_mode(void* self, th_exchange_mode mode)
+th_ssl_client_set_mode(void* self, th_request_read_mode mode)
 {
     th_ssl_client* client = (th_ssl_client*)self;
     client->mode = mode;

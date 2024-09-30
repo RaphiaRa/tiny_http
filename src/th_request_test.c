@@ -76,7 +76,7 @@ TH_TEST_BEGIN(request)
     {
         TH_SETUP_BASIC(context, request, socket);
         mock_data_set("GET / HTTP/1.1\r\nHost: example.com\r\n\r\n");
-        th_request_async_read(&socket.base, th_default_allocator_get(), &request, &handler);
+        th_request_async_read(&socket.base, th_default_allocator_get(), &request, 0, &handler);
         while (1) {
             if (th_context_poll(&context, -1) != TH_ERR_OK)
                 break;
@@ -92,7 +92,7 @@ TH_TEST_BEGIN(request)
     {
         TH_SETUP_BASIC(context, request, socket);
         mock_data_set("POST / HTTP/1.1\r\nHost: example.com\r\nContent-Length: 5\r\n\r\nhello");
-        th_request_async_read(&socket.base, th_default_allocator_get(), &request, &handler);
+        th_request_async_read(&socket.base, th_default_allocator_get(), &request, 0, &handler);
         while (1) {
             if (th_context_poll(&context, -1) != TH_ERR_OK)
                 break;
@@ -110,7 +110,7 @@ TH_TEST_BEGIN(request)
     {
         TH_SETUP_BASIC(context, request, socket);
         mock_data_set("GET / HTTP/1.1\r\nHost: example.com\r\nContent-Length: 5\r\n\r\nhello");
-        th_request_async_read(&socket.base, th_default_allocator_get(), &request, &handler);
+        th_request_async_read(&socket.base, th_default_allocator_get(), &request, 0, &handler);
         while (1) {
             if (th_context_poll(&context, -1) != TH_ERR_OK)
                 break;
@@ -123,7 +123,7 @@ TH_TEST_BEGIN(request)
     {
         TH_SETUP_BASIC(context, request, socket);
         mock_data_set("GET /test?key1=value1&key2=value2&key3=value3 HTTP/1.1\r\nHost: example.com\r\n\r\n");
-        th_request_async_read(&socket.base, th_default_allocator_get(), &request, &handler);
+        th_request_async_read(&socket.base, th_default_allocator_get(), &request, 0, &handler);
         while (1) {
             if (th_context_poll(&context, -1) != TH_ERR_OK)
                 break;
@@ -149,7 +149,7 @@ TH_TEST_BEGIN(request)
     {
         TH_SETUP_BASIC(context, request, socket);
         mock_data_set("GET /test HTTP/1.1\r\nHost: example.com\r\nCookie: key1=value1; key2=value2; key3=value3\r\n\r\n");
-        th_request_async_read(&socket.base, th_default_allocator_get(), &request, &handler);
+        th_request_async_read(&socket.base, th_default_allocator_get(), &request, 0, &handler);
         while (1) {
             if (th_context_poll(&context, -1) != TH_ERR_OK)
                 break;
@@ -166,6 +166,19 @@ TH_TEST_BEGIN(request)
         TH_EXPECT(iter && strcmp(iter->value, "value3") == 0);
         iter = th_map_find(cookies, "key4");
         TH_EXPECT(iter == NULL);
+        TH_SHUTDOWN_BASIC(context, request, socket);
+    }
+    TH_TEST_CASE_END
+    TH_TEST_CASE_BEGIN(request_reject_mode)
+    {
+        TH_SETUP_BASIC(context, request, socket);
+        mock_data_set("GET /test HTTP/1.1\r\nHost: example.com\r\nContent-Length: 5\r\n\r\nhello");
+        th_request_async_read(&socket.base, th_default_allocator_get(), &request, TH_REQUEST_READ_MODE_REJECT_UNAVAILABLE, &handler);
+        while (1) {
+            if (th_context_poll(&context, -1) != TH_ERR_OK)
+                break;
+        }
+        TH_EXPECT(last_err == TH_ERR_HTTP(TH_CODE_SERVICE_UNAVAILABLE));
         TH_SHUTDOWN_BASIC(context, request, socket);
     }
     TH_TEST_CASE_END

@@ -86,7 +86,7 @@ th_client_acceptor_accept_handler_fn(void* self, size_t result, th_err err)
         th_socket_set_fd(th_client_get_socket(client_acceptor->client), (int)result);
         if (th_client_tracker_count(&client_acceptor->client_tracker) > TH_CONFIG_MAX_CONNECTIONS) {
             TH_LOG_WARN("Too many connections, rejecting new connection");
-            th_client_set_mode(client_acceptor->client, TH_EXCHANGE_MODE_REJECT_UNAVAILABLE);
+            th_client_set_mode(client_acceptor->client, TH_REQUEST_READ_MODE_REJECT_UNAVAILABLE);
         }
         th_client_start(client_acceptor->client);
     }
@@ -160,7 +160,7 @@ th_client_acceptor_ssl_accept_handler_fn(void* self, size_t result, th_err err)
         th_socket_set_fd(th_client_get_socket(client_acceptor->client), (int)result);
         if (th_client_tracker_count(&client_acceptor->client_tracker) > TH_CONFIG_MAX_CONNECTIONS) {
             TH_LOG_WARN("Too many connections, rejecting new connection");
-            th_client_set_mode(client_acceptor->client, TH_EXCHANGE_MODE_REJECT_UNAVAILABLE);
+            th_client_set_mode(client_acceptor->client, TH_REQUEST_READ_MODE_REJECT_UNAVAILABLE);
         }
         th_client_start(client_acceptor->client);
     }

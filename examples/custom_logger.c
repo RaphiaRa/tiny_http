@@ -39,6 +39,19 @@ my_log(void* self, int level, const char* msg)
     fprintf(logger->file, "%s\n", msg);
 }
 
+static void
+my_logger_init(my_logger* log, const char* path)
+{
+    log->log.print = my_log;
+    log->file = fopen(path, "w");
+}
+
+static void
+my_logger_deinit(my_logger* log)
+{
+    fclose(log->file);
+}
+
 int main(int argc, char** argv)
 {
     (void)argc;
@@ -46,12 +59,8 @@ int main(int argc, char** argv)
     signal(SIGINT, sigint_handler);
 
     // Initialize our custom logger
-    my_logger logger = {
-        .log = {
-            .print = my_log,
-        },
-        .file = fopen("log.txt", "w"),
-    };
+    my_logger logger = {0};
+    my_logger_init(&logger, "custom_logger.log");
     th_log_set(&logger.log);
 
     // Startup the server as usual
@@ -73,6 +82,6 @@ cleanup:
         return EXIT_FAILURE;
     }
     th_server_destroy(server);
-    fclose(logger.file);
+    my_logger_deinit(&logger);
     return EXIT_SUCCESS;
 }

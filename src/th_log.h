@@ -9,7 +9,7 @@
 #include "th_config.h"
 
 #ifndef TH_LOG_LEVEL
-#define TH_LOG_LEVEL TH_LOG_LEVEL_NONE
+#define TH_LOG_LEVEL TH_LOG_LEVEL_INFO
 #endif
 
 #define TH_LOG_TAG "default"

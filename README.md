@@ -77,6 +77,25 @@ th_listen_opt opt = {
 };
 th_bind(server, "0.0.0.0", "433", &opt);
 ```
+
+## Logging
+
+Logging can be configured via the `TH_LOG_LEVEL` macro.
+```c
+$ gcc -o myserver myserver.c th.c -DTH_LOG_LEVEL=TH_LOG_LEVEL_TRACE
+```
+Possible values are:
+```c
+TH_LOG_LEVEL_NONE
+TH_LOG_LEVEL_ERROR
+TH_LOG_LEVEL_WARN
+TH_LOG_LEVEL_INFO
+TH_LOG_LEVEL_DEBUG
+TH_LOG_LEVEL_TRACE
+```
+By default, tiny_http logs to `stderr`,
+but users can provide their own logging function (See [examples/custom_logger.c](examples/custom_logger.c)).
+
 ## Building binaries, examples, and tests
 
 Library builds, examples, and tests can be built using CMake (This requires gperf to be installed).

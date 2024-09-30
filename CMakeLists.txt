@@ -161,6 +161,13 @@ if (NOT TH_DISABLE_EXAMPLES)
     target_link_libraries(file_server PUBLIC 
         tiny_http::tiny_http
     )
+    # Custom Logger example
+    add_executable(custom_logger
+        examples/custom_logger.c
+    )
+    target_link_libraries(custom_logger PUBLIC 
+        tiny_http::tiny_http
+    )
 endif()
 
 # Tests

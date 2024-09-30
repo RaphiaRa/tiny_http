@@ -23,6 +23,10 @@
 #define TH_WITH_MMAP 1
 #endif
 
+#ifndef TH_LOG_LEVEL
+#define TH_LOG_LEVEL TH_LOG_LEVEL_INFO
+#endif
+
 /* feature configuration end */
 
 #ifndef TH_CONFIG_OS_MOCK
@@ -110,7 +114,7 @@
 #endif
 
 #ifndef TH_CONFIG_MAX_CONNECTIONS
-#define TH_CONFIG_MAX_CONNECTIONS 128
+#define TH_CONFIG_MAX_CONNECTIONS 512
 #endif
 
 #ifndef TH_CONFIG_SMALL_HEADER_LEN
@@ -214,15 +218,6 @@ th_fmt_strn_append(char* buf, size_t pos, size_t len, const char* str, size_t n)
 TH_PRIVATE(size_t)
 th_fmt_strtime(char* buf, size_t len, th_date date);
 /* End of th_fmt.h */
-/* Start of th_io_op_bsd.h */
-
-
-#if defined(TH_CONFIG_WITH_BSD_SENDFILE)
-TH_PRIVATE(th_err)
-th_io_op_bsd_sendfile(void* self, size_t* result) TH_MAYBE_UNUSED;
-#endif
-
-/* End of th_io_op_bsd.h */
 /* Start of th_system_error.h */
 
 
@@ -291,212 +286,176 @@ th_system_strerror(int errc)
 #endif
 
 /* End of th_system_error.h */
-/* Start of th_iov.h */
-
-#include <stddef.h>
-#include <sys/uio.h>
+/* Start of th_http_error.h */
 
 
-/** th_iov
- *@brief I/O vector.
+
+#include <errno.h>
+
+/** th_http_err
+ * @brief Converts a error code to a equivalent HTTP error code.
  */
-
-typedef struct th_iov {
-    void* base;
-    size_t len;
-} th_iov;
-
-/** th_iov_consume
- *@brief Consume the I/O vector and
- * return the number of bytes that were not consumed.
- */
-TH_INLINE(size_t)
-th_iov_consume(th_iov** iov, size_t* iov_len, size_t consume)
+TH_INLINE(th_err)
+th_http_error(th_err err)
 {
-    size_t zeroed = 0;
-    for (size_t i = 0; i < *iov_len; i++) {
-        if (consume < (*iov)[i].len) {
-            (*iov)[i].base = (char*)(*iov)[i].base + consume;
-            (*iov)[i].len -= consume;
-            consume = 0;
-            break;
+    if (err == TH_ERR_OK)
+        return TH_ERR_HTTP(TH_CODE_OK);
+    switch (TH_ERR_CATEGORY(err)) {
+    case TH_ERR_CATEGORY_SYSTEM:
+        switch (TH_ERR_CODE(err)) {
+            {
+            case TH_ENOENT:
+                return TH_ERR_HTTP(TH_CODE_NOT_FOUND);
+                break;
+            case TH_ETIMEDOUT:
+                return TH_ERR_HTTP(TH_CODE_REQUEST_TIMEOUT);
+                break;
+            default:
+                return TH_ERR_HTTP(TH_CODE_INTERNAL_SERVER_ERROR);
+                break;
+            }
         }
-        consume -= (*iov)[i].len;
-        (*iov)[i].len = 0;
-        zeroed++;
+        break;
+    case TH_ERR_CATEGORY_HTTP:
+        return err;
+        break;
     }
-    *iov_len -= zeroed;
-    (*iov) += zeroed;
-    return consume;
+    return TH_ERR_HTTP(TH_CODE_INTERNAL_SERVER_ERROR);
 }
 
-TH_INLINE(size_t)
-th_iov_bytes(th_iov* iov, size_t iov_len)
+TH_INLINE(const char*)
+th_http_strerror(int code)
 {
-    size_t bytes = 0;
-    for (size_t i = 0; i < iov_len; i++) {
-        bytes += iov[i].len;
+    switch (code) {
+    case TH_CODE_OK:
+        return "OK";
+        break;
+    case TH_CODE_MOVED_PERMANENTLY:
+        return "Moved Permanently";
+        break;
+    case TH_CODE_BAD_REQUEST:
+        return "Bad Request";
+        break;
+    case TH_CODE_NOT_FOUND:
+        return "Not Found";
+        break;
+    case TH_CODE_METHOD_NOT_ALLOWED:
+        return "Method Not Allowed";
+        break;
+    case TH_CODE_PAYLOAD_TOO_LARGE:
+        return "Payload Too Large";
+        break;
+    case TH_CODE_INTERNAL_SERVER_ERROR:
+        return "Internal Server Error";
+        break;
+    case TH_CODE_SERVICE_UNAVAILABLE:
+        return "Service Unavailable";
+        break;
+    case TH_CODE_NOT_IMPLEMENTED:
+        return "Method Not Implemented";
+        break;
+    case TH_CODE_REQUEST_TIMEOUT:
+        return "Request Timeout";
+        break;
+    case TH_CODE_TOO_MANY_REQUESTS:
+        return "Too Many Requests";
+        break;
+    case TH_CODE_URI_TOO_LONG:
+        return "URI Too Long";
+        break;
+    case TH_CODE_UNSUPPORTED_MEDIA_TYPE:
+        return "Unsupported Media Type";
+        break;
+    case TH_CODE_RANGE_NOT_SATISFIABLE:
+        return "Range Not Satisfiable";
+        break;
+    case TH_CODE_REQUEST_HEADER_FIELDS_TOO_LARGE:
+        return "Request Header Fields Too Large";
+        break;
+    case TH_CODE_UNAUTHORIZED:
+        return "Unauthorized";
+        break;
+    case TH_CODE_FORBIDDEN:
+        return "Forbidden";
+        break;
+    default:
+        return "Unknown";
+        break;
     }
-    return bytes;
 }
 
-/* End of th_iov.h */
-/* Start of th_mock_syscall.h */
+typedef enum th_http_code_type {
+    TH_HTTP_CODE_TYPE_INFORMATIONAL,
+    TH_HTTP_CODE_TYPE_SUCCESS,
+    TH_HTTP_CODE_TYPE_REDIRECT,
+    TH_HTTP_CODE_TYPE_ERROR,
+} th_http_code_type;
+
+TH_INLINE(th_http_code_type)
+th_http_code_get_type(int code)
+{
+    if (code >= 100 && code < 200)
+        return TH_HTTP_CODE_TYPE_INFORMATIONAL;
+    if (code >= 200 && code < 300)
+        return TH_HTTP_CODE_TYPE_SUCCESS;
+    if (code >= 300 && code < 400)
+        return TH_HTTP_CODE_TYPE_REDIRECT;
+    if (code >= 400)
+        return TH_HTTP_CODE_TYPE_ERROR;
+    return TH_HTTP_CODE_TYPE_ERROR;
+}
+
+/* End of th_http_error.h */
+/* Start of th_io_op.h */
+
+
 
 #include <stddef.h>
-
-
-typedef struct th_mock_syscall {
-    int (*accept)(void);
-    int (*open)(void);
-    int (*lseek)(void);
-    int (*close)(void);
-    int (*read)(void* buf, size_t len);
-    int (*write)(size_t len);
-    int (*settime)(void);
-} th_mock_syscall;
-
-th_mock_syscall* th_mock_syscall_get(void);
-void th_mock_syscall_reset(void);
-
-int th_mock_accept(void);
-
-int th_mock_open(void);
-
-int th_mock_lseek(void);
-
-int th_mock_close(void);
-
-int th_mock_read(void* buf, size_t len);
-
-int th_mock_write(size_t len);
-
-int th_mock_settime(void);
-
-/* End of th_mock_syscall.h */
-/* Start of th_string.h */
-
-#include <stdint.h>
-#include <string.h>
-
-
-
-extern size_t th_string_npos;
-
-typedef struct th_string {
-    const char* ptr;
-    size_t len;
-} th_string;
-
-/** th_string_make
- * @brief Helper function to create a th_string from a pointer and a length.
- */
-TH_INLINE(th_string)
-th_string_make(const char* ptr, size_t len)
-{
-    return (th_string){ptr, len};
-}
-
-/** th_string_from_cstr
- * @brief Helper function to create a th_string from a null-terminated string.
- */
-TH_INLINE(th_string)
-th_string_from_cstr(const char* str)
-{
-    return th_string_make(str, strlen(str));
-}
-
-/** th_string_eq
- * @brief Helper function to compare two th_strings.
- * @return 1 if the strings are equal, 0 otherwise.
- */
-TH_PRIVATE(bool)
-th_string_eq(th_string a, th_string b);
-
-/** th_string_empty
- * @brief Helper function to check if a th_string is empty.
- * @return true if the string is empty, false otherwise.
- */
-TH_INLINE(bool)
-th_string_empty(th_string str)
-{
-    return str.len == 0;
-}
-
-/** TH_STRING_INIT
- * @brief Helper macro to initialize a th_string from string literal.
- */
-#define TH_STRING_INIT(str) {"" str, sizeof(str) - 1}
-
-/** TH_STRING
- * @brief Helper macro to create a th_string compound literal from a string literal.
- */
-#define TH_STRING(str) ((th_string){"" str, sizeof(str) - 1})
-
-/** TH_STRING_EQ
- * @brief Helper macro to compare a th_string with a string literal.
- */
-#define TH_STRING_EQ(str, cmp) (th_string_eq(str, TH_STRING(cmp)))
-
-TH_PRIVATE(bool)
-th_string_is_uint(th_string str);
 
 TH_PRIVATE(th_err)
-th_string_to_uint(th_string str, unsigned int* out);
+th_io_op_read(void* self, size_t* result) TH_MAYBE_UNUSED;
 
-TH_PRIVATE(size_t)
-th_string_find_first(th_string str, size_t start, char c);
+TH_PRIVATE(th_err)
+th_io_op_readv(void* self, size_t* result) TH_MAYBE_UNUSED;
 
-TH_PRIVATE(size_t)
-th_string_find_first_not(th_string str, size_t start, char c);
+TH_PRIVATE(th_err)
+th_io_op_write(void* self, size_t* result) TH_MAYBE_UNUSED;
 
-TH_PRIVATE(size_t)
-th_string_find_last_not(th_string str, size_t start, char c);
+TH_PRIVATE(th_err)
+th_io_op_writev(void* self, size_t* result) TH_MAYBE_UNUSED;
 
-TH_PRIVATE(size_t)
-th_string_find_first_of(th_string str, size_t start, const char* chars);
+TH_PRIVATE(th_err)
+th_io_op_send(void* self, size_t* result) TH_MAYBE_UNUSED;
 
-/*
-TH_PRIVATE(size_t)
-th_string_find_last(th_string str, size_t start, char c);
-*/
+TH_PRIVATE(th_err)
+th_io_op_sendv(void* self, size_t* result) TH_MAYBE_UNUSED;
 
-TH_PRIVATE(th_string)
-th_string_substr(th_string str, size_t start, size_t len);
+TH_PRIVATE(th_err)
+th_io_op_accept(void* self, size_t* result) TH_MAYBE_UNUSED;
 
-/** th_string_trim
- * @brief Removes leading and trailing whitespace from a string.
- * This doesn't modify the original string, just returns a new view of it.
- * @param str The string to trim.
- * @return A new string view with leading and trailing whitespace removed.
- */
-TH_PRIVATE(th_string)
-th_string_trim(th_string str);
+TH_PRIVATE(th_err)
+th_io_op_sendfile(void* self, size_t* result) TH_MAYBE_UNUSED;
 
-TH_PRIVATE(uint32_t)
-th_string_hash(th_string str);
+/* End of th_io_op.h */
+/* Start of th_io_op_bsd.h */
 
-typedef struct th_mut_string {
-    char* ptr;
-    size_t len;
-} th_mut_string;
 
-TH_PRIVATE(void)
-th_mut_string_tolower(th_mut_string str);
+#if defined(TH_CONFIG_WITH_BSD_SENDFILE)
+TH_PRIVATE(th_err)
+th_io_op_bsd_sendfile(void* self, size_t* result) TH_MAYBE_UNUSED;
+#endif
 
-/* End of th_string.h */
-/* Start of th_mime.h */
+/* End of th_io_op_bsd.h */
+/* Start of th_io_op_linux.h */
 
 
 
-struct th_mime_mapping {
-    const char* name;
-    th_string mime;
-};
+#if defined(TH_CONFIG_WITH_LINUX_SENDFILE)
+TH_PRIVATE(th_err)
+th_io_op_linux_sendfile(void* self, size_t* result) TH_MAYBE_UNUSED;
+#endif
 
-struct th_mime_mapping* th_mime_mapping_find(const char* ext, size_t len);
-
-/* End of th_mime.h */
+/* End of th_io_op_linux.h */
 /* Start of th_io_op_mock.h */
 
 
@@ -530,6 +489,41 @@ th_io_op_mock_sendfile(void* self, size_t* result);
 #endif
 
 /* End of th_io_op_mock.h */
+/* Start of th_io_op_posix.h */
+
+
+
+#if defined(TH_CONFIG_OS_POSIX)
+
+TH_PRIVATE(th_err)
+th_io_op_posix_read(void* self, size_t* result);
+
+TH_PRIVATE(th_err)
+th_io_op_posix_readv(void* self, size_t* result);
+
+TH_PRIVATE(th_err)
+th_io_op_posix_write(void* self, size_t* result);
+
+TH_PRIVATE(th_err)
+th_io_op_posix_writev(void* self, size_t* result);
+
+TH_PRIVATE(th_err)
+th_io_op_posix_send(void* self, size_t* result);
+
+TH_PRIVATE(th_err)
+th_io_op_posix_sendv(void* self, size_t* result);
+
+TH_PRIVATE(th_err)
+th_io_op_posix_accept(void* self, size_t* result);
+
+TH_PRIVATE(th_err)
+th_io_op_posix_sendfile_mmap(void* self, size_t* result) TH_MAYBE_UNUSED;
+
+TH_PRIVATE(th_err)
+th_io_op_posix_sendfile_buffered(void* self, size_t* result) TH_MAYBE_UNUSED;
+
+#endif
+/* End of th_io_op_posix.h */
 /* Start of th_log.h */
 
 
@@ -538,7 +532,7 @@ th_io_op_mock_sendfile(void* self, size_t* result);
 
 
 #ifndef TH_LOG_LEVEL
-#define TH_LOG_LEVEL TH_LOG_LEVEL_NONE
+#define TH_LOG_LEVEL TH_LOG_LEVEL_INFO
 #endif
 
 #define TH_LOG_TAG "default"
@@ -902,996 +896,6 @@ th_pool_allocator_deinit(th_pool_allocator* pool);
     }
 
 /* End of th_allocator.h */
-/* Start of th_vec.h */
-
-
-
-#include <stddef.h>
-
-#define TH_DEFINE_VEC(NAME, TYPE, DEINIT)                                                                  \
-    typedef struct NAME {                                                                                  \
-        TYPE* data;                                                                                        \
-        size_t size;                                                                                       \
-        size_t capacity;                                                                                   \
-        th_allocator* allocator;                                                                           \
-    } NAME;                                                                                                \
-                                                                                                           \
-    TH_INLINE(void)                                                                                        \
-    NAME##_init(NAME* vec, th_allocator* allocator) TH_MAYBE_UNUSED;                                       \
-                                                                                                           \
-    TH_INLINE(void)                                                                                        \
-    NAME##_deinit(NAME* vec) TH_MAYBE_UNUSED;                                                              \
-                                                                                                           \
-    TH_INLINE(size_t)                                                                                      \
-    NAME##_size(NAME* vec) TH_MAYBE_UNUSED;                                                                \
-                                                                                                           \
-    TH_INLINE(size_t)                                                                                      \
-    NAME##_capacity(NAME* vec) TH_MAYBE_UNUSED;                                                            \
-                                                                                                           \
-    TH_INLINE(th_err)                                                                                      \
-    NAME##_resize(NAME* vec, size_t capacity) TH_MAYBE_UNUSED;                                             \
-                                                                                                           \
-    TH_INLINE(void)                                                                                        \
-    NAME##_shrink_to_fit(NAME* vec) TH_MAYBE_UNUSED;                                                       \
-                                                                                                           \
-    TH_INLINE(th_err)                                                                                      \
-    NAME##_push_back(NAME* vec, TYPE value) TH_MAYBE_UNUSED;                                               \
-                                                                                                           \
-    TH_INLINE(TYPE*)                                                                                       \
-    NAME##_at(NAME* vec, size_t index) TH_MAYBE_UNUSED;                                                    \
-                                                                                                           \
-    TH_INLINE(TYPE*)                                                                                       \
-    NAME##_begin(NAME* vec) TH_MAYBE_UNUSED;                                                               \
-                                                                                                           \
-    TH_INLINE(TYPE*)                                                                                       \
-    NAME##_end(NAME* vec) TH_MAYBE_UNUSED;                                                                 \
-                                                                                                           \
-    TH_INLINE(void)                                                                                        \
-    NAME##_init(NAME* vec, th_allocator* allocator)                                                        \
-    {                                                                                                      \
-        vec->allocator = allocator ? allocator : th_default_allocator_get();                               \
-        vec->capacity = 0;                                                                                 \
-        vec->size = 0;                                                                                     \
-        vec->data = NULL;                                                                                  \
-    }                                                                                                      \
-                                                                                                           \
-    TH_INLINE(void)                                                                                        \
-    NAME##_deinit(NAME* vec)                                                                               \
-    {                                                                                                      \
-        if (vec->data) {                                                                                   \
-            for (size_t i = 0; i < vec->size; i++) {                                                       \
-                DEINIT(&vec->data[i]);                                                                     \
-            }                                                                                              \
-            th_allocator_free(vec->allocator, vec->data);                                                  \
-        }                                                                                                  \
-    }                                                                                                      \
-                                                                                                           \
-    TH_INLINE(size_t)                                                                                      \
-    NAME##_size(NAME* vec)                                                                                 \
-    {                                                                                                      \
-        return vec->size;                                                                                  \
-    }                                                                                                      \
-                                                                                                           \
-    TH_INLINE(size_t)                                                                                      \
-    NAME##_capacity(NAME* vec)                                                                             \
-    {                                                                                                      \
-        return vec->capacity;                                                                              \
-    }                                                                                                      \
-                                                                                                           \
-    TH_INLINE(th_err)                                                                                      \
-    NAME##_resize(NAME* vec, size_t size)                                                                  \
-    {                                                                                                      \
-        if (size < vec->size) {                                                                            \
-            vec->size = size;                                                                              \
-            return TH_ERR_OK;                                                                              \
-        }                                                                                                  \
-        if (size > vec->capacity) {                                                                        \
-            size_t new_capacity = th_next_pow2(size);                                                      \
-            TYPE* new_data = th_allocator_realloc(vec->allocator, vec->data, new_capacity * sizeof(TYPE)); \
-            if (new_data == NULL) {                                                                        \
-                return TH_ERR_BAD_ALLOC;                                                                   \
-            }                                                                                              \
-            vec->data = new_data;                                                                          \
-            vec->capacity = new_capacity;                                                                  \
-        }                                                                                                  \
-        vec->size = size;                                                                                  \
-        return TH_ERR_OK;                                                                                  \
-    }                                                                                                      \
-                                                                                                           \
-    TH_INLINE(void)                                                                                        \
-    NAME##_shrink_to_fit(NAME* vec)                                                                        \
-    {                                                                                                      \
-        if (vec->size == 0) {                                                                              \
-            th_allocator_free(vec->allocator, vec->data);                                                  \
-            vec->data = NULL;                                                                              \
-            vec->capacity = 0;                                                                             \
-        } else if (vec->size < vec->capacity) {                                                            \
-            TYPE* new_data = th_allocator_realloc(vec->allocator, vec->data, vec->size * sizeof(TYPE));    \
-            if (new_data != NULL) {                                                                        \
-                vec->data = new_data;                                                                      \
-                vec->capacity = vec->size;                                                                 \
-            }                                                                                              \
-        }                                                                                                  \
-    }                                                                                                      \
-                                                                                                           \
-    TH_INLINE(th_err)                                                                                      \
-    NAME##_push_back(NAME* vec, TYPE value)                                                                \
-    {                                                                                                      \
-        if (vec->size >= vec->capacity) {                                                                  \
-            size_t new_capacity = vec->capacity == 0 ? 1 : vec->capacity * 2;                              \
-            TYPE* new_data = th_allocator_realloc(vec->allocator, vec->data, new_capacity * sizeof(TYPE)); \
-            if (new_data == NULL) {                                                                        \
-                return TH_ERR_BAD_ALLOC;                                                                   \
-            }                                                                                              \
-            vec->data = new_data;                                                                          \
-            vec->capacity = new_capacity;                                                                  \
-        }                                                                                                  \
-        vec->data[vec->size++] = value;                                                                    \
-        return TH_ERR_OK;                                                                                  \
-    }                                                                                                      \
-                                                                                                           \
-    TH_INLINE(TYPE*)                                                                                       \
-    NAME##_at(NAME* vec, size_t index)                                                                     \
-    {                                                                                                      \
-        TH_ASSERT(index <= vec->size);                                                                     \
-        return vec->data + index;                                                                          \
-    }                                                                                                      \
-                                                                                                           \
-    TH_INLINE(TYPE*)                                                                                       \
-    NAME##_begin(NAME* vec)                                                                                \
-    {                                                                                                      \
-        return vec->data;                                                                                  \
-    }                                                                                                      \
-                                                                                                           \
-    TH_INLINE(TYPE*)                                                                                       \
-    NAME##_end(NAME* vec)                                                                                  \
-    {                                                                                                      \
-        return vec->data + vec->size;                                                                      \
-    }
-
-// Default vectors
-TH_DEFINE_VEC(th_buf_vec, char, (void))
-
-/* End of th_vec.h */
-/* Start of th_heap_string.h */
-
-
-typedef struct th_detail_large_string {
-    size_t capacity;
-    size_t len;
-    char* ptr;
-    th_allocator* allocator;
-} th_detail_large_string;
-
-#define TH_HEAP_STRING_SMALL_BUF_LEN (sizeof(char*) + sizeof(size_t) + sizeof(size_t) - 1)
-#define TH_HEAP_STRING_SMALL_MAX_LEN (TH_HEAP_STRING_SMALL_BUF_LEN - 1)
-typedef struct th_detail_small_string {
-    unsigned char small : 1;
-    unsigned char len : 7;
-    char buf[TH_HEAP_STRING_SMALL_BUF_LEN];
-    th_allocator* allocator;
-} th_detail_small_string;
-
-typedef struct th_heap_string {
-    union {
-        th_detail_small_string small;
-        th_detail_large_string large;
-    } impl;
-} th_heap_string;
-
-TH_PRIVATE(void)
-th_heap_string_init(th_heap_string* self, th_allocator* allocator);
-
-TH_PRIVATE(th_err)
-th_heap_string_set(th_heap_string* self, th_string str);
-
-TH_PRIVATE(th_err)
-th_heap_string_append(th_heap_string* self, th_string str);
-
-TH_PRIVATE(th_err)
-th_heap_string_push_back(th_heap_string* self, char c);
-
-TH_PRIVATE(th_err)
-th_heap_string_resize(th_heap_string* self, size_t new_len, char fill);
-
-TH_PRIVATE(th_string)
-th_heap_string_view(th_heap_string* self);
-
-TH_PRIVATE(char*)
-th_heap_string_data(th_heap_string* self);
-
-TH_PRIVATE(size_t)
-th_heap_string_len(th_heap_string* self);
-
-TH_PRIVATE(void)
-th_heap_string_deinit(th_heap_string* self);
-
-TH_PRIVATE(void)
-th_heap_string_clear(th_heap_string* self);
-
-/*
-TH_PRIVATE(bool)
-th_heap_string_eq(th_heap_string* self, th_string other);
-*/
-/*
-TH_PRIVATE(uint32_t)
-th_heap_string_hash(th_heap_string* self);
-*/
-TH_DEFINE_VEC(th_heap_string_vec, th_heap_string, th_heap_string_deinit)
-
-/* End of th_heap_string.h */
-/* Start of th_url_decode.h */
-
-
-
-#include <stddef.h>
-
-typedef enum th_url_decode_type {
-    TH_URL_DECODE_TYPE_PATH = 0,
-    TH_URL_DECODE_TYPE_QUERY
-} th_url_decode_type;
-
-/*
-TH_PRIVATE(th_err)
-th_url_decode_inplace(char* str, size_t* in_out_len, th_url_decode_type type);
-*/
-
-TH_PRIVATE(th_err)
-th_url_decode_string(th_string input, th_heap_string* output, th_url_decode_type type);
-
-/* End of th_url_decode.h */
-/* Start of th_queue.h */
-
-
-#include <stdbool.h>
-
-/** Generic queue implementation.
- * that works with any struct that has a next pointer.
- */
-#define TH_DEFINE_QUEUE(NAME, T)                                 \
-    typedef struct NAME {                                        \
-        T* head;                                                 \
-        T* tail;                                                 \
-    } NAME;                                                      \
-                                                                 \
-    TH_INLINE(NAME)                                              \
-    NAME##_make(void) TH_MAYBE_UNUSED;                           \
-                                                                 \
-    TH_INLINE(void)                                              \
-    NAME##_push(NAME* queue, T* item) TH_MAYBE_UNUSED;           \
-                                                                 \
-    TH_INLINE(T*)                                                \
-    NAME##_pop(NAME* queue) TH_MAYBE_UNUSED;                     \
-                                                                 \
-    TH_INLINE(bool)                                              \
-    NAME##_empty(NAME* queue) TH_MAYBE_UNUSED;                   \
-                                                                 \
-    TH_INLINE(void)                                              \
-    NAME##_push_queue(NAME* queue, NAME* other) TH_MAYBE_UNUSED; \
-                                                                 \
-    TH_INLINE(NAME)                                              \
-    NAME##_make(void)                                            \
-    {                                                            \
-        return (NAME){.head = NULL, .tail = NULL};               \
-    }                                                            \
-                                                                 \
-    TH_INLINE(bool)                                              \
-    NAME##_empty(NAME* queue)                                    \
-    {                                                            \
-        return queue->head == NULL;                              \
-    }                                                            \
-                                                                 \
-    TH_INLINE(void)                                              \
-    NAME##_push(NAME* queue, T* item)                            \
-    {                                                            \
-        if (queue->head == NULL) {                               \
-            queue->head = item;                                  \
-        } else {                                                 \
-            queue->tail->next = item;                            \
-        }                                                        \
-        queue->tail = item;                                      \
-        item->next = NULL;                                       \
-    }                                                            \
-                                                                 \
-    TH_INLINE(void)                                              \
-    NAME##_push_queue(NAME* queue, NAME* other)                  \
-    {                                                            \
-        if (queue->head == NULL) {                               \
-            *queue = *other;                                     \
-        } else if (other->head) {                                \
-            queue->tail->next = other->head;                     \
-            queue->tail = other->tail;                           \
-        }                                                        \
-        *other = NAME##_make();                                  \
-    }                                                            \
-                                                                 \
-    TH_INLINE(T*)                                                \
-    NAME##_pop(NAME* queue)                                      \
-    {                                                            \
-        T* item = queue->head;                                   \
-        if (item) {                                              \
-            queue->head = item->next;                            \
-            item->next = NULL;                                   \
-        }                                                        \
-        return item;                                             \
-    }
-
-/* End of th_queue.h */
-/* Start of th_task.h */
-
-#include <stdbool.h>
-#include <stdlib.h>
-
-
-typedef struct th_task {
-    /** fn
-     * @brief The function to execute.
-     */
-    void (*fn)(void* self);
-
-    /** destroy
-     * @brief The destructor for the th_task.
-     * Can be NULL if the th_task does not need to be destroyed.
-     */
-    void (*destroy)(void* self);
-
-    /** This is used internally by the runner. */
-    struct th_task* next;
-} th_task;
-
-/** th_task_init
- * @brief Initializes a task.
- */
-TH_PRIVATE(void)
-th_task_init(th_task* task, void (*fn)(void* self), void (*destroy)(void* self));
-
-/** th_task complete
- * @brief Runs the task.
- */
-TH_PRIVATE(void)
-th_task_complete(th_task* task);
-
-/** th_task_destroy
- * @brief Destroys the task, if the task has a destroy function.
- */
-TH_PRIVATE(void)
-th_task_destroy(th_task* task);
-
-/* th_task_queue declarations begin */
-
-#ifndef TH_TASK_QUEUE
-#define TH_TASK_QUEUE
-TH_DEFINE_QUEUE(th_task_queue, th_task)
-#endif
-
-/* th_task_queue declarations end */
-
-/* End of th_task.h */
-/* Start of th_dir.h */
-
-
-
-typedef struct th_dir {
-    th_allocator* allocator;
-    th_heap_string path;
-    int fd;
-} th_dir;
-
-TH_PRIVATE(void)
-th_dir_init(th_dir* dir, th_allocator* allocator);
-
-TH_PRIVATE(th_err)
-th_dir_open(th_dir* dir, th_string path);
-
-TH_PRIVATE(th_string)
-th_dir_get_path(th_dir* dir);
-
-TH_PRIVATE(void)
-th_dir_deinit(th_dir* dir);
-
-/* End of th_dir.h */
-/* Start of th_file.h */
-
-
-
-typedef struct th_file_mmap {
-    void* addr;
-    size_t offset;
-    size_t len;
-} th_file_mmap;
-
-typedef struct th_file {
-    int fd;
-    size_t size;
-    th_file_mmap view;
-} th_file;
-
-TH_PRIVATE(void)
-th_file_init(th_file* stream);
-
-typedef struct th_open_opt {
-    bool read;
-    bool write;
-    bool create;
-} th_open_opt;
-
-TH_PRIVATE(th_err)
-th_file_openat(th_file* stream, th_dir* dir, th_string path, th_open_opt opt);
-
-TH_PRIVATE(th_err)
-th_file_read(th_file* stream, void* addr, size_t len, size_t offset, size_t* read) TH_MAYBE_UNUSED;
-
-typedef struct th_fileview {
-    void* ptr;
-    size_t len;
-} th_fileview;
-
-TH_PRIVATE(th_err)
-th_file_get_view(th_file* stream, th_fileview* view, size_t offset, size_t len);
-
-TH_PRIVATE(void)
-th_file_close(th_file* stream);
-
-TH_PRIVATE(void)
-th_file_deinit(th_file* stream);
-
-/* End of th_file.h */
-/* Start of th_io_task.h */
-
-
-
-/** th_io_handler
- *@brief I/O operation completion handler, inherits from th_task.
- * and contains the result of the operation.
- */
-typedef struct th_io_handler {
-    th_task base;
-    void (*fn)(void* self, size_t result, th_err err);
-    size_t result;
-    th_err err;
-} th_io_handler;
-
-TH_PRIVATE(void)
-th_io_handler_fn(void* self);
-
-TH_INLINE(void)
-th_io_handler_init(th_io_handler* handler, void (*fn)(void* self, size_t result, th_err err), void (*destroy)(void* self))
-{
-    th_task_init(&handler->base, th_io_handler_fn, destroy);
-    handler->fn = fn;
-}
-
-TH_INLINE(void)
-th_io_handler_set_result(th_io_handler* handler, size_t result, th_err err)
-{
-    handler->result = result;
-    handler->err = err;
-}
-
-TH_INLINE(void)
-th_io_handler_complete(th_io_handler* handler, size_t result, th_err err)
-{
-    th_io_handler_set_result(handler, result, err);
-    th_task_complete(&handler->base);
-}
-
-TH_INLINE(void)
-th_io_handler_destroy(th_io_handler* handler)
-{
-    th_task_destroy(&handler->base);
-}
-
-// some aliases
-
-typedef th_io_handler th_write_handler;
-typedef th_io_handler th_read_handler;
-#define th_write_handler_init th_io_handler_init
-#define th_read_handler_init th_io_handler_init
-#define th_write_handler_complete th_io_handler_complete
-#define th_read_handler_complete th_io_handler_complete
-
-typedef enum th_io_open_flag {
-    TH_IO_OPEN_FLAG_RDONLY = 1 << 0,
-    TH_IO_OPEN_FLAG_DIR = 1 << 1,
-} th_io_open_flag;
-
-/** th_io_op
- *@brief I/O operation type.
- */
-typedef enum th_io_op_type {
-    TH_IO_OP_TYPE_NONE = 0,
-    TH_IO_OP_TYPE_READ = 1,
-    TH_IO_OP_TYPE_WRITE = 2,
-    TH_IO_OP_TYPE_MAX = TH_IO_OP_TYPE_WRITE
-} th_io_op_type;
-#define TH_IO_OP(opc, type) ((opc) | ((type) << 8))
-#define TH_IO_OP_TYPE(op) ((op) >> 8)
-typedef enum th_io_op {
-    TH_IO_OP_ACCEPT = TH_IO_OP(0, TH_IO_OP_TYPE_READ),
-    TH_IO_OP_READ = TH_IO_OP(1, TH_IO_OP_TYPE_READ),
-    TH_IO_OP_WRITE = TH_IO_OP(2, TH_IO_OP_TYPE_WRITE),
-    TH_IO_OP_WRITEV = TH_IO_OP(3, TH_IO_OP_TYPE_WRITE),
-    TH_IO_OP_SEND = TH_IO_OP(4, TH_IO_OP_TYPE_WRITE),
-    TH_IO_OP_SENDV = TH_IO_OP(5, TH_IO_OP_TYPE_WRITE),
-    TH_IO_OP_READV = TH_IO_OP(6, TH_IO_OP_TYPE_READ),
-    TH_IO_OP_OPENAT = TH_IO_OP(7, TH_IO_OP_TYPE_NONE),
-    TH_IO_OP_OPEN = TH_IO_OP(8, TH_IO_OP_TYPE_NONE),
-    TH_IO_OP_CLOSE = TH_IO_OP(9, TH_IO_OP_TYPE_NONE),
-    TH_IO_OP_SENDFILE = TH_IO_OP(10, TH_IO_OP_TYPE_WRITE),
-} th_io_op;
-
-/** th_io_task
- *@brief I/O task, inherits from th_task.
- * Contains the I/O operation type and the I/O operation arguments.
- */
-typedef struct th_io_task {
-    th_task base;
-    th_allocator* allocator;
-    th_err (*fn)(void* self, size_t* result);
-    th_io_handler* on_complete;
-    void* addr;
-    void* addr2;
-    size_t len;
-    size_t len2;
-    size_t offset;
-    unsigned int flags;
-    int fd;
-    enum th_io_op op;
-} th_io_task;
-
-TH_PRIVATE(th_io_task*)
-th_io_task_create(th_allocator* allocator);
-
-/*
-TH_PRIVATE(void)
-th_io_task_to_string(char* buf, size_t len, th_io_task* iot);
-*/
-
-TH_PRIVATE(void)
-th_io_task_prepare_read(th_io_task* iot, int fd, void* addr, size_t len, th_io_handler* on_complete);
-
-/*
-TH_PRIVATE(void)
-th_io_task_prepare_write(th_io_task* iot, int fd, void* addr, size_t len, th_io_handler* on_complete);
-
-TH_PRIVATE(void)
-th_io_task_prepare_writev(th_io_task* iot, int fd, th_iov* iov, size_t len, th_io_handler* on_complete);
-*/
-
-TH_PRIVATE(void)
-th_io_task_prepare_send(th_io_task* iot, int fd, void* addr, size_t len, th_io_handler* on_complete);
-
-TH_PRIVATE(void)
-th_io_task_prepare_sendv(th_io_task* iot, int fd, th_iov* iov, size_t len, th_io_handler* on_complete);
-
-TH_PRIVATE(void)
-th_io_task_prepare_readv(th_io_task* iot, int fd, th_iov* iov, size_t len, th_io_handler* on_complete);
-
-TH_PRIVATE(void)
-th_io_task_prepare_sendfile(th_io_task* iot, th_file* file, int sfd, th_iov* header, size_t iovcnt,
-                            size_t offset, size_t len, th_io_handler* on_complete);
-
-TH_PRIVATE(void)
-th_io_task_prepare_accept(th_io_task* iot, int fd, void* addr, void* addrlen, th_io_handler* on_complete);
-
-/** th_io_task_execute
- * @brief Executes the I/O task and leaves the completion handler untouched.
- * @param iot I/O task.
- * @param result Result of the I/O operation.
- * @return Error code.
- */
-TH_PRIVATE(th_err)
-th_io_task_execute(th_io_task* iot, size_t* result);
-
-/** th_io_task_try_execute
- * @brief Tries to execute the I/O task and returns the completion handler
- * if the I/O operation was completed.
- * @param iot I/O task.
- * @return Completion handler.
- */
-TH_PRIVATE(th_io_handler*)
-th_io_task_try_execute(th_io_task* iot);
-
-TH_PRIVATE(void)
-th_io_task_destroy(th_io_task* iot);
-
-/** th_io_task_abort
- * @brief Aborts the I/O task. Sets the error code and returns the completion handler.
- * @param iot I/O task.
- * @param err Error code.
- */
-TH_PRIVATE(th_io_handler*)
-th_io_task_abort(th_io_task* iot, th_err err);
-
-/* End of th_io_task.h */
-/* Start of th_io_service.h */
-
-
-
-typedef struct th_io_handle {
-    void (*cancel)(void* self);
-    void (*submit)(void* self, th_io_task* task);
-    void (*enable_timeout)(void* self, bool enabled);
-    int (*get_fd)(void* self);
-    void (*destroy)(void* self);
-} th_io_handle;
-
-TH_INLINE(void)
-th_io_handle_cancel(th_io_handle* io_handle)
-{
-    io_handle->cancel(io_handle);
-}
-
-TH_INLINE(void)
-th_io_handle_submit(th_io_handle* io_handle, th_io_task* iot)
-{
-    io_handle->submit(io_handle, iot);
-}
-
-TH_INLINE(int)
-th_io_handle_get_fd(th_io_handle* io_handle)
-{
-    return io_handle->get_fd(io_handle);
-}
-
-TH_INLINE(void)
-th_io_handle_enable_timeout(th_io_handle* io_handle, bool enabled)
-{
-    io_handle->enable_timeout(io_handle, enabled);
-}
-
-TH_INLINE(void)
-th_io_handle_destroy(th_io_handle* io_handle)
-{
-    io_handle->destroy(io_handle);
-}
-
-typedef struct th_io_service {
-    void (*run)(void* self, int timeout_ms);
-    th_err (*create_handle)(void* self, th_io_handle** out, int fd);
-    void (*destroy)(void* self);
-} th_io_service;
-
-TH_INLINE(void)
-th_io_service_run(th_io_service* io_service, int timeout_ms)
-{
-    io_service->run(io_service, timeout_ms);
-}
-
-TH_INLINE(th_err)
-th_io_service_create_handle(th_io_service* io_service, th_io_handle** out, int fd)
-{
-    return io_service->create_handle(io_service, out, fd);
-}
-
-TH_INLINE(void)
-th_io_service_destroy(th_io_service* io_service)
-{
-    if (io_service->destroy)
-        io_service->destroy(io_service);
-}
-
-/* End of th_io_service.h */
-/* Start of th_runner.h */
-
-
-
-typedef struct th_runner {
-    th_io_service* io_service;
-    th_task service_task;
-    int waiting;
-    th_task_queue queue;
-    size_t num_tasks;
-} th_runner;
-
-TH_PRIVATE(void)
-th_runner_init(th_runner* runner);
-
-TH_PRIVATE(void)
-th_runner_set_io_service(th_runner* runner, th_io_service* service);
-
-TH_PRIVATE(void)
-th_runner_push_task(th_runner* runner, th_task* task);
-
-TH_PRIVATE(void)
-th_runner_push_uncounted_task(th_runner* runner, th_task* task);
-
-TH_PRIVATE(void)
-th_runner_increase_task_count(th_runner* runner);
-
-TH_PRIVATE(th_err)
-th_runner_poll(th_runner* runner, int timeout_ms);
-
-TH_PRIVATE(void)
-th_runner_drain(th_runner* runner);
-
-TH_PRIVATE(void)
-th_runner_deinit(th_runner* runner);
-
-/* End of th_runner.h */
-/* Start of th_mock_service.h */
-
-
-
-#if defined(TH_CONFIG_OS_MOCK)
-
-
-typedef struct th_mock_service th_mock_service;
-typedef struct th_mock_handle th_mock_handle;
-struct th_mock_handle {
-    th_io_handle base;
-    th_mock_service* service;
-    int fd;
-};
-
-struct th_mock_service {
-    th_io_service base;
-    th_runner* runner;
-};
-
-TH_PRIVATE(th_err)
-th_mock_service_create(th_io_service** out, th_runner* runner);
-
-#endif
-/* End of th_mock_service.h */
-/* Start of th_ssl_context.h */
-
-
-#if TH_WITH_SSL
-
-#include <openssl/ssl.h>
-
-typedef struct th_ssl_context {
-    SSL_CTX* ctx;
-    BIO_METHOD* smem_method;
-} th_ssl_context;
-
-TH_PRIVATE(th_err)
-th_ssl_context_init(th_ssl_context* context, const char* key, const char* cert);
-
-TH_PRIVATE(void)
-th_ssl_context_deinit(th_ssl_context* context);
-
-#endif
-/* End of th_ssl_context.h */
-/* Start of th_ssl_smem_bio.h */
-
-
-#if TH_WITH_SSL
-
-#include <openssl/bio.h>
-
-
-TH_PRIVATE(BIO_METHOD*)
-th_smem_bio(th_ssl_context* ssl_context);
-
-TH_PRIVATE(void)
-th_smem_bio_setup_buf(BIO* bio, th_allocator* allocator, size_t max_len);
-
-TH_PRIVATE(size_t)
-th_smem_ensure_buf_size(BIO* bio, size_t size);
-
-TH_PRIVATE(void)
-th_smem_bio_set_eof(BIO* bio);
-
-TH_PRIVATE(void)
-th_smem_bio_get_rdata(BIO* bio, th_iov* buf);
-
-TH_PRIVATE(void)
-th_smem_bio_get_wbuf(BIO* bio, th_iov* buf);
-
-TH_PRIVATE(void)
-th_smem_bio_inc_read_pos(BIO* bio, size_t len);
-
-TH_PRIVATE(void)
-th_smem_bio_inc_write_pos(BIO* bio, size_t len);
-
-#endif
-/* End of th_ssl_smem_bio.h */
-/* Start of th_path.h */
-
-
-/**
- * @brief th_path provides a bunch of helper functions to work with paths.
- */
-
-/**
- * @brief th_path_resolve resolves a path to a absolute path.
- * @param dir The directory to resolve the path against.
- * @param path The path to resolve.
- * @param out The resolved path.
- * @return TH_ERR_OK on success, otherwise an error code.
- */
-TH_PRIVATE(th_err)
-th_path_resolve_against(th_string path, th_dir* dir, th_heap_string* out);
-
-TH_PRIVATE(th_err)
-th_path_resolve(th_string path, th_heap_string* out);
-
-TH_PRIVATE(bool)
-th_path_is_within(th_string path, th_dir* dir);
-
-TH_PRIVATE(bool)
-th_path_is_hidden(th_string path);
-
-/* End of th_path.h */
-/* Start of th_http_error.h */
-
-
-
-#include <errno.h>
-
-/** th_http_err
- * @brief Converts a error code to a equivalent HTTP error code.
- */
-TH_INLINE(th_err)
-th_http_error(th_err err)
-{
-    if (err == TH_ERR_OK)
-        return TH_ERR_HTTP(TH_CODE_OK);
-    switch (TH_ERR_CATEGORY(err)) {
-    case TH_ERR_CATEGORY_SYSTEM:
-        switch (TH_ERR_CODE(err)) {
-            {
-            case TH_ENOENT:
-                return TH_ERR_HTTP(TH_CODE_NOT_FOUND);
-                break;
-            case TH_ETIMEDOUT:
-                return TH_ERR_HTTP(TH_CODE_REQUEST_TIMEOUT);
-                break;
-            default:
-                return TH_ERR_HTTP(TH_CODE_INTERNAL_SERVER_ERROR);
-                break;
-            }
-        }
-        break;
-    case TH_ERR_CATEGORY_HTTP:
-        return err;
-        break;
-    }
-    return TH_ERR_HTTP(TH_CODE_INTERNAL_SERVER_ERROR);
-}
-
-TH_INLINE(const char*)
-th_http_strerror(int code)
-{
-    switch (code) {
-    case TH_CODE_OK:
-        return "OK";
-        break;
-    case TH_CODE_MOVED_PERMANENTLY:
-        return "Moved Permanently";
-        break;
-    case TH_CODE_BAD_REQUEST:
-        return "Bad Request";
-        break;
-    case TH_CODE_NOT_FOUND:
-        return "Not Found";
-        break;
-    case TH_CODE_METHOD_NOT_ALLOWED:
-        return "Method Not Allowed";
-        break;
-    case TH_CODE_PAYLOAD_TOO_LARGE:
-        return "Payload Too Large";
-        break;
-    case TH_CODE_INTERNAL_SERVER_ERROR:
-        return "Internal Server Error";
-        break;
-    case TH_CODE_SERVICE_UNAVAILABLE:
-        return "Service Unavailable";
-        break;
-    case TH_CODE_NOT_IMPLEMENTED:
-        return "Method Not Implemented";
-        break;
-    case TH_CODE_REQUEST_TIMEOUT:
-        return "Request Timeout";
-        break;
-    case TH_CODE_TOO_MANY_REQUESTS:
-        return "Too Many Requests";
-        break;
-    case TH_CODE_URI_TOO_LONG:
-        return "URI Too Long";
-        break;
-    case TH_CODE_UNSUPPORTED_MEDIA_TYPE:
-        return "Unsupported Media Type";
-        break;
-    case TH_CODE_RANGE_NOT_SATISFIABLE:
-        return "Range Not Satisfiable";
-        break;
-    case TH_CODE_REQUEST_HEADER_FIELDS_TOO_LARGE:
-        return "Request Header Fields Too Large";
-        break;
-    case TH_CODE_UNAUTHORIZED:
-        return "Unauthorized";
-        break;
-    case TH_CODE_FORBIDDEN:
-        return "Forbidden";
-        break;
-    default:
-        return "Unknown";
-        break;
-    }
-}
-
-typedef enum th_http_code_type {
-    TH_HTTP_CODE_TYPE_INFORMATIONAL,
-    TH_HTTP_CODE_TYPE_SUCCESS,
-    TH_HTTP_CODE_TYPE_REDIRECT,
-    TH_HTTP_CODE_TYPE_ERROR,
-} th_http_code_type;
-
-TH_INLINE(th_http_code_type)
-th_http_code_get_type(int code)
-{
-    if (code >= 100 && code < 200)
-        return TH_HTTP_CODE_TYPE_INFORMATIONAL;
-    if (code >= 200 && code < 300)
-        return TH_HTTP_CODE_TYPE_SUCCESS;
-    if (code >= 300 && code < 400)
-        return TH_HTTP_CODE_TYPE_REDIRECT;
-    if (code >= 400)
-        return TH_HTTP_CODE_TYPE_ERROR;
-    return TH_HTTP_CODE_TYPE_ERROR;
-}
-
-/* End of th_http_error.h */
-/* Start of th_io_op_posix.h */
-
-
-
-#if defined(TH_CONFIG_OS_POSIX)
-
-TH_PRIVATE(th_err)
-th_io_op_posix_read(void* self, size_t* result);
-
-TH_PRIVATE(th_err)
-th_io_op_posix_readv(void* self, size_t* result);
-
-TH_PRIVATE(th_err)
-th_io_op_posix_write(void* self, size_t* result);
-
-TH_PRIVATE(th_err)
-th_io_op_posix_writev(void* self, size_t* result);
-
-TH_PRIVATE(th_err)
-th_io_op_posix_send(void* self, size_t* result);
-
-TH_PRIVATE(th_err)
-th_io_op_posix_sendv(void* self, size_t* result);
-
-TH_PRIVATE(th_err)
-th_io_op_posix_accept(void* self, size_t* result);
-
-TH_PRIVATE(th_err)
-th_io_op_posix_sendfile_mmap(void* self, size_t* result) TH_MAYBE_UNUSED;
-
-TH_PRIVATE(th_err)
-th_io_op_posix_sendfile_buffered(void* self, size_t* result) TH_MAYBE_UNUSED;
-
-#endif
-/* End of th_io_op_posix.h */
-/* Start of th_timer.h */
-
-
-#include <stdbool.h>
-#include <stddef.h>
-#include <stdint.h>
-
-
-typedef struct th_timer {
-    uint32_t expire;
-} th_timer;
-
-TH_PRIVATE(void)
-th_timer_init(th_timer* timer);
-
-TH_PRIVATE(th_err)
-th_timer_set(th_timer* timer, th_duration duration);
-
-TH_PRIVATE(bool)
-th_timer_expired(th_timer* timer);
-
-/* End of th_timer.h */
 /* Start of th_hash.h */
 
 #include <stddef.h>
@@ -2250,6 +1254,876 @@ TH_DEFINE_HASHMAP(th_cstr_map, const char*, const char*, th_cstr_hash, th_cstr_e
 /* th_cstr_map end */
 
 /* End of th_hashmap.h */
+/* Start of th_string.h */
+
+#include <stdint.h>
+#include <string.h>
+
+
+
+extern size_t th_string_npos;
+
+typedef struct th_string {
+    const char* ptr;
+    size_t len;
+} th_string;
+
+/** th_string_make
+ * @brief Helper function to create a th_string from a pointer and a length.
+ */
+TH_INLINE(th_string)
+th_string_make(const char* ptr, size_t len)
+{
+    return (th_string){ptr, len};
+}
+
+/** th_string_from_cstr
+ * @brief Helper function to create a th_string from a null-terminated string.
+ */
+TH_INLINE(th_string)
+th_string_from_cstr(const char* str)
+{
+    return th_string_make(str, strlen(str));
+}
+
+/** th_string_eq
+ * @brief Helper function to compare two th_strings.
+ * @return 1 if the strings are equal, 0 otherwise.
+ */
+TH_PRIVATE(bool)
+th_string_eq(th_string a, th_string b);
+
+/** th_string_empty
+ * @brief Helper function to check if a th_string is empty.
+ * @return true if the string is empty, false otherwise.
+ */
+TH_INLINE(bool)
+th_string_empty(th_string str)
+{
+    return str.len == 0;
+}
+
+/** TH_STRING_INIT
+ * @brief Helper macro to initialize a th_string from string literal.
+ */
+#define TH_STRING_INIT(str) {"" str, sizeof(str) - 1}
+
+/** TH_STRING
+ * @brief Helper macro to create a th_string compound literal from a string literal.
+ */
+#define TH_STRING(str) ((th_string){"" str, sizeof(str) - 1})
+
+/** TH_STRING_EQ
+ * @brief Helper macro to compare a th_string with a string literal.
+ */
+#define TH_STRING_EQ(str, cmp) (th_string_eq(str, TH_STRING(cmp)))
+
+TH_PRIVATE(bool)
+th_string_is_uint(th_string str);
+
+TH_PRIVATE(th_err)
+th_string_to_uint(th_string str, unsigned int* out);
+
+TH_PRIVATE(size_t)
+th_string_find_first(th_string str, size_t start, char c);
+
+TH_PRIVATE(size_t)
+th_string_find_first_not(th_string str, size_t start, char c);
+
+TH_PRIVATE(size_t)
+th_string_find_last_not(th_string str, size_t start, char c);
+
+TH_PRIVATE(size_t)
+th_string_find_first_of(th_string str, size_t start, const char* chars);
+
+/*
+TH_PRIVATE(size_t)
+th_string_find_last(th_string str, size_t start, char c);
+*/
+
+TH_PRIVATE(th_string)
+th_string_substr(th_string str, size_t start, size_t len);
+
+/** th_string_trim
+ * @brief Removes leading and trailing whitespace from a string.
+ * This doesn't modify the original string, just returns a new view of it.
+ * @param str The string to trim.
+ * @return A new string view with leading and trailing whitespace removed.
+ */
+TH_PRIVATE(th_string)
+th_string_trim(th_string str);
+
+TH_PRIVATE(uint32_t)
+th_string_hash(th_string str);
+
+typedef struct th_mut_string {
+    char* ptr;
+    size_t len;
+} th_mut_string;
+
+TH_PRIVATE(void)
+th_mut_string_tolower(th_mut_string str);
+
+/* End of th_string.h */
+/* Start of th_vec.h */
+
+
+
+#include <stddef.h>
+
+#define TH_DEFINE_VEC(NAME, TYPE, DEINIT)                                                                  \
+    typedef struct NAME {                                                                                  \
+        TYPE* data;                                                                                        \
+        size_t size;                                                                                       \
+        size_t capacity;                                                                                   \
+        th_allocator* allocator;                                                                           \
+    } NAME;                                                                                                \
+                                                                                                           \
+    TH_INLINE(void)                                                                                        \
+    NAME##_init(NAME* vec, th_allocator* allocator) TH_MAYBE_UNUSED;                                       \
+                                                                                                           \
+    TH_INLINE(void)                                                                                        \
+    NAME##_deinit(NAME* vec) TH_MAYBE_UNUSED;                                                              \
+                                                                                                           \
+    TH_INLINE(size_t)                                                                                      \
+    NAME##_size(NAME* vec) TH_MAYBE_UNUSED;                                                                \
+                                                                                                           \
+    TH_INLINE(size_t)                                                                                      \
+    NAME##_capacity(NAME* vec) TH_MAYBE_UNUSED;                                                            \
+                                                                                                           \
+    TH_INLINE(th_err)                                                                                      \
+    NAME##_resize(NAME* vec, size_t capacity) TH_MAYBE_UNUSED;                                             \
+                                                                                                           \
+    TH_INLINE(void)                                                                                        \
+    NAME##_shrink_to_fit(NAME* vec) TH_MAYBE_UNUSED;                                                       \
+                                                                                                           \
+    TH_INLINE(th_err)                                                                                      \
+    NAME##_push_back(NAME* vec, TYPE value) TH_MAYBE_UNUSED;                                               \
+                                                                                                           \
+    TH_INLINE(TYPE*)                                                                                       \
+    NAME##_at(NAME* vec, size_t index) TH_MAYBE_UNUSED;                                                    \
+                                                                                                           \
+    TH_INLINE(TYPE*)                                                                                       \
+    NAME##_begin(NAME* vec) TH_MAYBE_UNUSED;                                                               \
+                                                                                                           \
+    TH_INLINE(TYPE*)                                                                                       \
+    NAME##_end(NAME* vec) TH_MAYBE_UNUSED;                                                                 \
+                                                                                                           \
+    TH_INLINE(void)                                                                                        \
+    NAME##_init(NAME* vec, th_allocator* allocator)                                                        \
+    {                                                                                                      \
+        vec->allocator = allocator ? allocator : th_default_allocator_get();                               \
+        vec->capacity = 0;                                                                                 \
+        vec->size = 0;                                                                                     \
+        vec->data = NULL;                                                                                  \
+    }                                                                                                      \
+                                                                                                           \
+    TH_INLINE(void)                                                                                        \
+    NAME##_deinit(NAME* vec)                                                                               \
+    {                                                                                                      \
+        if (vec->data) {                                                                                   \
+            for (size_t i = 0; i < vec->size; i++) {                                                       \
+                DEINIT(&vec->data[i]);                                                                     \
+            }                                                                                              \
+            th_allocator_free(vec->allocator, vec->data);                                                  \
+        }                                                                                                  \
+    }                                                                                                      \
+                                                                                                           \
+    TH_INLINE(size_t)                                                                                      \
+    NAME##_size(NAME* vec)                                                                                 \
+    {                                                                                                      \
+        return vec->size;                                                                                  \
+    }                                                                                                      \
+                                                                                                           \
+    TH_INLINE(size_t)                                                                                      \
+    NAME##_capacity(NAME* vec)                                                                             \
+    {                                                                                                      \
+        return vec->capacity;                                                                              \
+    }                                                                                                      \
+                                                                                                           \
+    TH_INLINE(th_err)                                                                                      \
+    NAME##_resize(NAME* vec, size_t size)                                                                  \
+    {                                                                                                      \
+        if (size < vec->size) {                                                                            \
+            vec->size = size;                                                                              \
+            return TH_ERR_OK;                                                                              \
+        }                                                                                                  \
+        if (size > vec->capacity) {                                                                        \
+            size_t new_capacity = th_next_pow2(size);                                                      \
+            TYPE* new_data = th_allocator_realloc(vec->allocator, vec->data, new_capacity * sizeof(TYPE)); \
+            if (new_data == NULL) {                                                                        \
+                return TH_ERR_BAD_ALLOC;                                                                   \
+            }                                                                                              \
+            vec->data = new_data;                                                                          \
+            vec->capacity = new_capacity;                                                                  \
+        }                                                                                                  \
+        vec->size = size;                                                                                  \
+        return TH_ERR_OK;                                                                                  \
+    }                                                                                                      \
+                                                                                                           \
+    TH_INLINE(void)                                                                                        \
+    NAME##_shrink_to_fit(NAME* vec)                                                                        \
+    {                                                                                                      \
+        if (vec->size == 0) {                                                                              \
+            th_allocator_free(vec->allocator, vec->data);                                                  \
+            vec->data = NULL;                                                                              \
+            vec->capacity = 0;                                                                             \
+        } else if (vec->size < vec->capacity) {                                                            \
+            TYPE* new_data = th_allocator_realloc(vec->allocator, vec->data, vec->size * sizeof(TYPE));    \
+            if (new_data != NULL) {                                                                        \
+                vec->data = new_data;                                                                      \
+                vec->capacity = vec->size;                                                                 \
+            }                                                                                              \
+        }                                                                                                  \
+    }                                                                                                      \
+                                                                                                           \
+    TH_INLINE(th_err)                                                                                      \
+    NAME##_push_back(NAME* vec, TYPE value)                                                                \
+    {                                                                                                      \
+        if (vec->size >= vec->capacity) {                                                                  \
+            size_t new_capacity = vec->capacity == 0 ? 1 : vec->capacity * 2;                              \
+            TYPE* new_data = th_allocator_realloc(vec->allocator, vec->data, new_capacity * sizeof(TYPE)); \
+            if (new_data == NULL) {                                                                        \
+                return TH_ERR_BAD_ALLOC;                                                                   \
+            }                                                                                              \
+            vec->data = new_data;                                                                          \
+            vec->capacity = new_capacity;                                                                  \
+        }                                                                                                  \
+        vec->data[vec->size++] = value;                                                                    \
+        return TH_ERR_OK;                                                                                  \
+    }                                                                                                      \
+                                                                                                           \
+    TH_INLINE(TYPE*)                                                                                       \
+    NAME##_at(NAME* vec, size_t index)                                                                     \
+    {                                                                                                      \
+        TH_ASSERT(index <= vec->size);                                                                     \
+        return vec->data + index;                                                                          \
+    }                                                                                                      \
+                                                                                                           \
+    TH_INLINE(TYPE*)                                                                                       \
+    NAME##_begin(NAME* vec)                                                                                \
+    {                                                                                                      \
+        return vec->data;                                                                                  \
+    }                                                                                                      \
+                                                                                                           \
+    TH_INLINE(TYPE*)                                                                                       \
+    NAME##_end(NAME* vec)                                                                                  \
+    {                                                                                                      \
+        return vec->data + vec->size;                                                                      \
+    }
+
+// Default vectors
+TH_DEFINE_VEC(th_buf_vec, char, (void))
+
+/* End of th_vec.h */
+/* Start of th_heap_string.h */
+
+
+typedef struct th_detail_large_string {
+    size_t capacity;
+    size_t len;
+    char* ptr;
+    th_allocator* allocator;
+} th_detail_large_string;
+
+#define TH_HEAP_STRING_SMALL_BUF_LEN (sizeof(char*) + sizeof(size_t) + sizeof(size_t) - 1)
+#define TH_HEAP_STRING_SMALL_MAX_LEN (TH_HEAP_STRING_SMALL_BUF_LEN - 1)
+typedef struct th_detail_small_string {
+    unsigned char small : 1;
+    unsigned char len : 7;
+    char buf[TH_HEAP_STRING_SMALL_BUF_LEN];
+    th_allocator* allocator;
+} th_detail_small_string;
+
+typedef struct th_heap_string {
+    union {
+        th_detail_small_string small;
+        th_detail_large_string large;
+    } impl;
+} th_heap_string;
+
+TH_PRIVATE(void)
+th_heap_string_init(th_heap_string* self, th_allocator* allocator);
+
+TH_PRIVATE(th_err)
+th_heap_string_set(th_heap_string* self, th_string str);
+
+TH_PRIVATE(th_err)
+th_heap_string_append(th_heap_string* self, th_string str);
+
+TH_PRIVATE(th_err)
+th_heap_string_push_back(th_heap_string* self, char c);
+
+TH_PRIVATE(th_err)
+th_heap_string_resize(th_heap_string* self, size_t new_len, char fill);
+
+TH_PRIVATE(th_string)
+th_heap_string_view(th_heap_string* self);
+
+TH_PRIVATE(char*)
+th_heap_string_data(th_heap_string* self);
+
+TH_PRIVATE(size_t)
+th_heap_string_len(th_heap_string* self);
+
+TH_PRIVATE(void)
+th_heap_string_deinit(th_heap_string* self);
+
+TH_PRIVATE(void)
+th_heap_string_clear(th_heap_string* self);
+
+/*
+TH_PRIVATE(bool)
+th_heap_string_eq(th_heap_string* self, th_string other);
+*/
+/*
+TH_PRIVATE(uint32_t)
+th_heap_string_hash(th_heap_string* self);
+*/
+TH_DEFINE_VEC(th_heap_string_vec, th_heap_string, th_heap_string_deinit)
+
+/* End of th_heap_string.h */
+/* Start of th_dir.h */
+
+
+
+typedef struct th_dir {
+    th_allocator* allocator;
+    th_heap_string path;
+    int fd;
+} th_dir;
+
+TH_PRIVATE(void)
+th_dir_init(th_dir* dir, th_allocator* allocator);
+
+TH_PRIVATE(th_err)
+th_dir_open(th_dir* dir, th_string path);
+
+TH_PRIVATE(th_string)
+th_dir_get_path(th_dir* dir);
+
+TH_PRIVATE(void)
+th_dir_deinit(th_dir* dir);
+
+/* End of th_dir.h */
+/* Start of th_file.h */
+
+
+
+typedef struct th_file_mmap {
+    void* addr;
+    size_t offset;
+    size_t len;
+} th_file_mmap;
+
+typedef struct th_file {
+    int fd;
+    size_t size;
+    th_file_mmap view;
+} th_file;
+
+TH_PRIVATE(void)
+th_file_init(th_file* stream);
+
+typedef struct th_open_opt {
+    bool read;
+    bool write;
+    bool create;
+} th_open_opt;
+
+TH_PRIVATE(th_err)
+th_file_openat(th_file* stream, th_dir* dir, th_string path, th_open_opt opt);
+
+TH_PRIVATE(th_err)
+th_file_read(th_file* stream, void* addr, size_t len, size_t offset, size_t* read) TH_MAYBE_UNUSED;
+
+typedef struct th_fileview {
+    void* ptr;
+    size_t len;
+} th_fileview;
+
+TH_PRIVATE(th_err)
+th_file_get_view(th_file* stream, th_fileview* view, size_t offset, size_t len);
+
+TH_PRIVATE(void)
+th_file_close(th_file* stream);
+
+TH_PRIVATE(void)
+th_file_deinit(th_file* stream);
+
+/* End of th_file.h */
+/* Start of th_iov.h */
+
+#include <stddef.h>
+#include <sys/uio.h>
+
+
+/** th_iov
+ *@brief I/O vector.
+ */
+
+typedef struct th_iov {
+    void* base;
+    size_t len;
+} th_iov;
+
+/** th_iov_consume
+ *@brief Consume the I/O vector and
+ * return the number of bytes that were not consumed.
+ */
+TH_INLINE(size_t)
+th_iov_consume(th_iov** iov, size_t* iov_len, size_t consume)
+{
+    size_t zeroed = 0;
+    for (size_t i = 0; i < *iov_len; i++) {
+        if (consume < (*iov)[i].len) {
+            (*iov)[i].base = (char*)(*iov)[i].base + consume;
+            (*iov)[i].len -= consume;
+            consume = 0;
+            break;
+        }
+        consume -= (*iov)[i].len;
+        (*iov)[i].len = 0;
+        zeroed++;
+    }
+    *iov_len -= zeroed;
+    (*iov) += zeroed;
+    return consume;
+}
+
+TH_INLINE(size_t)
+th_iov_bytes(th_iov* iov, size_t iov_len)
+{
+    size_t bytes = 0;
+    for (size_t i = 0; i < iov_len; i++) {
+        bytes += iov[i].len;
+    }
+    return bytes;
+}
+
+/* End of th_iov.h */
+/* Start of th_queue.h */
+
+
+#include <stdbool.h>
+
+/** Generic queue implementation.
+ * that works with any struct that has a next pointer.
+ */
+#define TH_DEFINE_QUEUE(NAME, T)                                 \
+    typedef struct NAME {                                        \
+        T* head;                                                 \
+        T* tail;                                                 \
+    } NAME;                                                      \
+                                                                 \
+    TH_INLINE(NAME)                                              \
+    NAME##_make(void) TH_MAYBE_UNUSED;                           \
+                                                                 \
+    TH_INLINE(void)                                              \
+    NAME##_push(NAME* queue, T* item) TH_MAYBE_UNUSED;           \
+                                                                 \
+    TH_INLINE(T*)                                                \
+    NAME##_pop(NAME* queue) TH_MAYBE_UNUSED;                     \
+                                                                 \
+    TH_INLINE(bool)                                              \
+    NAME##_empty(NAME* queue) TH_MAYBE_UNUSED;                   \
+                                                                 \
+    TH_INLINE(void)                                              \
+    NAME##_push_queue(NAME* queue, NAME* other) TH_MAYBE_UNUSED; \
+                                                                 \
+    TH_INLINE(NAME)                                              \
+    NAME##_make(void)                                            \
+    {                                                            \
+        return (NAME){.head = NULL, .tail = NULL};               \
+    }                                                            \
+                                                                 \
+    TH_INLINE(bool)                                              \
+    NAME##_empty(NAME* queue)                                    \
+    {                                                            \
+        return queue->head == NULL;                              \
+    }                                                            \
+                                                                 \
+    TH_INLINE(void)                                              \
+    NAME##_push(NAME* queue, T* item)                            \
+    {                                                            \
+        if (queue->head == NULL) {                               \
+            queue->head = item;                                  \
+        } else {                                                 \
+            queue->tail->next = item;                            \
+        }                                                        \
+        queue->tail = item;                                      \
+        item->next = NULL;                                       \
+    }                                                            \
+                                                                 \
+    TH_INLINE(void)                                              \
+    NAME##_push_queue(NAME* queue, NAME* other)                  \
+    {                                                            \
+        if (queue->head == NULL) {                               \
+            *queue = *other;                                     \
+        } else if (other->head) {                                \
+            queue->tail->next = other->head;                     \
+            queue->tail = other->tail;                           \
+        }                                                        \
+        *other = NAME##_make();                                  \
+    }                                                            \
+                                                                 \
+    TH_INLINE(T*)                                                \
+    NAME##_pop(NAME* queue)                                      \
+    {                                                            \
+        T* item = queue->head;                                   \
+        if (item) {                                              \
+            queue->head = item->next;                            \
+            item->next = NULL;                                   \
+        }                                                        \
+        return item;                                             \
+    }
+
+/* End of th_queue.h */
+/* Start of th_task.h */
+
+#include <stdbool.h>
+#include <stdlib.h>
+
+
+typedef struct th_task {
+    /** fn
+     * @brief The function to execute.
+     */
+    void (*fn)(void* self);
+
+    /** destroy
+     * @brief The destructor for the th_task.
+     * Can be NULL if the th_task does not need to be destroyed.
+     */
+    void (*destroy)(void* self);
+
+    /** This is used internally by the runner. */
+    struct th_task* next;
+} th_task;
+
+/** th_task_init
+ * @brief Initializes a task.
+ */
+TH_PRIVATE(void)
+th_task_init(th_task* task, void (*fn)(void* self), void (*destroy)(void* self));
+
+/** th_task complete
+ * @brief Runs the task.
+ */
+TH_PRIVATE(void)
+th_task_complete(th_task* task);
+
+/** th_task_destroy
+ * @brief Destroys the task, if the task has a destroy function.
+ */
+TH_PRIVATE(void)
+th_task_destroy(th_task* task);
+
+/* th_task_queue declarations begin */
+
+#ifndef TH_TASK_QUEUE
+#define TH_TASK_QUEUE
+TH_DEFINE_QUEUE(th_task_queue, th_task)
+#endif
+
+/* th_task_queue declarations end */
+
+/* End of th_task.h */
+/* Start of th_io_task.h */
+
+
+
+/** th_io_handler
+ *@brief I/O operation completion handler, inherits from th_task.
+ * and contains the result of the operation.
+ */
+typedef struct th_io_handler {
+    th_task base;
+    void (*fn)(void* self, size_t result, th_err err);
+    size_t result;
+    th_err err;
+} th_io_handler;
+
+TH_PRIVATE(void)
+th_io_handler_fn(void* self);
+
+TH_INLINE(void)
+th_io_handler_init(th_io_handler* handler, void (*fn)(void* self, size_t result, th_err err), void (*destroy)(void* self))
+{
+    th_task_init(&handler->base, th_io_handler_fn, destroy);
+    handler->fn = fn;
+}
+
+TH_INLINE(void)
+th_io_handler_set_result(th_io_handler* handler, size_t result, th_err err)
+{
+    handler->result = result;
+    handler->err = err;
+}
+
+TH_INLINE(void)
+th_io_handler_complete(th_io_handler* handler, size_t result, th_err err)
+{
+    th_io_handler_set_result(handler, result, err);
+    th_task_complete(&handler->base);
+}
+
+TH_INLINE(void)
+th_io_handler_destroy(th_io_handler* handler)
+{
+    th_task_destroy(&handler->base);
+}
+
+// some aliases
+
+typedef th_io_handler th_write_handler;
+typedef th_io_handler th_read_handler;
+#define th_write_handler_init th_io_handler_init
+#define th_read_handler_init th_io_handler_init
+#define th_write_handler_complete th_io_handler_complete
+#define th_read_handler_complete th_io_handler_complete
+
+typedef enum th_io_open_flag {
+    TH_IO_OPEN_FLAG_RDONLY = 1 << 0,
+    TH_IO_OPEN_FLAG_DIR = 1 << 1,
+} th_io_open_flag;
+
+/** th_io_op
+ *@brief I/O operation type.
+ */
+typedef enum th_io_op_type {
+    TH_IO_OP_TYPE_NONE = 0,
+    TH_IO_OP_TYPE_READ = 1,
+    TH_IO_OP_TYPE_WRITE = 2,
+    TH_IO_OP_TYPE_MAX = TH_IO_OP_TYPE_WRITE
+} th_io_op_type;
+#define TH_IO_OP(opc, type) ((opc) | ((type) << 8))
+#define TH_IO_OP_TYPE(op) ((op) >> 8)
+typedef enum th_io_op {
+    TH_IO_OP_ACCEPT = TH_IO_OP(0, TH_IO_OP_TYPE_READ),
+    TH_IO_OP_READ = TH_IO_OP(1, TH_IO_OP_TYPE_READ),
+    TH_IO_OP_WRITE = TH_IO_OP(2, TH_IO_OP_TYPE_WRITE),
+    TH_IO_OP_WRITEV = TH_IO_OP(3, TH_IO_OP_TYPE_WRITE),
+    TH_IO_OP_SEND = TH_IO_OP(4, TH_IO_OP_TYPE_WRITE),
+    TH_IO_OP_SENDV = TH_IO_OP(5, TH_IO_OP_TYPE_WRITE),
+    TH_IO_OP_READV = TH_IO_OP(6, TH_IO_OP_TYPE_READ),
+    TH_IO_OP_OPENAT = TH_IO_OP(7, TH_IO_OP_TYPE_NONE),
+    TH_IO_OP_OPEN = TH_IO_OP(8, TH_IO_OP_TYPE_NONE),
+    TH_IO_OP_CLOSE = TH_IO_OP(9, TH_IO_OP_TYPE_NONE),
+    TH_IO_OP_SENDFILE = TH_IO_OP(10, TH_IO_OP_TYPE_WRITE),
+} th_io_op;
+
+/** th_io_task
+ *@brief I/O task, inherits from th_task.
+ * Contains the I/O operation type and the I/O operation arguments.
+ */
+typedef struct th_io_task {
+    th_task base;
+    th_allocator* allocator;
+    th_err (*fn)(void* self, size_t* result);
+    th_io_handler* on_complete;
+    void* addr;
+    void* addr2;
+    size_t len;
+    size_t len2;
+    size_t offset;
+    unsigned int flags;
+    int fd;
+    enum th_io_op op;
+} th_io_task;
+
+TH_PRIVATE(th_io_task*)
+th_io_task_create(th_allocator* allocator);
+
+/*
+TH_PRIVATE(void)
+th_io_task_to_string(char* buf, size_t len, th_io_task* iot);
+*/
+
+TH_PRIVATE(void)
+th_io_task_prepare_read(th_io_task* iot, int fd, void* addr, size_t len, th_io_handler* on_complete);
+
+/*
+TH_PRIVATE(void)
+th_io_task_prepare_write(th_io_task* iot, int fd, void* addr, size_t len, th_io_handler* on_complete);
+
+TH_PRIVATE(void)
+th_io_task_prepare_writev(th_io_task* iot, int fd, th_iov* iov, size_t len, th_io_handler* on_complete);
+*/
+
+TH_PRIVATE(void)
+th_io_task_prepare_send(th_io_task* iot, int fd, void* addr, size_t len, th_io_handler* on_complete);
+
+TH_PRIVATE(void)
+th_io_task_prepare_sendv(th_io_task* iot, int fd, th_iov* iov, size_t len, th_io_handler* on_complete);
+
+TH_PRIVATE(void)
+th_io_task_prepare_readv(th_io_task* iot, int fd, th_iov* iov, size_t len, th_io_handler* on_complete);
+
+TH_PRIVATE(void)
+th_io_task_prepare_sendfile(th_io_task* iot, th_file* file, int sfd, th_iov* header, size_t iovcnt,
+                            size_t offset, size_t len, th_io_handler* on_complete);
+
+TH_PRIVATE(void)
+th_io_task_prepare_accept(th_io_task* iot, int fd, void* addr, void* addrlen, th_io_handler* on_complete);
+
+/** th_io_task_execute
+ * @brief Executes the I/O task and leaves the completion handler untouched.
+ * @param iot I/O task.
+ * @param result Result of the I/O operation.
+ * @return Error code.
+ */
+TH_PRIVATE(th_err)
+th_io_task_execute(th_io_task* iot, size_t* result);
+
+/** th_io_task_try_execute
+ * @brief Tries to execute the I/O task and returns the completion handler
+ * if the I/O operation was completed.
+ * @param iot I/O task.
+ * @return Completion handler.
+ */
+TH_PRIVATE(th_io_handler*)
+th_io_task_try_execute(th_io_task* iot);
+
+TH_PRIVATE(void)
+th_io_task_destroy(th_io_task* iot);
+
+/** th_io_task_abort
+ * @brief Aborts the I/O task. Sets the error code and returns the completion handler.
+ * @param iot I/O task.
+ * @param err Error code.
+ */
+TH_PRIVATE(th_io_handler*)
+th_io_task_abort(th_io_task* iot, th_err err);
+
+/* End of th_io_task.h */
+/* Start of th_io_service.h */
+
+
+
+typedef struct th_io_handle {
+    void (*cancel)(void* self);
+    void (*submit)(void* self, th_io_task* task);
+    void (*enable_timeout)(void* self, bool enabled);
+    int (*get_fd)(void* self);
+    void (*destroy)(void* self);
+} th_io_handle;
+
+TH_INLINE(void)
+th_io_handle_cancel(th_io_handle* io_handle)
+{
+    io_handle->cancel(io_handle);
+}
+
+TH_INLINE(void)
+th_io_handle_submit(th_io_handle* io_handle, th_io_task* iot)
+{
+    io_handle->submit(io_handle, iot);
+}
+
+TH_INLINE(int)
+th_io_handle_get_fd(th_io_handle* io_handle)
+{
+    return io_handle->get_fd(io_handle);
+}
+
+TH_INLINE(void)
+th_io_handle_enable_timeout(th_io_handle* io_handle, bool enabled)
+{
+    io_handle->enable_timeout(io_handle, enabled);
+}
+
+TH_INLINE(void)
+th_io_handle_destroy(th_io_handle* io_handle)
+{
+    io_handle->destroy(io_handle);
+}
+
+typedef struct th_io_service {
+    void (*run)(void* self, int timeout_ms);
+    th_err (*create_handle)(void* self, th_io_handle** out, int fd);
+    void (*destroy)(void* self);
+} th_io_service;
+
+TH_INLINE(void)
+th_io_service_run(th_io_service* io_service, int timeout_ms)
+{
+    io_service->run(io_service, timeout_ms);
+}
+
+TH_INLINE(th_err)
+th_io_service_create_handle(th_io_service* io_service, th_io_handle** out, int fd)
+{
+    return io_service->create_handle(io_service, out, fd);
+}
+
+TH_INLINE(void)
+th_io_service_destroy(th_io_service* io_service)
+{
+    if (io_service->destroy)
+        io_service->destroy(io_service);
+}
+
+/* End of th_io_service.h */
+/* Start of th_runner.h */
+
+
+
+typedef struct th_runner {
+    th_io_service* io_service;
+    th_task service_task;
+    int waiting;
+    th_task_queue queue;
+    size_t num_tasks;
+} th_runner;
+
+TH_PRIVATE(void)
+th_runner_init(th_runner* runner);
+
+TH_PRIVATE(void)
+th_runner_set_io_service(th_runner* runner, th_io_service* service);
+
+TH_PRIVATE(void)
+th_runner_push_task(th_runner* runner, th_task* task);
+
+TH_PRIVATE(void)
+th_runner_push_uncounted_task(th_runner* runner, th_task* task);
+
+TH_PRIVATE(void)
+th_runner_increase_task_count(th_runner* runner);
+
+TH_PRIVATE(th_err)
+th_runner_poll(th_runner* runner, int timeout_ms);
+
+TH_PRIVATE(void)
+th_runner_drain(th_runner* runner);
+
+TH_PRIVATE(void)
+th_runner_deinit(th_runner* runner);
+
+/* End of th_runner.h */
+/* Start of th_timer.h */
+
+
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+
+
+typedef struct th_timer {
+    uint32_t expire;
+} th_timer;
+
+TH_PRIVATE(void)
+th_timer_init(th_timer* timer);
+
+TH_PRIVATE(th_err)
+th_timer_set(th_timer* timer, th_duration duration);
+
+TH_PRIVATE(bool)
+th_timer_expired(th_timer* timer);
+
+/* End of th_timer.h */
 /* Start of th_kqueue_service.h */
 
 
@@ -2585,6 +2459,12 @@ struct th_method_mapping* th_method_mapping_find(const char* str, size_t len);
 
 
 
+typedef enum th_request_read_mode {
+    TH_REQUEST_READ_MODE_NORMAL = 0,
+    TH_REQUEST_READ_MODE_REJECT_UNAVAILABLE = (int)TH_ERR_HTTP(TH_CODE_SERVICE_UNAVAILABLE),
+    TH_REQUEST_READ_MODE_REJECT_TOO_MANY_REQUESTS = (int)TH_ERR_HTTP(TH_CODE_TOO_MANY_REQUESTS),
+} th_request_read_mode;
+
 #define TH_REQUEST_MAP_ARENA_LEN 512
 #define TH_REQUEST_STRING_ARENA_LEN 512
 #define TH_REQUEST_VEC_ARENA_LEN 1024
@@ -2630,7 +2510,7 @@ TH_PRIVATE(void)
 th_request_deinit(th_request* request);
 
 TH_PRIVATE(void)
-th_request_async_read(th_socket* sock, th_allocator* allocator, th_request* request, th_io_handler* on_complete);
+th_request_async_read(th_socket* sock, th_allocator* allocator, th_request* request, th_request_read_mode mode, th_io_handler* on_complete);
 
 TH_PRIVATE(th_err)
 th_request_store_cookie(th_request* request, th_string key, th_string value);
@@ -2654,41 +2534,31 @@ TH_PRIVATE(th_err)
 th_request_store_uri_query(th_request* request, th_string query);
 
 /* End of th_request.h */
-/* Start of th_header_id.h */
+/* Start of th_dir_mgr.h */
 
 
-#include <stddef.h>
-#include <stdint.h>
 
-typedef enum th_header_id {
-    TH_HEADER_ID_CONNECTION,
-    TH_HEADER_ID_CONTENT_LENGTH,
-    TH_HEADER_ID_CONTENT_TYPE,
-    TH_HEADER_ID_DATE,
-    TH_HEADER_ID_SERVER,
-    TH_HEADER_ID_COOKIE,
-    TH_HEADER_ID_TRANSFER_ENCODING,
-    TH_HEADER_ID_RANGE,
-    TH_HEADER_ID_MAX,
-    TH_HEADER_ID_UNKNOWN = TH_HEADER_ID_MAX,
-} th_header_id;
+TH_DEFINE_HASHMAP(th_dir_map, th_string, th_dir, th_string_hash, th_string_eq, (th_string){0})
 
-struct th_header_id_mapping {
-    const char* name;
-    th_header_id id;
-};
+typedef struct th_dir_mgr {
+    th_allocator* allocator;
+    th_dir_map map;
+    th_heap_string_vec heap_strings;
+} th_dir_mgr;
 
-struct th_header_id_mapping*
-th_header_id_mapping_find(const char* name, size_t len);
+TH_PRIVATE(void)
+th_dir_mgr_init(th_dir_mgr* mgr, th_allocator* allocator);
 
-TH_INLINE(th_header_id)
-th_header_id_from_string(const char* name, size_t len)
-{
-    struct th_header_id_mapping* mapping = th_header_id_mapping_find(name, (unsigned int)len);
-    return mapping ? mapping->id : TH_HEADER_ID_UNKNOWN;
-}
+TH_PRIVATE(th_err)
+th_dir_mgr_add(th_dir_mgr* mgr, th_string label, th_string path);
 
-/* End of th_header_id.h */
+TH_PRIVATE(th_dir*)
+th_dir_mgr_get(th_dir_mgr* mgr, th_string label);
+
+TH_PRIVATE(void)
+th_dir_mgr_deinit(th_dir_mgr* mgr);
+
+/* End of th_dir_mgr.h */
 /* Start of th_refcounted.h */
 
 
@@ -2722,31 +2592,6 @@ th_refcounted_unref(th_refcounted* refcounted)
 }
 
 /* End of th_refcounted.h */
-/* Start of th_dir_mgr.h */
-
-
-
-TH_DEFINE_HASHMAP(th_dir_map, th_string, th_dir, th_string_hash, th_string_eq, (th_string){0})
-
-typedef struct th_dir_mgr {
-    th_allocator* allocator;
-    th_dir_map map;
-    th_heap_string_vec heap_strings;
-} th_dir_mgr;
-
-TH_PRIVATE(void)
-th_dir_mgr_init(th_dir_mgr* mgr, th_allocator* allocator);
-
-TH_PRIVATE(th_err)
-th_dir_mgr_add(th_dir_mgr* mgr, th_string label, th_string path);
-
-TH_PRIVATE(th_dir*)
-th_dir_mgr_get(th_dir_mgr* mgr, th_string label);
-
-TH_PRIVATE(void)
-th_dir_mgr_deinit(th_dir_mgr* mgr);
-
-/* End of th_dir_mgr.h */
 /* Start of th_fcache.h */
 
 
@@ -2813,6 +2658,41 @@ TH_PRIVATE(void)
 th_fcache_deinit(th_fcache* cache);
 
 /* End of th_fcache.h */
+/* Start of th_header_id.h */
+
+
+#include <stddef.h>
+#include <stdint.h>
+
+typedef enum th_header_id {
+    TH_HEADER_ID_CONNECTION,
+    TH_HEADER_ID_CONTENT_LENGTH,
+    TH_HEADER_ID_CONTENT_TYPE,
+    TH_HEADER_ID_DATE,
+    TH_HEADER_ID_SERVER,
+    TH_HEADER_ID_COOKIE,
+    TH_HEADER_ID_TRANSFER_ENCODING,
+    TH_HEADER_ID_RANGE,
+    TH_HEADER_ID_MAX,
+    TH_HEADER_ID_UNKNOWN = TH_HEADER_ID_MAX,
+} th_header_id;
+
+struct th_header_id_mapping {
+    const char* name;
+    th_header_id id;
+};
+
+struct th_header_id_mapping*
+th_header_id_mapping_find(const char* name, size_t len);
+
+TH_INLINE(th_header_id)
+th_header_id_from_string(const char* name, size_t len)
+{
+    struct th_header_id_mapping* mapping = th_header_id_mapping_find(name, (unsigned int)len);
+    return mapping ? mapping->id : TH_HEADER_ID_UNKNOWN;
+}
+
+/* End of th_header_id.h */
 /* Start of th_response.h */
 
 
@@ -2929,12 +2809,6 @@ th_router_add_route(th_router* router, th_method method, th_string route, th_han
 #define TH_EXCHANGE_CONTINUE (size_t)0
 #define TH_EXCHANGE_CLOSE (size_t)1
 
-typedef enum th_exchange_mode {
-    TH_EXCHANGE_MODE_NORMAL = 0,
-    TH_EXCHANGE_MODE_REJECT_UNAVAILABLE = (int)TH_ERR_HTTP(TH_CODE_SERVICE_UNAVAILABLE),
-    TH_EXCHANGE_MODE_REJECT_TOO_MANY_REQUESTS = (int)TH_ERR_HTTP(TH_CODE_TOO_MANY_REQUESTS),
-} th_exchange_mode;
-
 typedef struct th_exchange th_exchange;
 
 TH_PRIVATE(th_err)
@@ -2943,9 +2817,29 @@ th_exchange_create(th_exchange** exchange, th_socket* socket,
                    th_allocator* allocator, th_io_handler* on_complete);
 
 TH_PRIVATE(void)
-th_exchange_start(th_exchange* exchange, th_exchange_mode mode);
+th_exchange_start(th_exchange* exchange, th_request_read_mode mode);
 
 /* End of th_exchange.h */
+/* Start of th_ssl_context.h */
+
+
+#if TH_WITH_SSL
+
+#include <openssl/ssl.h>
+
+typedef struct th_ssl_context {
+    SSL_CTX* ctx;
+    BIO_METHOD* smem_method;
+} th_ssl_context;
+
+TH_PRIVATE(th_err)
+th_ssl_context_init(th_ssl_context* context, const char* key, const char* cert);
+
+TH_PRIVATE(void)
+th_ssl_context_deinit(th_ssl_context* context);
+
+#endif
+/* End of th_ssl_context.h */
 /* Start of th_tcp_socket.h */
 
 
@@ -3052,7 +2946,7 @@ struct th_client {
     th_socket* (*get_socket)(void* self);
     th_address* (*get_address)(void* self);
     th_err (*start)(void* self);
-    void (*set_mode)(void* self, th_exchange_mode mode);
+    void (*set_mode)(void* self, th_request_read_mode mode);
 };
 
 /** th_client_init
@@ -3064,7 +2958,7 @@ th_client_init(th_client* client,
                th_socket* (*get_socket)(void* self),
                th_address* (*get_address)(void* self),
                th_err (*start)(void* self),
-               void (*set_mode)(void* self, th_exchange_mode mode),
+               void (*set_mode)(void* self, th_request_read_mode mode),
                void (*destroy)(void* self))
 {
     th_refcounted_init(&client->base, destroy);
@@ -3093,7 +2987,7 @@ th_client_start(th_client* client)
 }
 
 TH_INLINE(void)
-th_client_set_mode(th_client* client, th_exchange_mode mode)
+th_client_set_mode(th_client* client, th_request_read_mode mode)
 {
     client->set_mode(client, mode);
 }
@@ -3165,7 +3059,7 @@ struct th_tcp_client {
     th_allocator* allocator;
     th_router* router;
     th_fcache* fcache;
-    th_exchange_mode mode;
+    th_request_read_mode mode;
 };
 
 TH_PRIVATE(th_err)
@@ -3194,7 +3088,7 @@ struct th_ssl_client {
     th_allocator* allocator;
     th_router* router;
     th_fcache* fcache;
-    th_exchange_mode mode;
+    th_request_read_mode mode;
 };
 
 TH_PRIVATE(th_err)
@@ -3348,6 +3242,103 @@ TH_PRIVATE(void)
 th_listener_destroy(th_listener* listener);
 
 /* End of th_listener.h */
+/* Start of th_mime.h */
+
+
+
+struct th_mime_mapping {
+    const char* name;
+    th_string mime;
+};
+
+struct th_mime_mapping* th_mime_mapping_find(const char* ext, size_t len);
+
+/* End of th_mime.h */
+/* Start of th_mock_service.h */
+
+
+
+#if defined(TH_CONFIG_OS_MOCK)
+
+
+typedef struct th_mock_service th_mock_service;
+typedef struct th_mock_handle th_mock_handle;
+struct th_mock_handle {
+    th_io_handle base;
+    th_mock_service* service;
+    int fd;
+};
+
+struct th_mock_service {
+    th_io_service base;
+    th_runner* runner;
+};
+
+TH_PRIVATE(th_err)
+th_mock_service_create(th_io_service** out, th_runner* runner);
+
+#endif
+/* End of th_mock_service.h */
+/* Start of th_mock_syscall.h */
+
+#include <stddef.h>
+
+
+typedef struct th_mock_syscall {
+    int (*accept)(void);
+    int (*open)(void);
+    int (*lseek)(void);
+    int (*close)(void);
+    int (*read)(void* buf, size_t len);
+    int (*write)(size_t len);
+    int (*settime)(void);
+} th_mock_syscall;
+
+th_mock_syscall* th_mock_syscall_get(void);
+void th_mock_syscall_reset(void);
+
+int th_mock_accept(void);
+
+int th_mock_open(void);
+
+int th_mock_lseek(void);
+
+int th_mock_close(void);
+
+int th_mock_read(void* buf, size_t len);
+
+int th_mock_write(size_t len);
+
+int th_mock_settime(void);
+
+/* End of th_mock_syscall.h */
+/* Start of th_path.h */
+
+
+/**
+ * @brief th_path provides a bunch of helper functions to work with paths.
+ */
+
+/**
+ * @brief th_path_resolve resolves a path to a absolute path.
+ * @param dir The directory to resolve the path against.
+ * @param path The path to resolve.
+ * @param out The resolved path.
+ * @return TH_ERR_OK on success, otherwise an error code.
+ */
+TH_PRIVATE(th_err)
+th_path_resolve_against(th_string path, th_dir* dir, th_heap_string* out);
+
+TH_PRIVATE(th_err)
+th_path_resolve(th_string path, th_heap_string* out);
+
+TH_PRIVATE(bool)
+th_path_is_within(th_string path, th_dir* dir);
+
+TH_PRIVATE(bool)
+th_path_is_hidden(th_string path);
+
+/* End of th_path.h */
 /* Start of th_poll_service.h */
 
 
@@ -3456,47 +3447,60 @@ th_ssl_handle_error_stack(void);
 
 #endif // TH_WITH_SSL
 /* End of th_ssl_error.h */
-/* Start of th_io_op_linux.h */
+/* Start of th_ssl_smem_bio.h */
 
 
+#if TH_WITH_SSL
 
-#if defined(TH_CONFIG_WITH_LINUX_SENDFILE)
-TH_PRIVATE(th_err)
-th_io_op_linux_sendfile(void* self, size_t* result) TH_MAYBE_UNUSED;
+#include <openssl/bio.h>
+
+
+TH_PRIVATE(BIO_METHOD*)
+th_smem_bio(th_ssl_context* ssl_context);
+
+TH_PRIVATE(void)
+th_smem_bio_setup_buf(BIO* bio, th_allocator* allocator, size_t max_len);
+
+TH_PRIVATE(size_t)
+th_smem_ensure_buf_size(BIO* bio, size_t size);
+
+TH_PRIVATE(void)
+th_smem_bio_set_eof(BIO* bio);
+
+TH_PRIVATE(void)
+th_smem_bio_get_rdata(BIO* bio, th_iov* buf);
+
+TH_PRIVATE(void)
+th_smem_bio_get_wbuf(BIO* bio, th_iov* buf);
+
+TH_PRIVATE(void)
+th_smem_bio_inc_read_pos(BIO* bio, size_t len);
+
+TH_PRIVATE(void)
+th_smem_bio_inc_write_pos(BIO* bio, size_t len);
+
 #endif
-
-/* End of th_io_op_linux.h */
-/* Start of th_io_op.h */
+/* End of th_ssl_smem_bio.h */
+/* Start of th_url_decode.h */
 
 
 
 #include <stddef.h>
 
+typedef enum th_url_decode_type {
+    TH_URL_DECODE_TYPE_PATH = 0,
+    TH_URL_DECODE_TYPE_QUERY
+} th_url_decode_type;
+
+/*
 TH_PRIVATE(th_err)
-th_io_op_read(void* self, size_t* result) TH_MAYBE_UNUSED;
+th_url_decode_inplace(char* str, size_t* in_out_len, th_url_decode_type type);
+*/
 
 TH_PRIVATE(th_err)
-th_io_op_readv(void* self, size_t* result) TH_MAYBE_UNUSED;
+th_url_decode_string(th_string input, th_heap_string* output, th_url_decode_type type);
 
-TH_PRIVATE(th_err)
-th_io_op_write(void* self, size_t* result) TH_MAYBE_UNUSED;
-
-TH_PRIVATE(th_err)
-th_io_op_writev(void* self, size_t* result) TH_MAYBE_UNUSED;
-
-TH_PRIVATE(th_err)
-th_io_op_send(void* self, size_t* result) TH_MAYBE_UNUSED;
-
-TH_PRIVATE(th_err)
-th_io_op_sendv(void* self, size_t* result) TH_MAYBE_UNUSED;
-
-TH_PRIVATE(th_err)
-th_io_op_accept(void* self, size_t* result) TH_MAYBE_UNUSED;
-
-TH_PRIVATE(th_err)
-th_io_op_sendfile(void* self, size_t* result) TH_MAYBE_UNUSED;
-
-/* End of th_io_op.h */
+/* End of th_url_decode.h */
 /* Start of picohttpparser.h */
 /*
  * Copyright (c) 2009-2014 Kazuho Oku, Tokuhiro Matsuno, Daisuke Murase,
@@ -6657,6 +6661,7 @@ typedef struct th_request_read_handler {
     th_allocator* allocator;
     th_socket* sock;
     th_request* request;
+    th_request_read_mode mode;
     th_request_read_state state;
 } th_request_read_handler;
 
@@ -6677,7 +6682,7 @@ th_request_read_handler_complete(th_request_read_handler* handler, size_t len, t
 }
 
 TH_LOCAL(th_err)
-th_request_read_handler_create(th_request_read_handler** handler, th_allocator* allocator, th_socket* sock, th_request* request, th_io_handler* on_complete)
+th_request_read_handler_create(th_request_read_handler** handler, th_allocator* allocator, th_socket* sock, th_request* request, th_request_read_mode mode, th_io_handler* on_complete)
 {
     *handler = th_allocator_alloc(allocator, sizeof(th_request_read_handler));
     if (!*handler)
@@ -6686,6 +6691,7 @@ th_request_read_handler_create(th_request_read_handler** handler, th_allocator* 
     (*handler)->allocator = allocator;
     (*handler)->sock = sock;
     (*handler)->request = request;
+    (*handler)->mode = mode;
     (*handler)->state = TH_REQUEST_READ_STATE_HEADER;
     return TH_ERR_OK;
 }
@@ -6914,6 +6920,7 @@ TH_LOCAL(void)
 th_request_read_handle_header(th_request_read_handler* handler, size_t len)
 {
     th_request* request = handler->request;
+    th_request_read_mode mode = handler->mode;
     th_string path;
     th_string method;
     size_t num_headers = TH_CONFIG_MAX_HEADER_NUM;
@@ -6940,6 +6947,11 @@ th_request_read_handle_header(th_request_read_handler* handler, size_t len)
     }
     size_t header_len = (size_t)pret;
     TH_LOG_DEBUG("%p: Parsed request: %.*s %.*s HTTP/%d.%d", request, (int)method.len, method.ptr, (int)path.len, path.ptr, 1, request->minor_version);
+    if (mode != TH_REQUEST_READ_MODE_NORMAL) {
+        // Unless we are in normal mode, we don't need to parse the request further
+        th_request_read_handler_complete(handler, 0, (th_err)mode);
+        return;
+    }
     if (request->minor_version == 0)
         request->close = true; // HTTP/1.0 defaults to close
     // find method
@@ -7056,11 +7068,11 @@ th_request_read_handler_fn(void* self, size_t len, th_err err)
 }
 
 TH_PRIVATE(void)
-th_request_async_read(th_socket* sock, th_allocator* allocator, th_request* request, th_io_handler* on_complete)
+th_request_async_read(th_socket* sock, th_allocator* allocator, th_request* request, th_request_read_mode mode, th_io_handler* on_complete)
 {
     th_request_read_handler* handler = NULL;
     th_err err = TH_ERR_OK;
-    if ((err = th_request_read_handler_create(&handler, allocator, sock, request, on_complete)) != TH_ERR_OK) {
+    if ((err = th_request_read_handler_create(&handler, allocator, sock, request, mode, on_complete)) != TH_ERR_OK) {
         th_context_dispatch_handler(th_socket_get_context(sock), on_complete, 0, err);
         return;
     }
@@ -7853,7 +7865,7 @@ th_client_observable_init(th_client_observable* observable,
                           th_socket* (*get_socket)(void* self),
                           th_address* (*get_address)(void* self),
                           th_err (*start)(void* self),
-                          void (*set_mode)(void* self, th_exchange_mode mode),
+                          void (*set_mode)(void* self, th_request_read_mode mode),
                           void (*destroy)(void* self),
                           th_client_observer* observer)
 {
@@ -7879,7 +7891,7 @@ TH_LOCAL(th_err)
 th_tcp_client_start(void* self);
 
 TH_LOCAL(void)
-th_tcp_client_set_mode(void* self, th_exchange_mode mode);
+th_tcp_client_set_mode(void* self, th_request_read_mode mode);
 
 TH_LOCAL(th_err)
 th_tcp_client_exchange_next_msg(th_tcp_client* client);
@@ -7945,7 +7957,7 @@ th_tcp_client_init(th_tcp_client* client, th_context* context,
     client->fcache = fcache;
     th_tcp_socket_init(&client->socket, context, client->allocator);
     th_address_init(&client->addr);
-    client->mode = TH_EXCHANGE_MODE_NORMAL;
+    client->mode = TH_REQUEST_READ_MODE_NORMAL;
 }
 
 TH_PRIVATE(th_err)
@@ -7985,7 +7997,7 @@ th_tcp_client_start(void* self)
 }
 
 TH_LOCAL(void)
-th_tcp_client_set_mode(void* self, th_exchange_mode mode)
+th_tcp_client_set_mode(void* self, th_request_read_mode mode)
 {
     th_tcp_client* client = (th_tcp_client*)self;
     client->mode = mode;
@@ -8044,7 +8056,7 @@ TH_LOCAL(th_err)
 th_ssl_client_start(void* self);
 
 TH_LOCAL(void)
-th_ssl_client_set_mode(void* self, th_exchange_mode mode);
+th_ssl_client_set_mode(void* self, th_request_read_mode mode);
 
 TH_LOCAL(th_err)
 th_ssl_client_exchange_next_msg(th_ssl_client* client);
@@ -8163,7 +8175,7 @@ th_ssl_client_init(th_ssl_client* client, th_context* context, th_ssl_context* s
     client->fcache = fcache;
     th_ssl_socket_init(&client->socket, context, ssl_context, client->allocator);
     th_address_init(&client->addr);
-    client->mode = TH_EXCHANGE_MODE_NORMAL;
+    client->mode = TH_REQUEST_READ_MODE_NORMAL;
 }
 
 TH_PRIVATE(th_err)
@@ -8211,7 +8223,7 @@ th_ssl_client_start(void* self)
 }
 
 TH_LOCAL(void)
-th_ssl_client_set_mode(void* self, th_exchange_mode mode)
+th_ssl_client_set_mode(void* self, th_request_read_mode mode)
 {
     th_ssl_client* client = (th_ssl_client*)self;
     client->mode = mode;
@@ -8951,7 +8963,7 @@ th_client_acceptor_accept_handler_fn(void* self, size_t result, th_err err)
         th_socket_set_fd(th_client_get_socket(client_acceptor->client), (int)result);
         if (th_client_tracker_count(&client_acceptor->client_tracker) > TH_CONFIG_MAX_CONNECTIONS) {
             TH_LOG_WARN("Too many connections, rejecting new connection");
-            th_client_set_mode(client_acceptor->client, TH_EXCHANGE_MODE_REJECT_UNAVAILABLE);
+            th_client_set_mode(client_acceptor->client, TH_REQUEST_READ_MODE_REJECT_UNAVAILABLE);
         }
         th_client_start(client_acceptor->client);
     }
@@ -9025,7 +9037,7 @@ th_client_acceptor_ssl_accept_handler_fn(void* self, size_t result, th_err err)
         th_socket_set_fd(th_client_get_socket(client_acceptor->client), (int)result);
         if (th_client_tracker_count(&client_acceptor->client_tracker) > TH_CONFIG_MAX_CONNECTIONS) {
             TH_LOG_WARN("Too many connections, rejecting new connection");
-            th_client_set_mode(client_acceptor->client, TH_EXCHANGE_MODE_REJECT_UNAVAILABLE);
+            th_client_set_mode(client_acceptor->client, TH_REQUEST_READ_MODE_REJECT_UNAVAILABLE);
         }
         th_client_start(client_acceptor->client);
     }
@@ -9732,16 +9744,11 @@ th_exchange_create(th_exchange** out, th_socket* socket,
 }
 
 TH_PRIVATE(void)
-th_exchange_start(th_exchange* handler, th_exchange_mode mode)
+th_exchange_start(th_exchange* handler, th_request_read_mode mode)
 {
     handler->state = TH_EXCHANGE_STATE_START;
-    if (mode != TH_EXCHANGE_MODE_NORMAL) {
-        TH_LOG_DEBUG("%p: Rejecting request with error %s", handler, th_strerror((th_err)mode));
-        th_exchange_write_error_response(handler, (th_err)mode);
-        return;
-    }
     TH_LOG_TRACE("%p: Reading request %p", handler, &handler->request);
-    th_request_async_read(handler->socket, handler->allocator, &handler->request, (th_io_handler*)handler);
+    th_request_async_read(handler->socket, handler->allocator, &handler->request, mode, (th_io_handler*)handler);
 }
 /* End of src/th_exchange.c */
 /* Start of src/th_fmt.c */

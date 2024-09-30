@@ -22,6 +22,10 @@
 #define TH_WITH_MMAP 1
 #endif
 
+#ifndef TH_LOG_LEVEL
+#define TH_LOG_LEVEL TH_LOG_LEVEL_INFO
+#endif
+
 /* feature configuration end */
 
 #ifndef TH_CONFIG_OS_MOCK

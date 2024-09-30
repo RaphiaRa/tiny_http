@@ -8,13 +8,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-static bool running = true;
+static sig_atomic_t stop = 0;
 
 static void
 sigint_handler(int signum)
 {
-    (void)signum;
-    running = false;
+    stop = signum;
 }
 
 static th_err
@@ -64,7 +63,7 @@ int main(int argc, char** argv)
         goto cleanup;
     if ((err = th_route(server, TH_METHOD_GET, "/", handler, NULL)) != TH_ERR_OK)
         goto cleanup;
-    while (running) {
+    while (!stop) {
         th_poll(server, 1000);
     }
     fprintf(stderr, "Shutting down...\n");

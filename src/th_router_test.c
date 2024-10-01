@@ -157,5 +157,14 @@ TH_TEST_BEGIN(router)
         th_router_deinit(&router);
     }
     TH_TEST_CASE_END
+    TH_TEST_CASE_BEGIN(router_handle_invalid_capture)
+    {
+        th_router router;
+        th_router_init(&router, NULL);
+        TH_EXPECT(th_router_add_route(&router, TH_METHOD_GET, TH_STRING("/test/{invalid:arg}"), mock_handler, NULL) == TH_ERR_INVALID_ARG);
+        TH_EXPECT(th_router_add_route(&router, TH_METHOD_GET, TH_STRING("/test/asdsad{invalid}"), mock_handler, NULL) == TH_ERR_INVALID_ARG);
+        th_router_deinit(&router);
+    }
+    TH_TEST_CASE_END
 }
 TH_TEST_END

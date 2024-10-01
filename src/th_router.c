@@ -187,7 +187,9 @@ TH_LOCAL(th_err)
 th_route_parse_trail(th_string* trail, th_string* name, th_capture_type* type)
 {
     th_string segment = th_string_substr(*trail, 0, th_string_find_first_of(*trail, 0, "/"));
-    if (segment.len > 2 && segment.ptr[0] == '{' && segment.ptr[segment.len - 1] == '}') {
+    size_t open_curly = th_string_find_first(segment, 0, '{');
+    size_t close_curly = th_string_find_first(segment, 0, '}');
+    if (segment.len > 2 && open_curly == 0 && close_curly == segment.len - 1) {
         th_string capture = th_string_substr(segment, 1, segment.len - 2);
         size_t sep = th_string_find_first(capture, 0, ':');
         if (sep == th_string_npos) {
@@ -205,9 +207,11 @@ th_route_parse_trail(th_string* trail, th_string* name, th_capture_type* type)
                 return TH_ERR_INVALID_ARG;
             }
         }
-    } else {
+    } else if (open_curly == th_string_npos && close_curly == th_string_npos) {
         *name = segment;
         *type = TH_CAPTURE_TYPE_NONE;
+    } else {
+        return TH_ERR_INVALID_ARG;
     }
     // Consume segment
     *trail = th_string_substr(*trail, segment.len + 1, th_string_npos);

@@ -114,8 +114,8 @@ Example - Path capturing:
 static th_err
 handler(void* userp, const th_request* req, th_response* res)
 {
-    const char* msg = th_get_path_param(req, "msg");
-    th_body_printf(res, "Hello, %s!", msg);
+    const char* msg = th_try_get_path_param(req, "msg");
+    th_printf_body(res, "Hello, %s!", msg);
     th_add_header(res, "Content-Type", "text/plain");
     return TH_ERR_OK;
 }
@@ -141,15 +141,15 @@ Example - File serving:
 static th_err
 handle_path(void* userp, const th_request* req, th_response* res)
 {
-    const char* path = th_get_path_param(req, "path");
-    th_body_from_file(res, "root", path);
+    const char* path = th_try_get_path_param(req, "path");
+    th_set_body_from_file(res, "root", path);
     return TH_ERR_OK;
 }
 
 static th_err
 handle_index(void* userp, const th_request* req, th_response* res)
 {
-    th_body_from_file(res, "root", "index.html");
+    th_set_body_from_file(res, "root", "index.html");
     return TH_ERR_OK;
 }
 

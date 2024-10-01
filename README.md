@@ -120,7 +120,7 @@ handler(void* userp, const th_request* req, th_response* res)
     return TH_ERR_OK;
 }
 
-int main()
+int main(void)
 {
     th_server* server;
     th_server_create(&server, NULL);
@@ -153,7 +153,7 @@ handle_index(void* userp, const th_request* req, th_response* res)
     return TH_ERR_OK;
 }
 
-int main()
+int main(void)
 {
     th_server* server;
     th_server_create(&server, NULL);

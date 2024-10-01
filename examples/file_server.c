@@ -75,8 +75,11 @@ int main(int argc, char** argv)
     }
     th_server* server = NULL;
     th_err err = TH_ERR_OK;
-    if ((err = th_server_create(&server, NULL)) != TH_ERR_OK)
-        goto cleanup;
+    if ((err = th_server_create(&server, NULL)) != TH_ERR_OK) {
+        fprintf(stderr, "Failed to create server: %s\n", th_strerror(err));
+        return EXIT_FAILURE;
+    }
+
     th_listener_opt opt = {0};
     opt.cert_file = cert;
     opt.key_file = key;

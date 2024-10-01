@@ -55,15 +55,15 @@ handler(void* userp, const th_request* req, th_response* resp)
     return TH_ERR_OK;
 }
 
-int main(int argc, char** argv)
+int main(void)
 {
-    (void)argc;
-    (void)argv;
     signal(SIGINT, sigint_handler);
     th_server* server = NULL;
     th_err err = TH_ERR_OK;
-    if ((err = th_server_create(&server, NULL)) != TH_ERR_OK)
-        goto cleanup;
+    if ((err = th_server_create(&server, NULL)) != TH_ERR_OK) {
+        fprintf(stderr, "Failed to create server: %s\n", th_strerror(err));
+        return EXIT_FAILURE;
+    }
     if ((err = th_bind(server, "0.0.0.0", "8080", NULL)) != TH_ERR_OK)
         goto cleanup;
     if ((err = th_route(server, TH_METHOD_ANY, "/{path:path}", handler, NULL)) != TH_ERR_OK)

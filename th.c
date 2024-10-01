@@ -930,6 +930,7 @@ th_hash_cstr(const char* str)
 
 
 
+#include <stdio.h>
 #include <string.h>
 
 #define TH_DEFINE_HASHMAP(NAME, K, V, HASH, K_EQ, K_NULL)                                                                           \
@@ -1098,10 +1099,6 @@ th_hash_cstr(const char* str)
         if ((err = NAME##_reserve(map, new_capacity)) != TH_ERR_OK) {                                                               \
             return err;                                                                                                             \
         }                                                                                                                           \
-        /* Reset size, begin and end */                                                                                             \
-        map->size = 0;                                                                                                              \
-        map->begin = 0;                                                                                                             \
-        map->end = 0;                                                                                                               \
         /* Need to rehash all entries */                                                                                            \
         for (size_t i = 0; i < old_capacity; i++) {                                                                                 \
             NAME##_entry* entry = &map->entries[i];                                                                                 \
@@ -1113,7 +1110,7 @@ th_hash_cstr(const char* str)
             /* Don't need to rehash every entry */                                                                                  \
             hash &= (new_capacity - 1);                                                                                             \
             NAME##_entry e = *entry;                                                                                                \
-            *entry = (NAME##_entry){.key = K_NULL};                                                                                 \
+            NAME##_erase(map, entry);                                                                                               \
             if ((err = NAME##_do_set(map, hash, e.key, e.value)) != TH_ERR_OK) {                                                    \
                 return err;                                                                                                         \
             }                                                                                                                       \
@@ -1170,13 +1167,14 @@ th_hash_cstr(const char* str)
         /* Need to fix possible holes */                                                                                            \
         size_t last_zeroed = entry - map->entries;                                                                                  \
         for (size_t i = entry - map->entries + 1; i < map->end; i++) {                                                              \
-            if (K_EQ(map->entries[i].key, K_NULL)                                                                                   \
-                || ((HASH(map->entries[i].key) & (map->capacity - 1)) == i)) {                                                      \
+            uint32_t hash = 0;                                                                                                      \
+            if (K_EQ(map->entries[i].key, K_NULL)) {                                                                                \
                 break;                                                                                                              \
+            } else if ((hash = (HASH(map->entries[i].key) & (map->capacity - 1))) <= last_zeroed) {                                 \
+                map->entries[last_zeroed] = map->entries[i];                                                                        \
+                map->entries[i].key = K_NULL;                                                                                       \
+                last_zeroed = i;                                                                                                    \
             }                                                                                                                       \
-            map->entries[i - 1] = map->entries[i];                                                                                  \
-            map->entries[i] = (NAME##_entry){.key = K_NULL};                                                                        \
-            last_zeroed = i;                                                                                                        \
         }                                                                                                                           \
         if (map->size == 0) {                                                                                                       \
             map->begin = 0;                                                                                                         \
@@ -4115,7 +4113,9 @@ TH_LOCAL(th_err)
 th_route_parse_trail(th_string* trail, th_string* name, th_capture_type* type)
 {
     th_string segment = th_string_substr(*trail, 0, th_string_find_first_of(*trail, 0, "/"));
-    if (segment.len > 2 && segment.ptr[0] == '{' && segment.ptr[segment.len - 1] == '}') {
+    size_t open_curly = th_string_find_first(segment, 0, '{');
+    size_t close_curly = th_string_find_first(segment, 0, '}');
+    if (segment.len > 2 && open_curly == 0 && close_curly == segment.len - 1) {
         th_string capture = th_string_substr(segment, 1, segment.len - 2);
         size_t sep = th_string_find_first(capture, 0, ':');
         if (sep == th_string_npos) {
@@ -4133,9 +4133,11 @@ th_route_parse_trail(th_string* trail, th_string* name, th_capture_type* type)
                 return TH_ERR_INVALID_ARG;
             }
         }
-    } else {
+    } else if (open_curly == th_string_npos && close_curly == th_string_npos) {
         *name = segment;
         *type = TH_CAPTURE_TYPE_NONE;
+    } else {
+        return TH_ERR_INVALID_ARG;
     }
     // Consume segment
     *trail = th_string_substr(*trail, segment.len + 1, th_string_npos);

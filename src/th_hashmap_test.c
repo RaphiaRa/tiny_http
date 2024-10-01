@@ -23,6 +23,18 @@ static bool th_test_eq(const char* a, const char* b)
 
 TH_DEFINE_HASHMAP(th_test_map, const char*, int, th_test_hash, th_test_eq, NULL)
 
+static uint32_t th_test_hash_int(int i)
+{
+    return (uint32_t)i;
+}
+
+static bool th_test_eq_int(int a, int b)
+{
+    return a == b;
+}
+
+TH_DEFINE_HASHMAP(th_test_map_int, int, int, th_test_hash_int, th_test_eq_int, -1)
+
 TH_TEST_BEGIN(hashmap)
 {
     TH_TEST_CASE_BEGIN(hashmap_init)
@@ -184,6 +196,18 @@ TH_TEST_BEGIN(hashmap)
         int* value = th_test_map_try_get(&map, "key1");
         TH_EXPECT(value && *value == 5);
         th_test_map_deinit(&map);
+    }
+    TH_TEST_CASE_END
+    TH_TEST_CASE_BEGIN(hashmap_int_set_and_find)
+    {
+        th_test_map_int map = {0};
+        th_test_map_int_init(&map, NULL);
+        TH_EXPECT(th_test_map_int_set(&map, 3, 1) == TH_ERR_OK);
+        TH_EXPECT(th_test_map_int_set(&map, 5, 2) == TH_ERR_OK);
+        TH_EXPECT(th_test_map_int_set(&map, 8, 3) == TH_ERR_OK);
+        int* value = th_test_map_int_try_get(&map, 5);
+        TH_EXPECT(value && *value == 2);
+        th_test_map_int_deinit(&map);
     }
     TH_TEST_CASE_END
 }

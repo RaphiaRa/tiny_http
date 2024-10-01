@@ -175,10 +175,6 @@
         if ((err = NAME##_reserve(map, new_capacity)) != TH_ERR_OK) {                                                               \
             return err;                                                                                                             \
         }                                                                                                                           \
-        /* Reset size, begin and end */                                                                                             \
-        map->size = 0;                                                                                                              \
-        map->begin = 0;                                                                                                             \
-        map->end = 0;                                                                                                               \
         /* Need to rehash all entries */                                                                                            \
         for (size_t i = 0; i < old_capacity; i++) {                                                                                 \
             NAME##_entry* entry = &map->entries[i];                                                                                 \
@@ -190,7 +186,7 @@
             /* Don't need to rehash every entry */                                                                                  \
             hash &= (new_capacity - 1);                                                                                             \
             NAME##_entry e = *entry;                                                                                                \
-            *entry = (NAME##_entry){.key = K_NULL};                                                                                 \
+            NAME##_erase(map, entry);                                                                                               \
             if ((err = NAME##_do_set(map, hash, e.key, e.value)) != TH_ERR_OK) {                                                    \
                 return err;                                                                                                         \
             }                                                                                                                       \
@@ -247,13 +243,14 @@
         /* Need to fix possible holes */                                                                                            \
         size_t last_zeroed = entry - map->entries;                                                                                  \
         for (size_t i = entry - map->entries + 1; i < map->end; i++) {                                                              \
-            if (K_EQ(map->entries[i].key, K_NULL)                                                                                   \
-                || ((HASH(map->entries[i].key) & (map->capacity - 1)) == i)) {                                                      \
+            uint32_t hash = 0;                                                                                                      \
+            if (K_EQ(map->entries[i].key, K_NULL)) {                                                                                \
                 break;                                                                                                              \
+            } else if ((hash = (HASH(map->entries[i].key) & (map->capacity - 1))) <= last_zeroed) {                                 \
+                map->entries[last_zeroed] = map->entries[i];                                                                        \
+                map->entries[i].key = K_NULL;                                                                                       \
+                last_zeroed = i;                                                                                                    \
             }                                                                                                                       \
-            map->entries[i - 1] = map->entries[i];                                                                                  \
-            map->entries[i] = (NAME##_entry){.key = K_NULL};                                                                        \
-            last_zeroed = i;                                                                                                        \
         }                                                                                                                           \
         if (map->size == 0) {                                                                                                       \
             map->begin = 0;                                                                                                         \

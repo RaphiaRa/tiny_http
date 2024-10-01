@@ -93,10 +93,10 @@ int main(int argc, char** argv)
     }
     fprintf(stderr, "Shutting down...\n");
 cleanup:
+    th_server_destroy(server);
     if (err != TH_ERR_OK) {
         fprintf(stderr, "Error: %s\n", th_strerror(err));
         return EXIT_FAILURE;
     }
-    th_server_destroy(server);
     return EXIT_SUCCESS;
 }

@@ -77,11 +77,11 @@ int main(int argc, char** argv)
     }
     fprintf(stderr, "Shutting down...\n");
 cleanup:
+    th_server_destroy(server);
+    my_logger_deinit(&logger);
     if (err != TH_ERR_OK) {
         fprintf(stderr, "Error: %s\n", th_strerror(err));
         return EXIT_FAILURE;
     }
-    th_server_destroy(server);
-    my_logger_deinit(&logger);
     return EXIT_SUCCESS;
 }

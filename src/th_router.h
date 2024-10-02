@@ -50,6 +50,13 @@ th_router_deinit(th_router* router);
 TH_PRIVATE(th_err)
 th_router_handle(th_router* router, th_request* request, th_response* response);
 
+/** th_router_would_handle
+ *  Check if the router would handle the request, if
+ * it was to be passed with the given method (and not the actual method in the request).
+ */
+TH_PRIVATE(bool)
+th_router_would_handle(th_router* router, th_method method, th_request* request);
+
 TH_PRIVATE(th_err)
 th_router_add_route(th_router* router, th_method method, th_string route, th_handler handler, void* user_data);
 

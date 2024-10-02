@@ -3,14 +3,15 @@
 
 #include <th.h>
 
+#include "th_config.h"
+
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-
-#include "th_config.h"
+#include <time.h>
 
 typedef struct th_timer {
-    uint32_t expire;
+    time_t expire;
 } th_timer;
 
 TH_PRIVATE(void)

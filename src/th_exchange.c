@@ -70,6 +70,8 @@ th_exchange_handle_request(th_exchange* handler)
     th_request* request = &handler->request;
     th_router* router = handler->router;
     th_response* response = &handler->response;
+    // We only need to write headers if it's a HEAD request
+    response->only_headers = (request->method_internal == TH_METHOD_INTERNAL_HEAD);
     th_err err = th_http_error(th_router_handle(router, request, response));
     switch (th_http_code_get_type(TH_ERR_CODE(err))) {
     case TH_HTTP_CODE_TYPE_INFORMATIONAL:

@@ -42,6 +42,7 @@ th_response_init(th_response* response, th_fcache* fcache, th_allocator* allocat
     th_heap_string_init(&response->body, allocator);
 
     memset(response->header_is_set, 0, sizeof(response->header_is_set));
+    response->only_headers = false;
 }
 
 TH_PRIVATE(void)
@@ -309,6 +310,10 @@ th_response_async_write(th_response* response, th_socket* socket, th_io_handler*
     if ((err = th_response_set_start_line(response)) != TH_ERR_OK)
         goto cleanup;
     size_t iovcnt = response->cur_header_buf_pos + 1;
+    if (response->only_headers) {
+        th_socket_async_writev_exact(socket, response->iov, iovcnt, handler);
+        return;
+    }
     if (response->is_file == 0) { // user provided body
         if (th_heap_string_len(&response->body) > 0) {
             response->iov[iovcnt].base = (void*)th_heap_string_data(&response->body);

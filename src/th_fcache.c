@@ -52,6 +52,7 @@ th_fcache_entry_open(th_fcache_entry* entry, th_string root, th_string path)
         TH_LOG_ERROR("Failed to set path: %s", th_strerror(err));
         goto cleanup_fstream;
     }
+    entry->stat_hash = th_file_stat_hash(&entry->stream);
     entry->dir = dir;
     return TH_ERR_OK;
 cleanup_fstream:
@@ -84,6 +85,14 @@ th_fcache_init(th_fcache* cache, th_allocator* allocator)
     cache->max_cached = TH_CONFIG_MAX_CACHED_FDS;
 }
 
+TH_LOCAL(void)
+th_fcache_erase(th_fcache* cache, th_fcache_entry* entry)
+{
+    th_fcache_list_erase(&cache->list, entry);
+    th_fcache_entry_unref(entry);
+    --cache->num_cached;
+}
+
 TH_LOCAL(th_fcache_entry*)
 th_fcache_try_get(th_fcache* cache, th_string root, th_string path)
 {
@@ -94,6 +103,13 @@ th_fcache_try_get(th_fcache* cache, th_string root, th_string path)
     if (!v)
         return NULL;
     th_fcache_entry* entry = *v;
+    // Check if the file has been modified
+    uint32_t hash = th_file_stat_hash(&entry->stream);
+    if (hash != entry->stat_hash) {
+        TH_LOG_TRACE("File has been modified, don't use cached entry");
+        th_fcache_erase(cache, entry);
+        return NULL;
+    }
     // Move entry to the back of the list
     th_fcache_list_erase(&cache->list, entry);
     th_fcache_list_push_back(&cache->list, entry);
@@ -111,9 +127,8 @@ th_fcache_insert(th_fcache* cache, th_fcache_entry* entry)
 {
     if (cache->num_cached == cache->max_cached) {
         // Evict the first entry
-        th_fcache_entry* first = th_fcache_list_pop_front(&cache->list);
-        th_fcache_entry_unref(first);
-        cache->num_cached--;
+        th_fcache_entry* first = th_fcache_list_front(&cache->list);
+        th_fcache_erase(cache, first);
     }
     th_err err = TH_ERR_OK;
     if ((err = th_fcache_map_set(&cache->map, th_fcache_entry_id(entry), entry)) != TH_ERR_OK) {

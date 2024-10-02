@@ -4,7 +4,6 @@
 #include <th.h>
 
 #include "th_config.h"
-#include "th_hashmap.h"
 #include "th_dir.h"
 #include "th_dir_mgr.h"
 #include "th_file.h"
@@ -12,6 +11,7 @@
 #include "th_heap_string.h"
 #include "th_queue.h"
 #include "th_refcounted.h"
+#include "th_timer.h"
 
 typedef struct th_fcache th_fcache;
 typedef struct th_fcache_entry th_fcache_entry;
@@ -24,6 +24,7 @@ struct th_fcache_entry {
     th_fcache* cache;
     th_fcache_entry* next;
     th_fcache_entry* prev;
+    uint32_t stat_hash;
 };
 
 typedef struct th_fcache_id {

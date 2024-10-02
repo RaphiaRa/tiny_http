@@ -40,6 +40,9 @@ typedef struct th_fileview {
 TH_PRIVATE(th_err)
 th_file_get_view(th_file* stream, th_fileview* view, size_t offset, size_t len);
 
+TH_PRIVATE(uint32_t)
+th_file_stat_hash(th_file* stream);
+
 TH_PRIVATE(void)
 th_file_close(th_file* stream);
 

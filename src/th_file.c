@@ -4,6 +4,7 @@
 #include "th_config.h"
 #include "th_fmt.h"
 #include "th_heap_string.h"
+#include "th_log.h"
 #include "th_path.h"
 
 #if defined(TH_CONFIG_OS_POSIX)
@@ -17,6 +18,9 @@
 #elif defined(TH_CONFIG_OS_MOCK)
 #include "th_mock_syscall.h"
 #endif
+
+#undef TH_LOG_TAG
+#define TH_LOG_TAG "file"
 
 /* th_file_view implmentation begin */
 
@@ -205,6 +209,71 @@ th_file_get_view(th_file* stream, th_fileview* view, size_t offset, size_t len)
     view->ptr = (uint8_t*)stream->view.addr + (offset - stream->view.offset);
     view->len = stream->view.len - (offset - stream->view.offset);
     return TH_ERR_OK;
+}
+
+/**
+ * We use DJB2 hash function, without multiplication,
+ * as it's faster and good enough for our purposes.
+ */
+#define FSTAT_HASH_INIT 5381
+#define FSTAT_HASH_NEXT(hash, val) ((hash << 5) + hash + val)
+
+#if defined(TH_CONFIG_OS_POSIX)
+TH_LOCAL(uint32_t)
+th_file_stat_hash_posix(th_file* stream)
+{
+    struct stat st = {0};
+    if (fstat(stream->fd, &st) == -1) {
+        TH_LOG_ERROR("fstat failed: %s, can't calculate hash", strerror(errno));
+        TH_ASSERT(0 && "fstat failed");
+        return 0;
+    }
+
+    uint32_t hash = FSTAT_HASH_INIT;
+#if defined(TH_CONFIG_OS_OSX)
+    hash = FSTAT_HASH_NEXT(hash, (uint32_t)st.st_mtimespec.tv_sec);
+    hash = FSTAT_HASH_NEXT(hash, (uint32_t)st.st_mtimespec.tv_nsec);
+#else
+    hash = FSTAT_HASH_NEXT(hash, (uint32_t)st.st_mtime);
+#endif
+    hash = FSTAT_HASH_NEXT(hash, (uint32_t)st.st_size);
+    hash = FSTAT_HASH_NEXT(hash, (uint32_t)st.st_mode);
+    hash = FSTAT_HASH_NEXT(hash, (uint32_t)st.st_ino);
+    hash = FSTAT_HASH_NEXT(hash, (uint32_t)st.st_uid);
+    hash = FSTAT_HASH_NEXT(hash, (uint32_t)st.st_gid);
+    return hash;
+}
+#elif defined(TH_CONFIG_OS_WIN)
+#error "Not implemented"
+TH_LOCAL(uint32_t)
+th_file_stat_hash_win(th_file* stream)
+{
+    (void)stream;
+    return 0;
+}
+#elif defined(TH_CONFIG_OS_MOCK)
+TH_LOCAL(uint32_t)
+th_file_stat_hash_mock(th_file* stream)
+{
+    (void)stream;
+    return 0;
+}
+#endif
+#undef FSTAT_HASH_INIT
+#undef FSTAT_HASH_NEXT
+
+TH_PRIVATE(uint32_t)
+th_file_stat_hash(th_file* stream)
+{
+#if defined(TH_CONFIG_OS_POSIX)
+    return th_file_stat_hash_posix(stream);
+#elif defined(TH_CONFIG_OS_WIN)
+    return th_file_stat_hash_win(stream);
+#elif defined(TH_CONFIG_OS_MOCK)
+    return th_file_stat_hash_mock(stream);
+#else
+    return 0;
+#endif
 }
 
 TH_PRIVATE(void)

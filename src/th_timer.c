@@ -2,7 +2,7 @@
 #include "th_config.h"
 #include "th_utility.h"
 
-#if defined(TH_CONFIG_OS_POSIX)
+#ifdef TH_CONFIG_OS_POSIX
 #include <errno.h>
 #include <time.h>
 #elif defined(TH_CONFIG_OS_WIN)
@@ -16,7 +16,7 @@ th_timer_init(th_timer* timer)
 }
 
 TH_LOCAL(th_err)
-th_timer_monotonic_now(uint64_t* out)
+th_timer_monotonic_now(time_t* out)
 {
 #if defined(TH_CONFIG_OS_POSIX)
     struct timespec ts = {0};
@@ -38,7 +38,7 @@ th_timer_monotonic_now(uint64_t* out)
 TH_PRIVATE(th_err)
 th_timer_set(th_timer* timer, th_duration duration)
 {
-    uint64_t now = 0;
+    time_t now = 0;
     th_err err = th_timer_monotonic_now(&now);
     TH_ASSERT(err == TH_ERR_OK && "th_timer_monotonic_now failed");
     if (err != TH_ERR_OK)
@@ -50,7 +50,7 @@ th_timer_set(th_timer* timer, th_duration duration)
 TH_PRIVATE(bool)
 th_timer_expired(th_timer* timer)
 {
-    uint64_t now = 0;
+    time_t now = 0;
     th_err err = th_timer_monotonic_now(&now);
     TH_ASSERT(err == TH_ERR_OK && "th_timer_monotonic_now failed");
     /* We don't return the error here, as it's already handled in th_timer_set

@@ -44,6 +44,8 @@ struct th_response {
     size_t file_len;
     th_last_chunk_type last_chunk_type;
     th_code code;
+    // Set this to true if we have a HEAD request, so that we only write headers.
+    bool only_headers;
 };
 
 TH_PRIVATE(void)

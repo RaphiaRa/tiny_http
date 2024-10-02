@@ -282,6 +282,17 @@ th_request_handle_headers(th_request* request, struct phr_header* headers, size_
     return TH_ERR_OK;
 }
 
+TH_LOCAL(th_method)
+th_request_map_method(th_method_internal method)
+{
+    switch (method) {
+    case TH_METHOD_INTERNAL_HEAD:
+        return TH_METHOD_GET;
+    default:
+        return (th_method)method;
+    }
+}
+
 TH_LOCAL(void)
 th_request_read_handle_header(th_request_read_handler* handler, size_t len)
 {
@@ -330,12 +341,11 @@ th_request_read_handle_header(th_request_read_handler* handler, size_t len)
     // Reject all methods that we don't support yet
     if (request->method_internal == TH_METHOD_INTERNAL_TRACE
         || request->method_internal == TH_METHOD_INTERNAL_CONNECT
-        || request->method_internal == TH_METHOD_INTERNAL_OPTIONS
-        || request->method_internal == TH_METHOD_INTERNAL_HEAD) {
+        || request->method_internal == TH_METHOD_INTERNAL_OPTIONS) {
         th_request_read_handler_complete(handler, 0, TH_ERR_HTTP(TH_CODE_METHOD_NOT_ALLOWED));
         return;
     }
-    request->method = (th_method)request->method_internal;
+    request->method = th_request_map_method(request->method_internal);
 
     // find path query
     th_err err = TH_ERR_OK;

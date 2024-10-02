@@ -46,7 +46,9 @@ struct th_request {
     size_t content_buf_len;
     size_t content_buf_pos;
     char* content_buf;
+    // Method, as it is seen by the server.
     th_method_internal method_internal;
+    // Method, as it is seen by the user.
     th_method method;
     int minor_version;
     bool close;

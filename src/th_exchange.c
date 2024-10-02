@@ -1,5 +1,6 @@
 #include "th_exchange.h"
 
+#include "th_fmt.h"
 #include "th_http_error.h"
 #include "th_log.h"
 #include "th_request.h"
@@ -62,17 +63,58 @@ th_exchange_write_require_1_1_response(th_exchange* handler)
     th_response_async_write(&handler->response, handler->socket, (th_io_handler*)handler);
 }
 
+TH_LOCAL(th_err)
+th_exchange_handle_options(th_exchange* exchange, th_request* request, th_response* response)
+{
+    // All the methods we gotta check
+    static const struct {
+        th_method method;
+        const char* allow;
+    } methods[] = {
+        {TH_METHOD_GET, "GET, HEAD"},
+        {TH_METHOD_POST, "POST"},
+        {TH_METHOD_PUT, "PUT"},
+        {TH_METHOD_DELETE, "DELETE"},
+        {TH_METHOD_PATCH, "PATCH"},
+    };
+    char allow[512] = {0};
+    size_t pos = th_fmt_str_append(allow, 0, sizeof(allow), "OPTIONS"); // OPTIONS is always allowed
+    th_router* router = exchange->router;
+    for (size_t i = 0; i < TH_ARRAY_SIZE(methods); i++) {
+        if (th_router_would_handle(router, methods[i].method, request)) {
+            pos += th_fmt_str_append(allow, pos, sizeof(allow) - pos, ", ");
+            pos += th_fmt_str_append(allow, pos, sizeof(allow) - pos, methods[i].allow);
+        }
+    }
+    th_err err = TH_ERR_OK;
+    if ((err = th_response_add_header(response, TH_STRING("Allow"), th_string_make(allow, pos))) != TH_ERR_OK)
+        return err;
+    if ((err = th_response_add_header(response, TH_STRING("Content-Type"), TH_STRING("text/plain"))) != TH_ERR_OK)
+        return err;
+    return TH_ERR_OK;
+}
+
+TH_LOCAL(th_err)
+th_exchange_handle_route(th_exchange* exchange, th_request* request, th_response* response)
+{
+    th_router* router = exchange->router;
+    if (request->method_internal == TH_METHOD_INTERNAL_OPTIONS) {
+        return th_exchange_handle_options(exchange, request, response);
+    } else {
+        return th_http_error(th_router_handle(router, request, response));
+    }
+}
+
 TH_LOCAL(void)
 th_exchange_handle_request(th_exchange* handler)
 {
     handler = (th_exchange*)th_io_composite_ref(&handler->base);
     th_socket* socket = handler->socket;
     th_request* request = &handler->request;
-    th_router* router = handler->router;
     th_response* response = &handler->response;
     // We only need to write headers if it's a HEAD request
     response->only_headers = (request->method_internal == TH_METHOD_INTERNAL_HEAD);
-    th_err err = th_http_error(th_router_handle(router, request, response));
+    th_err err = th_http_error(th_exchange_handle_route(handler, request, response));
     switch (th_http_code_get_type(TH_ERR_CODE(err))) {
     case TH_HTTP_CODE_TYPE_INFORMATIONAL:
         if (request->minor_version == 0) {

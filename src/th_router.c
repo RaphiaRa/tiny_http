@@ -86,7 +86,7 @@ th_router_deinit(th_router* router)
 }
 
 TH_LOCAL(th_err)
-th_route_consume_trail(th_route_segment* route, th_request* request, th_string* trail, bool* result)
+th_route_consume_trail(th_route_segment* route, th_request* request, th_string* trail, bool dry, bool* result)
 {
     th_string route_name = th_heap_string_view(&route->name);
     th_heap_string decoded = {0};
@@ -99,7 +99,6 @@ th_route_consume_trail(th_route_segment* route, th_request* request, th_string* 
     th_string segment = th_heap_string_view(&decoded);
     // if (th_string_empty(segment) && route->type != TH_CAPTURE_TYPE_NONE)
     //     return false;
-    *result = false;
     switch (route->type) {
     case TH_CAPTURE_TYPE_NONE:
         if (th_string_eq(route_name, segment)) {
@@ -109,18 +108,21 @@ th_route_consume_trail(th_route_segment* route, th_request* request, th_string* 
         break;
     case TH_CAPTURE_TYPE_INT:
         if (th_string_is_uint(segment)) {
-            (void)th_request_store_path_param(request, route_name, segment);
+            if (!dry)
+                (void)th_request_store_path_param(request, route_name, segment);
             *trail = th_string_substr(*trail, segment.len + 1, th_string_npos);
             *result = true;
         }
         break;
     case TH_CAPTURE_TYPE_STRING:
-        (void)th_request_store_path_param(request, route_name, segment);
+        if (!dry)
+            (void)th_request_store_path_param(request, route_name, segment);
         *trail = th_string_substr(*trail, segment.len + 1, th_string_npos);
         *result = true;
         break;
     case TH_CAPTURE_TYPE_PATH:
-        (void)th_request_store_path_param(request, route_name, *trail);
+        if (!dry)
+            (void)th_request_store_path_param(request, route_name, *trail);
         *trail = th_string_make(NULL, 0);
         *result = true;
         break;
@@ -132,8 +134,8 @@ cleanup:
     return err;
 }
 
-TH_PRIVATE(th_err)
-th_router_handle(th_router* router, th_request* request, th_response* response)
+TH_LOCAL(th_err)
+th_router_do_handle(th_router* router, th_method method, th_request* request, th_response* response, bool dry)
 {
     TH_LOG_DEBUG("Handling request %p: %s", request, request->uri_path);
     if (request->uri_path[0] != '/')
@@ -145,7 +147,7 @@ th_router_handle(th_router* router, th_request* request, th_response* response)
         bool consumed = false;
         if (route == NULL) {
             break;
-        } else if ((err = th_route_consume_trail(route, request, &trail, &consumed)) != TH_ERR_OK
+        } else if ((err = th_route_consume_trail(route, request, &trail, dry, &consumed)) != TH_ERR_OK
                    || consumed) {
             if (err != TH_ERR_OK)
                 return err;
@@ -159,11 +161,25 @@ th_router_handle(th_router* router, th_request* request, th_response* response)
     if (route == NULL) {
         return TH_ERR_HTTP(TH_CODE_NOT_FOUND);
     }
-    th_route_handler handler = route->handler[request->method].handler ? route->handler[request->method] : route->handler[TH_METHOD_ANY];
+    th_route_handler handler = route->handler[method].handler ? route->handler[method] : route->handler[TH_METHOD_ANY];
     if (handler.handler == NULL) {
         return TH_ERR_HTTP(TH_CODE_METHOD_NOT_ALLOWED);
     }
+    if (dry)
+        return TH_ERR_OK;
     return handler.handler(handler.user_data, request, response);
+}
+
+TH_PRIVATE(th_err)
+th_router_handle(th_router* router, th_request* request, th_response* response)
+{
+    return th_router_do_handle(router, request->method, request, response, false);
+}
+
+TH_PRIVATE(bool)
+th_router_would_handle(th_router* router, th_method method, th_request* request)
+{
+    return th_router_do_handle(router, method, request, NULL, true) == TH_ERR_OK;
 }
 
 // abc < {int} < {string} < {path}

@@ -340,8 +340,7 @@ th_request_read_handle_header(th_request_read_handler* handler, size_t len)
     request->method_internal = mm->method;
     // Reject all methods that we don't support yet
     if (request->method_internal == TH_METHOD_INTERNAL_TRACE
-        || request->method_internal == TH_METHOD_INTERNAL_CONNECT
-        || request->method_internal == TH_METHOD_INTERNAL_OPTIONS) {
+        || request->method_internal == TH_METHOD_INTERNAL_CONNECT) {
         th_request_read_handler_complete(handler, 0, TH_ERR_HTTP(TH_CODE_METHOD_NOT_ALLOWED));
         return;
     }

@@ -19,8 +19,9 @@ TH_TEST_BEGIN(router)
         th_router router;
         th_router_init(&router, NULL);
         th_request request = {0};
+        th_request_init(&request, NULL);
         request.method = TH_METHOD_GET;
-        request.uri_path = "/test";
+        th_heap_string_set(&request.uri_path, TH_STRING("/test"));
         th_response response = {0};
         TH_EXPECT(th_router_handle(&router, &request, &response) == TH_ERR_HTTP(TH_CODE_NOT_FOUND));
         th_router_deinit(&router);
@@ -42,8 +43,9 @@ TH_TEST_BEGIN(router)
         th_err err = th_router_add_route(&router, TH_METHOD_GET, TH_STRING("/test"), mock_handler, NULL);
         TH_EXPECT(err == TH_ERR_OK);
         th_request request = {0};
+        th_request_init(&request, NULL);
         request.method = TH_METHOD_GET;
-        request.uri_path = "/test";
+        th_heap_string_set(&request.uri_path, TH_STRING("/test"));
         th_response response = {0};
         TH_EXPECT(th_router_handle(&router, &request, &response) == TH_ERR_OK);
         th_router_deinit(&router);
@@ -58,7 +60,7 @@ TH_TEST_BEGIN(router)
             th_request request = {0};
             th_request_init(&request, NULL);
             request.method = TH_METHOD_GET;
-            request.uri_path = "/";
+            th_heap_string_set(&request.uri_path, TH_STRING("/"));
             th_response response = {0};
             TH_EXPECT(th_router_handle(&router, &request, &response) == TH_ERR_OK);
             th_request_deinit(&request);
@@ -67,7 +69,7 @@ TH_TEST_BEGIN(router)
             th_request request = {0};
             th_request_init(&request, NULL);
             request.method = TH_METHOD_GET;
-            request.uri_path = "/test";
+            th_heap_string_set(&request.uri_path, TH_STRING("/test"));
             th_response response = {0};
             TH_EXPECT(th_router_handle(&router, &request, &response) == TH_ERR_HTTP(TH_CODE_NOT_FOUND));
             th_request_deinit(&request);
@@ -85,7 +87,7 @@ TH_TEST_BEGIN(router)
             th_request request = {0};
             th_request_init(&request, NULL);
             request.method = TH_METHOD_GET;
-            request.uri_path = "/test/abc";
+            th_heap_string_set(&request.uri_path, TH_STRING("/test/abc"));
             th_response response = {0};
             TH_EXPECT(th_router_handle(&router, &request, &response) == TH_ERR_OK);
             const char* param = th_try_get_path_param(&request, "path");
@@ -96,7 +98,7 @@ TH_TEST_BEGIN(router)
             th_request request = {0};
             th_request_init(&request, NULL);
             request.method = TH_METHOD_GET;
-            request.uri_path = "/test/abc/def";
+            th_heap_string_set(&request.uri_path, TH_STRING("/test/abc/def"));
             th_response response = {0};
             TH_EXPECT(th_router_handle(&router, &request, &response) == TH_ERR_OK);
             const char* param = th_try_get_path_param(&request, "path");
@@ -116,7 +118,7 @@ TH_TEST_BEGIN(router)
             th_request request = {0};
             th_request_init(&request, NULL);
             request.method = TH_METHOD_GET;
-            request.uri_path = "/test/abc/test2/def";
+            th_heap_string_set(&request.uri_path, TH_STRING("/test/abc/test2/def"));
             th_response response = {0};
             TH_EXPECT(th_router_handle(&router, &request, &response) == TH_ERR_OK);
             const char* param = th_try_get_path_param(&request, "first");
@@ -138,7 +140,7 @@ TH_TEST_BEGIN(router)
             th_request request = {0};
             th_request_init(&request, NULL);
             request.method = TH_METHOD_GET;
-            request.uri_path = "/test/123";
+            th_heap_string_set(&request.uri_path, TH_STRING("/test/123"));
             th_response response = {0};
             TH_EXPECT(th_router_handle(&router, &request, &response) == TH_ERR_OK);
             const char* id = th_try_get_path_param(&request, "id");
@@ -149,7 +151,7 @@ TH_TEST_BEGIN(router)
             th_request request = {0};
             th_request_init(&request, NULL);
             request.method = TH_METHOD_GET;
-            request.uri_path = "/test/abc";
+            th_heap_string_set(&request.uri_path, TH_STRING("/test/abc"));
             th_response response = {0};
             TH_EXPECT(th_router_handle(&router, &request, &response) == TH_ERR_HTTP(TH_CODE_NOT_FOUND));
             th_request_deinit(&request);

@@ -109,20 +109,20 @@ th_route_consume_trail(th_route_segment* route, th_request* request, th_string* 
     case TH_CAPTURE_TYPE_INT:
         if (th_string_is_uint(segment)) {
             if (!dry)
-                (void)th_request_store_path_param(request, route_name, segment);
+                (void)th_request_add_path_param(request, route_name, segment);
             *trail = th_string_substr(*trail, segment.len + 1, th_string_npos);
             *result = true;
         }
         break;
     case TH_CAPTURE_TYPE_STRING:
         if (!dry)
-            (void)th_request_store_path_param(request, route_name, segment);
+            (void)th_request_add_path_param(request, route_name, segment);
         *trail = th_string_substr(*trail, segment.len + 1, th_string_npos);
         *result = true;
         break;
     case TH_CAPTURE_TYPE_PATH:
         if (!dry)
-            (void)th_request_store_path_param(request, route_name, *trail);
+            (void)th_request_add_path_param(request, route_name, *trail);
         *trail = th_string_make(NULL, 0);
         *result = true;
         break;
@@ -137,10 +137,10 @@ cleanup:
 TH_LOCAL(th_err)
 th_router_do_handle(th_router* router, th_method method, th_request* request, th_response* response, bool dry)
 {
-    TH_LOG_DEBUG("Handling request %p: %s", request, request->uri_path);
-    if (request->uri_path[0] != '/')
+    TH_LOG_DEBUG("Handling request %p: %s", request, th_heap_string_data(&request->uri_path));
+    if (*th_heap_string_at(&request->uri_path, 0) != '/')
         return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
-    th_string trail = th_string_from_cstr(request->uri_path + 1);
+    th_string trail = th_string_substr(th_heap_string_view(&request->uri_path), 1, th_string_npos);
     th_route_segment* route = router->routes;
     while (1) {
         th_err err = TH_ERR_OK;

@@ -57,28 +57,6 @@ th_string_find_first(th_string str, size_t start, char c)
 }
 
 TH_PRIVATE(size_t)
-th_string_find_first_not(th_string str, size_t start, char c)
-{
-    for (size_t i = start; i < str.len; i++) {
-        if (str.ptr[i] != c) {
-            return i;
-        }
-    }
-    return th_string_npos;
-}
-
-TH_PRIVATE(size_t)
-th_string_find_last_not(th_string str, size_t start, char c)
-{
-    for (size_t i = str.len - 1; i >= start; i--) {
-        if (str.ptr[i] != c) {
-            return i;
-        }
-    }
-    return th_string_npos;
-}
-
-TH_PRIVATE(size_t)
 th_string_find_first_of(th_string str, size_t start, const char* chars)
 {
     for (size_t i = start; i < str.len; i++) {
@@ -119,12 +97,15 @@ th_string_substr(th_string str, size_t start, size_t len)
 TH_PRIVATE(th_string)
 th_string_trim(th_string str)
 {
-    size_t start = th_string_find_first_not(str, 0, ' ');
-    if (start == th_string_npos) {
-        return th_string_make(NULL, 0);
+    size_t start = 0;
+    while (start < str.len && (str.ptr[start] == ' ' || str.ptr[start] == '\t')) {
+        start++;
     }
-    size_t end = th_string_find_last_not(str, start, ' ');
-    return th_string_substr(str, start, end - start + 1);
+    size_t end = str.len;
+    while (end > start && (str.ptr[end - 1] == ' ' || str.ptr[end - 1] == '\t')) {
+        end--;
+    }
+    return th_string_substr(str, start, end - start);
 }
 
 TH_PRIVATE(uint32_t)
@@ -132,17 +113,3 @@ th_string_hash(th_string str)
 {
     return th_hash_bytes(str.ptr, str.len);
 }
-
-/* th_mut_string implementation begin */
-
-TH_PRIVATE(void)
-th_mut_string_tolower(th_mut_string str)
-{
-    for (size_t i = 0; i < str.len; i++) {
-        if (str.ptr[i] >= 'A' && str.ptr[i] <= 'Z') {
-            str.ptr[i] += 'a' - 'A';
-        }
-    }
-}
-
-/* th_mut_string implementation end */

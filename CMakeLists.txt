@@ -51,6 +51,7 @@ SET(TH_CORE_SRC
     src/th_error.c
     src/th_socket.c
     src/th_tcp_socket.c
+    src/th_request_parser.c
     src/th_request.c
     src/th_response.c
     src/th_context.c
@@ -79,10 +80,6 @@ SET(TH_CORE_SRC
     src/th_ssl_error.c
 )
 
-SET(TH_3RD_PARTY_SRC
-    src/picohttpparser.c
-)
-
 SET(TH_TEST_SRC
     src/th_mock_service.c
     src/th_mock_syscall.c
@@ -92,7 +89,6 @@ SET(TH_TEST_SRC
 
 add_library(tiny_http 
     ${TH_CORE_SRC}
-    ${TH_3RD_PARTY_SRC}
 )
 add_library(tiny_http::tiny_http ALIAS tiny_http)
 
@@ -175,7 +171,6 @@ endif()
 if (NOT TH_DISABLE_TESTS)
     add_library(tiny_http_test
         ${TH_CORE_SRC}
-        ${TH_3RD_PARTY_SRC}
         ${TH_TEST_SRC}
     )
     if (OpenSSL_FOUND)
@@ -197,7 +192,7 @@ if (NOT TH_DISABLE_TESTS)
         src/th_task_test.c
         src/th_router_test.c
         src/th_allocator_test.c
-        src/th_request_test.c
+        src/th_request_parser_test.c
         src/th_response_test.c
         src/th_fcache_test.c
         src/th_hashmap_test.c
@@ -260,7 +255,7 @@ if (NOT TH_DISABLE_AMALGAMATION)
         # Amalgamation of th.c
         add_custom_command(
             OUTPUT ${OUTPUT_FILE}
-            COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/amalgamate.py -o ${OUTPUT_FILE} ${TH_CORE_SRC} ${TH_3RD_PARTY_SRC}
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/amalgamate.py -o ${OUTPUT_FILE} ${TH_CORE_SRC}
             COMMAND cp ${CMAKE_CURRENT_SOURCE_DIR}/include/th.h ${CMAKE_CURRENT_BINARY_DIR}/th.h
             DEPENDS tiny_http
             COMMENT "Running amalgamation.py on ${OUTPUT_FILE}"

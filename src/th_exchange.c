@@ -79,9 +79,16 @@ th_exchange_handle_options(th_exchange* exchange, th_request* request, th_respon
     };
     char allow[512] = {0};
     size_t pos = th_fmt_str_append(allow, 0, sizeof(allow), "OPTIONS"); // OPTIONS is always allowed
-    th_router* router = exchange->router;
-    for (size_t i = 0; i < TH_ARRAY_SIZE(methods); i++) {
-        if (th_router_would_handle(router, methods[i].method, request)) {
+    if (strcmp(request->uri_path, "*") != 0) {
+        th_router* router = exchange->router;
+        for (size_t i = 0; i < TH_ARRAY_SIZE(methods); i++) {
+            if (th_router_would_handle(router, methods[i].method, request)) {
+                pos += th_fmt_str_append(allow, pos, sizeof(allow) - pos, ", ");
+                pos += th_fmt_str_append(allow, pos, sizeof(allow) - pos, methods[i].allow);
+            }
+        }
+    } else {
+        for (size_t i = 0; i < TH_ARRAY_SIZE(methods); i++) {
             pos += th_fmt_str_append(allow, pos, sizeof(allow) - pos, ", ");
             pos += th_fmt_str_append(allow, pos, sizeof(allow) - pos, methods[i].allow);
         }

@@ -75,12 +75,6 @@ TH_PRIVATE(size_t)
 th_string_find_first(th_string str, size_t start, char c);
 
 TH_PRIVATE(size_t)
-th_string_find_first_not(th_string str, size_t start, char c);
-
-TH_PRIVATE(size_t)
-th_string_find_last_not(th_string str, size_t start, char c);
-
-TH_PRIVATE(size_t)
 th_string_find_first_of(th_string str, size_t start, const char* chars);
 
 /*
@@ -102,13 +96,5 @@ th_string_trim(th_string str);
 
 TH_PRIVATE(uint32_t)
 th_string_hash(th_string str);
-
-typedef struct th_mut_string {
-    char* ptr;
-    size_t len;
-} th_mut_string;
-
-TH_PRIVATE(void)
-th_mut_string_tolower(th_mut_string str);
 
 #endif

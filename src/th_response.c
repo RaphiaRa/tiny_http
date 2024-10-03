@@ -220,7 +220,7 @@ th_response_set_body_va(th_response* response, const char* fmt, va_list args)
         }
     } else {
         th_heap_string_resize(&response->body, (size_t)len, ' ');
-        vsnprintf(th_heap_string_data(&response->body), len, fmt, args);
+        vsnprintf(th_heap_string_at(&response->body, 0), len, fmt, args);
     }
     response->is_file = 0;
     response->last_chunk_type = TH_CHUNK_TYPE_BODY;

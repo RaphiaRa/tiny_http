@@ -9,6 +9,12 @@
 #define TH_EXCHANGE_CONTINUE (size_t)0
 #define TH_EXCHANGE_CLOSE (size_t)1
 
+typedef enum th_request_read_mode {
+    TH_REQUEST_READ_MODE_NORMAL = 0,
+    TH_REQUEST_READ_MODE_REJECT_UNAVAILABLE = (int)TH_ERR_HTTP(TH_CODE_SERVICE_UNAVAILABLE),
+    TH_REQUEST_READ_MODE_REJECT_TOO_MANY_REQUESTS = (int)TH_ERR_HTTP(TH_CODE_TOO_MANY_REQUESTS),
+} th_request_read_mode;
+
 typedef struct th_exchange th_exchange;
 
 TH_PRIVATE(th_err)

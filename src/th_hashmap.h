@@ -9,7 +9,7 @@
 
 #include <string.h>
 
-#define TH_DEFINE_HASHMAP(NAME, K, V, HASH, K_EQ, K_NULL)                                                                           \
+#define TH_DEFINE_HASHMAP2(NAME, K, V, HASH, K_EQ, K_NULL, K_DEINIT, V_DEINIT)                                                      \
     typedef struct NAME##_entry {                                                                                                   \
         K key;                                                                                                                      \
         V value;                                                                                                                    \
@@ -76,15 +76,22 @@
     TH_INLINE(void)                                                                                                                 \
     NAME##_deinit(NAME* map)                                                                                                        \
     {                                                                                                                               \
-        if (map->entries) {                                                                                                         \
-            th_allocator_free(map->allocator, map->entries);                                                                        \
-        }                                                                                                                           \
+        NAME##_reset(map);                                                                                                          \
     }                                                                                                                               \
                                                                                                                                     \
     TH_INLINE(void)                                                                                                                 \
     NAME##_reset(NAME* map)                                                                                                         \
     {                                                                                                                               \
         if (map->entries) {                                                                                                         \
+            if (map->size > 0) {                                                                                                    \
+                for (size_t i = map->begin; i < map->end; i++) {                                                                    \
+                    NAME##_entry* entry = &map->entries[i];                                                                         \
+                    if (!K_EQ(entry->key, K_NULL)) {                                                                                \
+                        K_DEINIT(entry->key);                                                                                       \
+                        V_DEINIT(entry->value);                                                                                     \
+                    }                                                                                                               \
+                }                                                                                                                   \
+            }                                                                                                                       \
             th_allocator_free(map->allocator, map->entries);                                                                        \
         }                                                                                                                           \
         map->entries = NULL;                                                                                                        \
@@ -142,6 +149,7 @@
                 return TH_ERR_OK;                                                                                                   \
             }                                                                                                                       \
             if (K_EQ(entry->key, key)) {                                                                                            \
+                V_DEINIT(entry->value);                                                                                             \
                 entry->value = value;                                                                                               \
                 return TH_ERR_OK;                                                                                                   \
             }                                                                                                                       \
@@ -156,11 +164,39 @@
                 return TH_ERR_OK;                                                                                                   \
             }                                                                                                                       \
             if (K_EQ(entry->key, key)) {                                                                                            \
+                V_DEINIT(entry->value);                                                                                             \
                 entry->value = value;                                                                                               \
                 return TH_ERR_OK;                                                                                                   \
             }                                                                                                                       \
         }                                                                                                                           \
         return TH_ERR_BAD_ALLOC;                                                                                                    \
+    }                                                                                                                               \
+                                                                                                                                    \
+    TH_INLINE(void)                                                                                                                 \
+    NAME##_fix_hole(NAME* map, NAME##_entry* entry) TH_MAYBE_UNUSED;                                                                \
+                                                                                                                                    \
+    TH_INLINE(void)                                                                                                                 \
+    NAME##_fix_hole(NAME* map, NAME##_entry* entry)                                                                                 \
+    {                                                                                                                               \
+        size_t last_zeroed = entry - map->entries;                                                                                  \
+        for (size_t i = entry - map->entries + 1; i < map->end; i++) {                                                              \
+            uint32_t hash = 0;                                                                                                      \
+            if (K_EQ(map->entries[i].key, K_NULL)) {                                                                                \
+                break;                                                                                                              \
+            } else if ((hash = (HASH(map->entries[i].key) & (map->capacity - 1))) <= last_zeroed) {                                 \
+                map->entries[last_zeroed] = map->entries[i];                                                                        \
+                map->entries[i].key = K_NULL;                                                                                       \
+                last_zeroed = i;                                                                                                    \
+            }                                                                                                                       \
+        }                                                                                                                           \
+        if (map->size == 0) {                                                                                                       \
+            map->begin = 0;                                                                                                         \
+            map->end = 0;                                                                                                           \
+        } else if (last_zeroed == map->end - 1) {                                                                                   \
+            map->end = NAME##_prev(map, &map->entries[last_zeroed]) - map->entries + 1;                                             \
+        } else if (last_zeroed == map->begin) {                                                                                     \
+            map->begin = NAME##_next(map, &map->entries[last_zeroed]) - map->entries;                                               \
+        }                                                                                                                           \
     }                                                                                                                               \
                                                                                                                                     \
     TH_INLINE(th_err)                                                                                                               \
@@ -186,7 +222,9 @@
             /* Don't need to rehash every entry */                                                                                  \
             hash &= (new_capacity - 1);                                                                                             \
             NAME##_entry e = *entry;                                                                                                \
-            NAME##_erase(map, entry);                                                                                               \
+            entry->key = K_NULL;                                                                                                    \
+            NAME##_fix_hole(map, entry);                                                                                            \
+            --map->size;                                                                                                            \
             if ((err = NAME##_do_set(map, hash, e.key, e.value)) != TH_ERR_OK) {                                                    \
                 return err;                                                                                                         \
             }                                                                                                                       \
@@ -240,26 +278,7 @@
     {                                                                                                                               \
         entry->key = K_NULL;                                                                                                        \
         map->size--;                                                                                                                \
-        /* Need to fix possible holes */                                                                                            \
-        size_t last_zeroed = entry - map->entries;                                                                                  \
-        for (size_t i = entry - map->entries + 1; i < map->end; i++) {                                                              \
-            uint32_t hash = 0;                                                                                                      \
-            if (K_EQ(map->entries[i].key, K_NULL)) {                                                                                \
-                break;                                                                                                              \
-            } else if ((hash = (HASH(map->entries[i].key) & (map->capacity - 1))) <= last_zeroed) {                                 \
-                map->entries[last_zeroed] = map->entries[i];                                                                        \
-                map->entries[i].key = K_NULL;                                                                                       \
-                last_zeroed = i;                                                                                                    \
-            }                                                                                                                       \
-        }                                                                                                                           \
-        if (map->size == 0) {                                                                                                       \
-            map->begin = 0;                                                                                                         \
-            map->end = 0;                                                                                                           \
-        } else if (last_zeroed == map->end - 1) {                                                                                   \
-            map->end = NAME##_prev(map, &map->entries[last_zeroed]) - map->entries + 1;                                             \
-        } else if (last_zeroed == map->begin) {                                                                                     \
-            map->begin = NAME##_next(map, &map->entries[last_zeroed]) - map->entries;                                               \
-        }                                                                                                                           \
+        NAME##_fix_hole(map, entry);                                                                                                \
     }                                                                                                                               \
                                                                                                                                     \
     TH_INLINE(V*)                                                                                                                   \
@@ -306,6 +325,41 @@
         return NAME##_begin(map);                                                                                                   \
     }
 
+/** TH_DEFINE_HASHMAP_FIND
+ * Define find functions for alternative key types.
+ * !!! Only makes sense if the HASH function for the alternative key type
+ * is the same as the HASH function for the primary key type.
+ */
+#define TH_DEFINE_HASHMAP_FIND(NAME, METHOD, K, K_HASH, K_EQ, K_NULL) \
+    TH_INLINE(NAME##_entry*)                                          \
+    NAME##_##METHOD(const NAME* map, K key)                           \
+    {                                                                 \
+        uint32_t hash = K_HASH(key) & (map->capacity - 1);            \
+        if (map->size == 0) {                                         \
+            return NULL;                                              \
+        }                                                             \
+        for (size_t i = hash; i < map->end; i++) {                    \
+            NAME##_entry* entry = &map->entries[i];                   \
+            if (K_EQ(entry->key, K_NULL)) {                           \
+                return NULL;                                          \
+            }                                                         \
+            if (K_EQ(entry->key, key)) {                              \
+                return entry;                                         \
+            }                                                         \
+        }                                                             \
+        for (size_t i = map->begin; i < hash; i++) {                  \
+            NAME##_entry* entry = &map->entries[i];                   \
+            if (K_EQ(entry->key, K_NULL)) {                           \
+                return NULL;                                          \
+            }                                                         \
+            if (K_EQ(entry->key, key)) {                              \
+                return entry;                                         \
+            }                                                         \
+        }                                                             \
+        return NULL;                                                  \
+    }
+
+#define TH_DEFINE_HASHMAP(NAME, K, V, HASH, K_EQ, K_NULL) TH_DEFINE_HASHMAP2(NAME, K, V, HASH, K_EQ, K_NULL, (void), (void))
 /* default hash maps begin */
 /* th_cstr_map begin */
 

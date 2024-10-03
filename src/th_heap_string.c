@@ -3,6 +3,8 @@
 #include "th_hash.h"
 #include "th_utility.h"
 
+#include <ctype.h>
+
 #define TH_HEAP_STRING_SMALL (sizeof(char*) + sizeof(size_t) + sizeof(size_t) - 2)
 #define TH_HEAP_STRING_ALIGNUP(size) TH_ALIGNUP(size, 16)
 TH_PRIVATE(void)
@@ -21,6 +23,13 @@ TH_PRIVATE(void)
 th_heap_string_init(th_heap_string* self, th_allocator* allocator)
 {
     th_detail_small_string_init(&self->impl.small, allocator);
+}
+
+TH_PRIVATE(th_err)
+th_heap_string_init_with(th_heap_string* self, th_string str, th_allocator* allocator)
+{
+    th_heap_string_init(self, allocator);
+    return th_heap_string_set(self, str);
 }
 
 TH_LOCAL(void)
@@ -182,7 +191,7 @@ th_heap_string_resize(th_heap_string* self, size_t new_len, char fill)
 }
 
 TH_PRIVATE(th_string)
-th_heap_string_view(th_heap_string* self)
+th_heap_string_view(const th_heap_string* self)
 {
     if (self->impl.small.small) {
         return (th_string){self->impl.small.buf, self->impl.small.len};
@@ -191,8 +200,8 @@ th_heap_string_view(th_heap_string* self)
     }
 }
 
-TH_PRIVATE(char*)
-th_heap_string_data(th_heap_string* self)
+TH_PRIVATE(const char*)
+th_heap_string_data(const th_heap_string* self)
 {
     if (self->impl.small.small) {
         return self->impl.small.buf;
@@ -201,8 +210,19 @@ th_heap_string_data(th_heap_string* self)
     }
 }
 
+TH_PRIVATE(char*)
+th_heap_string_at(th_heap_string* self, size_t index)
+{
+    TH_ASSERT(index < th_heap_string_len(self) && "Index out of bounds");
+    if (self->impl.small.small) {
+        return &self->impl.small.buf[index];
+    } else {
+        return &self->impl.large.ptr[index];
+    }
+}
+
 TH_PRIVATE(size_t)
-th_heap_string_len(th_heap_string* self)
+th_heap_string_len(const th_heap_string* self)
 {
     if (self->impl.small.small) {
         return self->impl.small.len;
@@ -222,9 +242,19 @@ th_heap_string_clear(th_heap_string* self)
         self->impl.large.ptr[0] = '\0';
     }
 }
-/*
+
+TH_PRIVATE(void)
+th_heap_string_to_lower(th_heap_string* self)
+{
+    char* ptr = th_heap_string_at(self, 0);
+    size_t n = th_heap_string_len(self);
+    for (size_t i = 0; i < n; i++) {
+        ptr[i] = (char)tolower((int)ptr[i]);
+    }
+}
+
 TH_PRIVATE(bool)
-th_heap_string_eq(th_heap_string* self, th_string other)
+th_heap_string_eq(const th_heap_string* self, th_string other)
 {
     const char* ptr = NULL;
     size_t n = 0;
@@ -237,10 +267,9 @@ th_heap_string_eq(th_heap_string* self, th_string other)
     }
     return n == other.len && memcmp(ptr, other.ptr, n) == 0;
 }
-*/
-/*
+
 TH_PRIVATE(uint32_t)
-th_heap_string_hash(th_heap_string* self)
+th_heap_string_hash(const th_heap_string* self)
 {
     const char* ptr = NULL;
     size_t n = 0;
@@ -253,7 +282,7 @@ th_heap_string_hash(th_heap_string* self)
     }
     return th_hash_bytes(ptr, n);
 }
-*/
+
 TH_PRIVATE(void)
 th_heap_string_deinit(th_heap_string* self)
 {

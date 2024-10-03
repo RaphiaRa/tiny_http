@@ -32,22 +32,26 @@ handler(void* userp, const th_request* req, th_response* resp)
                             method_strings[th_get_method(req)], th_get_path(req), th_get_query(req));
     th_map_iter iter = th_map_begin(th_get_headers(req));
     for (; iter; iter = th_map_next(th_get_headers(req), iter)) {
-        len += (size_t)snprintf(buf + len, buf_len - len, "  %s: %s\n", iter->key, iter->value);
+        len += (size_t)snprintf(buf + len, buf_len - len, "  %s: %s\n",
+                                th_map_iter_key(iter), th_map_iter_value(iter));
     }
     len += (size_t)snprintf(buf + len, buf_len - len, "Cookies:\n");
     iter = th_map_begin(th_get_cookies(req));
     for (; iter; iter = th_map_next(th_get_cookies(req), iter)) {
-        len += (size_t)snprintf(buf + len, buf_len - len, "  %s: %s\n", iter->key, iter->value);
+        len += (size_t)snprintf(buf + len, buf_len - len, "  %s: %s\n",
+                                th_map_iter_key(iter), th_map_iter_value(iter));
     }
     len += (size_t)snprintf(buf + len, buf_len - len, "Query params:\n");
     iter = th_map_begin(th_get_query_params(req));
     for (; iter; iter = th_map_next(th_get_query_params(req), iter)) {
-        len += (size_t)snprintf(buf + len, buf_len - len, "  %s: %s\n", iter->key, iter->value);
+        len += (size_t)snprintf(buf + len, buf_len - len, "  %s: %s\n",
+                                th_map_iter_key(iter), th_map_iter_value(iter));
     }
     len += (size_t)snprintf(buf + len, buf_len - len, "Body params:\n");
     iter = th_map_begin(th_get_body_params(req));
     for (; iter; iter = th_map_next(th_get_body_params(req), iter)) {
-        len += (size_t)snprintf(buf + len, buf_len - len, "  %s: %s\n", iter->key, iter->value);
+        len += (size_t)snprintf(buf + len, buf_len - len, "  %s: %s\n",
+                                th_map_iter_key(iter), th_map_iter_value(iter));
     }
     th_set_body(resp, buf);
     th_add_header(resp, "Content-Type", "text/plain; charset=utf-8");

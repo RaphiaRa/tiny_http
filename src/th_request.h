@@ -7,52 +7,29 @@
 #include "th_hashmap.h"
 #include "th_heap_string.h"
 #include "th_method.h"
-#include "th_socket.h"
 
-typedef enum th_request_read_mode {
-    TH_REQUEST_READ_MODE_NORMAL = 0,
-    TH_REQUEST_READ_MODE_REJECT_UNAVAILABLE = (int)TH_ERR_HTTP(TH_CODE_SERVICE_UNAVAILABLE),
-    TH_REQUEST_READ_MODE_REJECT_TOO_MANY_REQUESTS = (int)TH_ERR_HTTP(TH_CODE_TOO_MANY_REQUESTS),
-} th_request_read_mode;
+#define TH_HS_HASH(hs) th_heap_string_hash(&hs)
+#define TH_HS_EQ(a, b) th_heap_string_eq(&a, th_heap_string_view(&b))
+#define TH_HS_DEINIT(hs) th_heap_string_deinit(&hs)
+TH_DEFINE_HASHMAP2(th_hs_map, th_heap_string, th_heap_string, TH_HS_HASH, TH_HS_EQ, (th_heap_string){0}, TH_HS_DEINIT, TH_HS_DEINIT)
 
-#define TH_REQUEST_MAP_ARENA_LEN 512
-#define TH_REQUEST_STRING_ARENA_LEN 512
-#define TH_REQUEST_VEC_ARENA_LEN 1024
+#define TH_HS_CSTR_EQ(a, b) (strcmp(th_heap_string_data(&a), b) == 0)
+#define TH_HS_CSTR_HASH(s) th_cstr_hash(s)
+TH_DEFINE_HASHMAP_FIND(th_hs_map, find_by_cstr, const char*, TH_HS_CSTR_HASH, TH_HS_CSTR_EQ, "")
 
 struct th_request {
     th_allocator* allocator;
-    const char* uri_path;
-    const char* uri_query;
-    void* map_arena;
-    void* vec_arena;
-    void* string_arena;
-    th_arena_allocator map_allocator;
-    th_arena_allocator vec_allocator;
-    th_arena_allocator string_allocator;
-    th_cstr_map cookies;
-    th_cstr_map headers;
-    th_cstr_map query_params;
-    th_cstr_map body_params;
-    th_cstr_map path_params;
-    /** heap_strings
-     * This vector is used to store heap allocated strings that are used in the request.
-     * It's used to ensure that all memory is deallocated when the request is destroyed.
-     */
-    th_heap_string_vec heap_strings;
-    th_buf_vec buffer;
-    /* content_len as specified in the Content-Length header */
-    size_t content_len;
-    size_t data_len;
-    size_t content_buf_len;
-    size_t content_buf_pos;
-    char* content_buf;
-    // Method, as it is seen by the server.
-    th_method_internal method_internal;
-    // Method, as it is seen by the user.
+    th_heap_string uri_path;
+    th_heap_string uri_query;
+    th_hs_map cookies;
+    th_hs_map headers;
+    th_hs_map query_params;
+    th_hs_map body_params;
+    th_hs_map path_params;
+    th_string body;
     th_method method;
-    int minor_version;
+    int version;
     bool close;
-    bool parse_body_params;
 };
 
 TH_PRIVATE(void)
@@ -62,27 +39,36 @@ TH_PRIVATE(void)
 th_request_deinit(th_request* request);
 
 TH_PRIVATE(void)
-th_request_async_read(th_socket* sock, th_allocator* allocator, th_request* request, th_request_read_mode mode, th_io_handler* on_complete);
+th_request_set_version(th_request* request, int version);
+
+TH_PRIVATE(void)
+th_request_set_method(th_request* request, th_method method);
 
 TH_PRIVATE(th_err)
-th_request_store_cookie(th_request* request, th_string key, th_string value);
+th_request_set_uri_path(th_request* request, th_string path);
 
 TH_PRIVATE(th_err)
-th_request_store_header(th_request* request, th_string key, th_string value);
+th_request_set_uri_query(th_request* request, th_string query);
 
 TH_PRIVATE(th_err)
-th_request_store_query_param(th_request* request, th_string key, th_string value);
+th_request_add_query_param(th_request* request, th_string key, th_string value);
 
 TH_PRIVATE(th_err)
-th_request_store_body_param(th_request* request, th_string key, th_string value);
+th_request_add_body_param(th_request* request, th_string key, th_string value);
 
 TH_PRIVATE(th_err)
-th_request_store_path_param(th_request* request, th_string key, th_string value);
+th_request_add_path_param(th_request* request, th_string key, th_string value);
 
 TH_PRIVATE(th_err)
-th_request_store_uri_path(th_request* request, th_string path);
+th_request_add_cookie(th_request* request, th_string key, th_string value);
 
 TH_PRIVATE(th_err)
-th_request_store_uri_query(th_request* request, th_string query);
+th_request_add_header(th_request* request, th_string key, th_string value);
+
+TH_PRIVATE(void)
+th_request_clear_query_params(th_request* request);
+
+TH_PRIVATE(void)
+th_request_set_body(th_request* request, th_string body);
 
 #endif

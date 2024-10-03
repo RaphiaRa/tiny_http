@@ -18,7 +18,7 @@ th_path_resolve_posix(th_string path, th_heap_string* out)
     pos += th_fmt_strn_append(in, pos, sizeof(in) - pos, path.ptr, path.len);
     in[pos] = '\0';
     th_heap_string_resize(out, TH_CONFIG_MAX_PATH_LEN, 0);
-    char* out_ptr = th_heap_string_data(out);
+    char* out_ptr = th_heap_string_at(out, 0);
     char* ret = realpath(in, out_ptr);
     if (ret == NULL)
         return TH_ERR_SYSTEM(errno);

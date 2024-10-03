@@ -930,7 +930,6 @@ th_hash_cstr(const char* str)
 
 
 
-#include <stdio.h>
 #include <string.h>
 
 #define TH_DEFINE_HASHMAP(NAME, K, V, HASH, K_EQ, K_NULL)                                                                           \
@@ -1643,6 +1642,9 @@ typedef struct th_fileview {
 TH_PRIVATE(th_err)
 th_file_get_view(th_file* stream, th_fileview* view, size_t offset, size_t len);
 
+TH_PRIVATE(uint32_t)
+th_file_stat_hash(th_file* stream);
+
 TH_PRIVATE(void)
 th_file_close(th_file* stream);
 
@@ -2103,13 +2105,14 @@ th_runner_deinit(th_runner* runner);
 /* Start of th_timer.h */
 
 
+
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-
+#include <time.h>
 
 typedef struct th_timer {
-    uint32_t expire;
+    time_t expire;
 } th_timer;
 
 TH_PRIVATE(void)
@@ -2494,7 +2497,9 @@ struct th_request {
     size_t content_buf_len;
     size_t content_buf_pos;
     char* content_buf;
+    // Method, as it is seen by the server.
     th_method_internal method_internal;
+    // Method, as it is seen by the user.
     th_method method;
     int minor_version;
     bool close;
@@ -2605,6 +2610,7 @@ struct th_fcache_entry {
     th_fcache* cache;
     th_fcache_entry* next;
     th_fcache_entry* prev;
+    uint32_t stat_hash;
 };
 
 typedef struct th_fcache_id {
@@ -2729,6 +2735,8 @@ struct th_response {
     size_t file_len;
     th_last_chunk_type last_chunk_type;
     th_code code;
+    // Set this to true if we have a HEAD request, so that we only write headers.
+    bool only_headers;
 };
 
 TH_PRIVATE(void)
@@ -2796,6 +2804,13 @@ th_router_deinit(th_router* router);
 
 TH_PRIVATE(th_err)
 th_router_handle(th_router* router, th_request* request, th_response* response);
+
+/** th_router_would_handle
+ *  Check if the router would handle the request, if
+ * it was to be passed with the given method (and not the actual method in the request).
+ */
+TH_PRIVATE(bool)
+th_router_would_handle(th_router* router, th_method method, th_request* request);
 
 TH_PRIVATE(th_err)
 th_router_add_route(th_router* router, th_method method, th_string route, th_handler handler, void* user_data);
@@ -4012,7 +4027,7 @@ th_router_deinit(th_router* router)
 }
 
 TH_LOCAL(th_err)
-th_route_consume_trail(th_route_segment* route, th_request* request, th_string* trail, bool* result)
+th_route_consume_trail(th_route_segment* route, th_request* request, th_string* trail, bool dry, bool* result)
 {
     th_string route_name = th_heap_string_view(&route->name);
     th_heap_string decoded = {0};
@@ -4025,7 +4040,6 @@ th_route_consume_trail(th_route_segment* route, th_request* request, th_string* 
     th_string segment = th_heap_string_view(&decoded);
     // if (th_string_empty(segment) && route->type != TH_CAPTURE_TYPE_NONE)
     //     return false;
-    *result = false;
     switch (route->type) {
     case TH_CAPTURE_TYPE_NONE:
         if (th_string_eq(route_name, segment)) {
@@ -4035,18 +4049,21 @@ th_route_consume_trail(th_route_segment* route, th_request* request, th_string* 
         break;
     case TH_CAPTURE_TYPE_INT:
         if (th_string_is_uint(segment)) {
-            (void)th_request_store_path_param(request, route_name, segment);
+            if (!dry)
+                (void)th_request_store_path_param(request, route_name, segment);
             *trail = th_string_substr(*trail, segment.len + 1, th_string_npos);
             *result = true;
         }
         break;
     case TH_CAPTURE_TYPE_STRING:
-        (void)th_request_store_path_param(request, route_name, segment);
+        if (!dry)
+            (void)th_request_store_path_param(request, route_name, segment);
         *trail = th_string_substr(*trail, segment.len + 1, th_string_npos);
         *result = true;
         break;
     case TH_CAPTURE_TYPE_PATH:
-        (void)th_request_store_path_param(request, route_name, *trail);
+        if (!dry)
+            (void)th_request_store_path_param(request, route_name, *trail);
         *trail = th_string_make(NULL, 0);
         *result = true;
         break;
@@ -4058,8 +4075,8 @@ cleanup:
     return err;
 }
 
-TH_PRIVATE(th_err)
-th_router_handle(th_router* router, th_request* request, th_response* response)
+TH_LOCAL(th_err)
+th_router_do_handle(th_router* router, th_method method, th_request* request, th_response* response, bool dry)
 {
     TH_LOG_DEBUG("Handling request %p: %s", request, request->uri_path);
     if (request->uri_path[0] != '/')
@@ -4071,7 +4088,7 @@ th_router_handle(th_router* router, th_request* request, th_response* response)
         bool consumed = false;
         if (route == NULL) {
             break;
-        } else if ((err = th_route_consume_trail(route, request, &trail, &consumed)) != TH_ERR_OK
+        } else if ((err = th_route_consume_trail(route, request, &trail, dry, &consumed)) != TH_ERR_OK
                    || consumed) {
             if (err != TH_ERR_OK)
                 return err;
@@ -4085,11 +4102,25 @@ th_router_handle(th_router* router, th_request* request, th_response* response)
     if (route == NULL) {
         return TH_ERR_HTTP(TH_CODE_NOT_FOUND);
     }
-    th_route_handler handler = route->handler[request->method].handler ? route->handler[request->method] : route->handler[TH_METHOD_ANY];
+    th_route_handler handler = route->handler[method].handler ? route->handler[method] : route->handler[TH_METHOD_ANY];
     if (handler.handler == NULL) {
         return TH_ERR_HTTP(TH_CODE_METHOD_NOT_ALLOWED);
     }
+    if (dry)
+        return TH_ERR_OK;
     return handler.handler(handler.user_data, request, response);
+}
+
+TH_PRIVATE(th_err)
+th_router_handle(th_router* router, th_request* request, th_response* response)
+{
+    return th_router_do_handle(router, request->method, request, response, false);
+}
+
+TH_PRIVATE(bool)
+th_router_would_handle(th_router* router, th_method method, th_request* request)
+{
+    return th_router_do_handle(router, method, request, NULL, true) == TH_ERR_OK;
 }
 
 // abc < {int} < {string} < {path}
@@ -6918,6 +6949,17 @@ th_request_handle_headers(th_request* request, struct phr_header* headers, size_
     return TH_ERR_OK;
 }
 
+TH_LOCAL(th_method)
+th_request_map_method(th_method_internal method)
+{
+    switch (method) {
+    case TH_METHOD_INTERNAL_HEAD:
+        return TH_METHOD_GET;
+    default:
+        return (th_method)method;
+    }
+}
+
 TH_LOCAL(void)
 th_request_read_handle_header(th_request_read_handler* handler, size_t len)
 {
@@ -6965,13 +7007,11 @@ th_request_read_handle_header(th_request_read_handler* handler, size_t len)
     request->method_internal = mm->method;
     // Reject all methods that we don't support yet
     if (request->method_internal == TH_METHOD_INTERNAL_TRACE
-        || request->method_internal == TH_METHOD_INTERNAL_CONNECT
-        || request->method_internal == TH_METHOD_INTERNAL_OPTIONS
-        || request->method_internal == TH_METHOD_INTERNAL_HEAD) {
+        || request->method_internal == TH_METHOD_INTERNAL_CONNECT) {
         th_request_read_handler_complete(handler, 0, TH_ERR_HTTP(TH_CODE_METHOD_NOT_ALLOWED));
         return;
     }
-    request->method = (th_method)request->method_internal;
+    request->method = th_request_map_method(request->method_internal);
 
     // find path query
     th_err err = TH_ERR_OK;
@@ -7379,6 +7419,7 @@ th_response_init(th_response* response, th_fcache* fcache, th_allocator* allocat
     th_heap_string_init(&response->body, allocator);
 
     memset(response->header_is_set, 0, sizeof(response->header_is_set));
+    response->only_headers = false;
 }
 
 TH_PRIVATE(void)
@@ -7646,6 +7687,10 @@ th_response_async_write(th_response* response, th_socket* socket, th_io_handler*
     if ((err = th_response_set_start_line(response)) != TH_ERR_OK)
         goto cleanup;
     size_t iovcnt = response->cur_header_buf_pos + 1;
+    if (response->only_headers) {
+        th_socket_async_writev_exact(socket, response->iov, iovcnt, handler);
+        return;
+    }
     if (response->is_file == 0) { // user provided body
         if (th_heap_string_len(&response->body) > 0) {
             response->iov[iovcnt].base = (void*)th_heap_string_data(&response->body);
@@ -8351,6 +8396,9 @@ th_header_id_mapping_find (register const char *str, register size_t len)
 #elif defined(TH_CONFIG_OS_MOCK)
 #endif
 
+#undef TH_LOG_TAG
+#define TH_LOG_TAG "file"
+
 /* th_file_view implmentation begin */
 
 #if defined(TH_CONFIG_OS_POSIX)
@@ -8540,6 +8588,71 @@ th_file_get_view(th_file* stream, th_fileview* view, size_t offset, size_t len)
     return TH_ERR_OK;
 }
 
+/**
+ * We use DJB2 hash function, without multiplication,
+ * as it's faster and good enough for our purposes.
+ */
+#define FSTAT_HASH_INIT 5381
+#define FSTAT_HASH_NEXT(hash, val) ((hash << 5) + hash + val)
+
+#if defined(TH_CONFIG_OS_POSIX)
+TH_LOCAL(uint32_t)
+th_file_stat_hash_posix(th_file* stream)
+{
+    struct stat st = {0};
+    if (fstat(stream->fd, &st) == -1) {
+        TH_LOG_ERROR("fstat failed: %s, can't calculate hash", strerror(errno));
+        TH_ASSERT(0 && "fstat failed");
+        return 0;
+    }
+
+    uint32_t hash = FSTAT_HASH_INIT;
+#if defined(TH_CONFIG_OS_OSX)
+    hash = FSTAT_HASH_NEXT(hash, (uint32_t)st.st_mtimespec.tv_sec);
+    hash = FSTAT_HASH_NEXT(hash, (uint32_t)st.st_mtimespec.tv_nsec);
+#else
+    hash = FSTAT_HASH_NEXT(hash, (uint32_t)st.st_mtime);
+#endif
+    hash = FSTAT_HASH_NEXT(hash, (uint32_t)st.st_size);
+    hash = FSTAT_HASH_NEXT(hash, (uint32_t)st.st_mode);
+    hash = FSTAT_HASH_NEXT(hash, (uint32_t)st.st_ino);
+    hash = FSTAT_HASH_NEXT(hash, (uint32_t)st.st_uid);
+    hash = FSTAT_HASH_NEXT(hash, (uint32_t)st.st_gid);
+    return hash;
+}
+#elif defined(TH_CONFIG_OS_WIN)
+#error "Not implemented"
+TH_LOCAL(uint32_t)
+th_file_stat_hash_win(th_file* stream)
+{
+    (void)stream;
+    return 0;
+}
+#elif defined(TH_CONFIG_OS_MOCK)
+TH_LOCAL(uint32_t)
+th_file_stat_hash_mock(th_file* stream)
+{
+    (void)stream;
+    return 0;
+}
+#endif
+#undef FSTAT_HASH_INIT
+#undef FSTAT_HASH_NEXT
+
+TH_PRIVATE(uint32_t)
+th_file_stat_hash(th_file* stream)
+{
+#if defined(TH_CONFIG_OS_POSIX)
+    return th_file_stat_hash_posix(stream);
+#elif defined(TH_CONFIG_OS_WIN)
+    return th_file_stat_hash_win(stream);
+#elif defined(TH_CONFIG_OS_MOCK)
+    return th_file_stat_hash_mock(stream);
+#else
+    return 0;
+#endif
+}
+
 TH_PRIVATE(void)
 th_file_close(th_file* stream)
 {
@@ -8613,6 +8726,7 @@ th_fcache_entry_open(th_fcache_entry* entry, th_string root, th_string path)
         TH_LOG_ERROR("Failed to set path: %s", th_strerror(err));
         goto cleanup_fstream;
     }
+    entry->stat_hash = th_file_stat_hash(&entry->stream);
     entry->dir = dir;
     return TH_ERR_OK;
 cleanup_fstream:
@@ -8645,6 +8759,14 @@ th_fcache_init(th_fcache* cache, th_allocator* allocator)
     cache->max_cached = TH_CONFIG_MAX_CACHED_FDS;
 }
 
+TH_LOCAL(void)
+th_fcache_erase(th_fcache* cache, th_fcache_entry* entry)
+{
+    th_fcache_list_erase(&cache->list, entry);
+    th_fcache_entry_unref(entry);
+    --cache->num_cached;
+}
+
 TH_LOCAL(th_fcache_entry*)
 th_fcache_try_get(th_fcache* cache, th_string root, th_string path)
 {
@@ -8655,6 +8777,13 @@ th_fcache_try_get(th_fcache* cache, th_string root, th_string path)
     if (!v)
         return NULL;
     th_fcache_entry* entry = *v;
+    // Check if the file has been modified
+    uint32_t hash = th_file_stat_hash(&entry->stream);
+    if (hash != entry->stat_hash) {
+        TH_LOG_TRACE("File has been modified, don't use cached entry");
+        th_fcache_erase(cache, entry);
+        return NULL;
+    }
     // Move entry to the back of the list
     th_fcache_list_erase(&cache->list, entry);
     th_fcache_list_push_back(&cache->list, entry);
@@ -8672,9 +8801,8 @@ th_fcache_insert(th_fcache* cache, th_fcache_entry* entry)
 {
     if (cache->num_cached == cache->max_cached) {
         // Evict the first entry
-        th_fcache_entry* first = th_fcache_list_pop_front(&cache->list);
-        th_fcache_entry_unref(first);
-        cache->num_cached--;
+        th_fcache_entry* first = th_fcache_list_front(&cache->list);
+        th_fcache_erase(cache, first);
     }
     th_err err = TH_ERR_OK;
     if ((err = th_fcache_map_set(&cache->map, th_fcache_entry_id(entry), entry)) != TH_ERR_OK) {
@@ -9640,15 +9768,65 @@ th_exchange_write_require_1_1_response(th_exchange* handler)
     th_response_async_write(&handler->response, handler->socket, (th_io_handler*)handler);
 }
 
+TH_LOCAL(th_err)
+th_exchange_handle_options(th_exchange* exchange, th_request* request, th_response* response)
+{
+    // All the methods we gotta check
+    static const struct {
+        th_method method;
+        const char* allow;
+    } methods[] = {
+        {TH_METHOD_GET, "GET, HEAD"},
+        {TH_METHOD_POST, "POST"},
+        {TH_METHOD_PUT, "PUT"},
+        {TH_METHOD_DELETE, "DELETE"},
+        {TH_METHOD_PATCH, "PATCH"},
+    };
+    char allow[512] = {0};
+    size_t pos = th_fmt_str_append(allow, 0, sizeof(allow), "OPTIONS"); // OPTIONS is always allowed
+    if (strcmp(request->uri_path, "*") != 0) {
+        th_router* router = exchange->router;
+        for (size_t i = 0; i < TH_ARRAY_SIZE(methods); i++) {
+            if (th_router_would_handle(router, methods[i].method, request)) {
+                pos += th_fmt_str_append(allow, pos, sizeof(allow) - pos, ", ");
+                pos += th_fmt_str_append(allow, pos, sizeof(allow) - pos, methods[i].allow);
+            }
+        }
+    } else {
+        for (size_t i = 0; i < TH_ARRAY_SIZE(methods); i++) {
+            pos += th_fmt_str_append(allow, pos, sizeof(allow) - pos, ", ");
+            pos += th_fmt_str_append(allow, pos, sizeof(allow) - pos, methods[i].allow);
+        }
+    }
+    th_err err = TH_ERR_OK;
+    if ((err = th_response_add_header(response, TH_STRING("Allow"), th_string_make(allow, pos))) != TH_ERR_OK)
+        return err;
+    if ((err = th_response_add_header(response, TH_STRING("Content-Type"), TH_STRING("text/plain"))) != TH_ERR_OK)
+        return err;
+    return TH_ERR_OK;
+}
+
+TH_LOCAL(th_err)
+th_exchange_handle_route(th_exchange* exchange, th_request* request, th_response* response)
+{
+    th_router* router = exchange->router;
+    if (request->method_internal == TH_METHOD_INTERNAL_OPTIONS) {
+        return th_exchange_handle_options(exchange, request, response);
+    } else {
+        return th_http_error(th_router_handle(router, request, response));
+    }
+}
+
 TH_LOCAL(void)
 th_exchange_handle_request(th_exchange* handler)
 {
     handler = (th_exchange*)th_io_composite_ref(&handler->base);
     th_socket* socket = handler->socket;
     th_request* request = &handler->request;
-    th_router* router = handler->router;
     th_response* response = &handler->response;
-    th_err err = th_http_error(th_router_handle(router, request, response));
+    // We only need to write headers if it's a HEAD request
+    response->only_headers = (request->method_internal == TH_METHOD_INTERNAL_HEAD);
+    th_err err = th_http_error(th_exchange_handle_route(handler, request, response));
     switch (th_http_code_get_type(TH_ERR_CODE(err))) {
     case TH_HTTP_CODE_TYPE_INFORMATIONAL:
         if (request->minor_version == 0) {
@@ -10103,7 +10281,7 @@ th_io_op_sendfile(void* self, size_t* result)
 /* End of src/th_io_op.c */
 /* Start of src/th_timer.c */
 
-#if defined(TH_CONFIG_OS_POSIX)
+#ifdef TH_CONFIG_OS_POSIX
 #include <errno.h>
 #include <time.h>
 #elif defined(TH_CONFIG_OS_WIN)
@@ -10117,7 +10295,7 @@ th_timer_init(th_timer* timer)
 }
 
 TH_LOCAL(th_err)
-th_timer_monotonic_now(uint64_t* out)
+th_timer_monotonic_now(time_t* out)
 {
 #if defined(TH_CONFIG_OS_POSIX)
     struct timespec ts = {0};
@@ -10139,7 +10317,7 @@ th_timer_monotonic_now(uint64_t* out)
 TH_PRIVATE(th_err)
 th_timer_set(th_timer* timer, th_duration duration)
 {
-    uint64_t now = 0;
+    time_t now = 0;
     th_err err = th_timer_monotonic_now(&now);
     TH_ASSERT(err == TH_ERR_OK && "th_timer_monotonic_now failed");
     if (err != TH_ERR_OK)
@@ -10151,7 +10329,7 @@ th_timer_set(th_timer* timer, th_duration duration)
 TH_PRIVATE(bool)
 th_timer_expired(th_timer* timer)
 {
-    uint64_t now = 0;
+    time_t now = 0;
     th_err err = th_timer_monotonic_now(&now);
     TH_ASSERT(err == TH_ERR_OK && "th_timer_monotonic_now failed");
     /* We don't return the error here, as it's already handled in th_timer_set

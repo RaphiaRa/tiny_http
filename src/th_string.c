@@ -86,7 +86,7 @@ TH_PRIVATE(th_string)
 th_string_substr(th_string str, size_t start, size_t len)
 {
     if (start >= str.len) {
-        return th_string_make(NULL, 0);
+        return th_string_make(str.ptr + len, 0);
     }
     if (len == th_string_npos || start + len > str.len) {
         len = str.len - start;

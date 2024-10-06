@@ -932,7 +932,7 @@ th_hash_cstr(const char* str)
 
 #include <string.h>
 
-#define TH_DEFINE_HASHMAP(NAME, K, V, HASH, K_EQ, K_NULL)                                                                           \
+#define TH_DEFINE_HASHMAP2(NAME, K, V, HASH, K_EQ, K_NULL, K_DEINIT, V_DEINIT)                                                      \
     typedef struct NAME##_entry {                                                                                                   \
         K key;                                                                                                                      \
         V value;                                                                                                                    \
@@ -999,15 +999,22 @@ th_hash_cstr(const char* str)
     TH_INLINE(void)                                                                                                                 \
     NAME##_deinit(NAME* map)                                                                                                        \
     {                                                                                                                               \
-        if (map->entries) {                                                                                                         \
-            th_allocator_free(map->allocator, map->entries);                                                                        \
-        }                                                                                                                           \
+        NAME##_reset(map);                                                                                                          \
     }                                                                                                                               \
                                                                                                                                     \
     TH_INLINE(void)                                                                                                                 \
     NAME##_reset(NAME* map)                                                                                                         \
     {                                                                                                                               \
         if (map->entries) {                                                                                                         \
+            if (map->size > 0) {                                                                                                    \
+                for (size_t i = map->begin; i < map->end; i++) {                                                                    \
+                    NAME##_entry* entry = &map->entries[i];                                                                         \
+                    if (!K_EQ(entry->key, K_NULL)) {                                                                                \
+                        K_DEINIT(entry->key);                                                                                       \
+                        V_DEINIT(entry->value);                                                                                     \
+                    }                                                                                                               \
+                }                                                                                                                   \
+            }                                                                                                                       \
             th_allocator_free(map->allocator, map->entries);                                                                        \
         }                                                                                                                           \
         map->entries = NULL;                                                                                                        \
@@ -1065,6 +1072,9 @@ th_hash_cstr(const char* str)
                 return TH_ERR_OK;                                                                                                   \
             }                                                                                                                       \
             if (K_EQ(entry->key, key)) {                                                                                            \
+                K_DEINIT(entry->key);                                                                                               \
+                V_DEINIT(entry->value);                                                                                             \
+                entry->key = key;                                                                                                   \
                 entry->value = value;                                                                                               \
                 return TH_ERR_OK;                                                                                                   \
             }                                                                                                                       \
@@ -1079,11 +1089,41 @@ th_hash_cstr(const char* str)
                 return TH_ERR_OK;                                                                                                   \
             }                                                                                                                       \
             if (K_EQ(entry->key, key)) {                                                                                            \
+                K_DEINIT(entry->key);                                                                                               \
+                V_DEINIT(entry->value);                                                                                             \
+                entry->key = key;                                                                                                   \
                 entry->value = value;                                                                                               \
                 return TH_ERR_OK;                                                                                                   \
             }                                                                                                                       \
         }                                                                                                                           \
         return TH_ERR_BAD_ALLOC;                                                                                                    \
+    }                                                                                                                               \
+                                                                                                                                    \
+    TH_INLINE(void)                                                                                                                 \
+    NAME##_fix_hole(NAME* map, NAME##_entry* entry) TH_MAYBE_UNUSED;                                                                \
+                                                                                                                                    \
+    TH_INLINE(void)                                                                                                                 \
+    NAME##_fix_hole(NAME* map, NAME##_entry* entry)                                                                                 \
+    {                                                                                                                               \
+        size_t last_zeroed = entry - map->entries;                                                                                  \
+        for (size_t i = entry - map->entries + 1; i < map->end; i++) {                                                              \
+            uint32_t hash = 0;                                                                                                      \
+            if (K_EQ(map->entries[i].key, K_NULL)) {                                                                                \
+                break;                                                                                                              \
+            } else if ((hash = (HASH(map->entries[i].key) & (map->capacity - 1))) <= last_zeroed) {                                 \
+                map->entries[last_zeroed] = map->entries[i];                                                                        \
+                map->entries[i].key = K_NULL;                                                                                       \
+                last_zeroed = i;                                                                                                    \
+            }                                                                                                                       \
+        }                                                                                                                           \
+        if (map->size == 0) {                                                                                                       \
+            map->begin = 0;                                                                                                         \
+            map->end = 0;                                                                                                           \
+        } else if (last_zeroed == map->end - 1) {                                                                                   \
+            map->end = NAME##_prev(map, &map->entries[last_zeroed]) - map->entries + 1;                                             \
+        } else if (last_zeroed == map->begin) {                                                                                     \
+            map->begin = NAME##_next(map, &map->entries[last_zeroed]) - map->entries;                                               \
+        }                                                                                                                           \
     }                                                                                                                               \
                                                                                                                                     \
     TH_INLINE(th_err)                                                                                                               \
@@ -1109,7 +1149,9 @@ th_hash_cstr(const char* str)
             /* Don't need to rehash every entry */                                                                                  \
             hash &= (new_capacity - 1);                                                                                             \
             NAME##_entry e = *entry;                                                                                                \
-            NAME##_erase(map, entry);                                                                                               \
+            entry->key = K_NULL;                                                                                                    \
+            --map->size;                                                                                                            \
+            NAME##_fix_hole(map, entry);                                                                                            \
             if ((err = NAME##_do_set(map, hash, e.key, e.value)) != TH_ERR_OK) {                                                    \
                 return err;                                                                                                         \
             }                                                                                                                       \
@@ -1163,26 +1205,7 @@ th_hash_cstr(const char* str)
     {                                                                                                                               \
         entry->key = K_NULL;                                                                                                        \
         map->size--;                                                                                                                \
-        /* Need to fix possible holes */                                                                                            \
-        size_t last_zeroed = entry - map->entries;                                                                                  \
-        for (size_t i = entry - map->entries + 1; i < map->end; i++) {                                                              \
-            uint32_t hash = 0;                                                                                                      \
-            if (K_EQ(map->entries[i].key, K_NULL)) {                                                                                \
-                break;                                                                                                              \
-            } else if ((hash = (HASH(map->entries[i].key) & (map->capacity - 1))) <= last_zeroed) {                                 \
-                map->entries[last_zeroed] = map->entries[i];                                                                        \
-                map->entries[i].key = K_NULL;                                                                                       \
-                last_zeroed = i;                                                                                                    \
-            }                                                                                                                       \
-        }                                                                                                                           \
-        if (map->size == 0) {                                                                                                       \
-            map->begin = 0;                                                                                                         \
-            map->end = 0;                                                                                                           \
-        } else if (last_zeroed == map->end - 1) {                                                                                   \
-            map->end = NAME##_prev(map, &map->entries[last_zeroed]) - map->entries + 1;                                             \
-        } else if (last_zeroed == map->begin) {                                                                                     \
-            map->begin = NAME##_next(map, &map->entries[last_zeroed]) - map->entries;                                               \
-        }                                                                                                                           \
+        NAME##_fix_hole(map, entry);                                                                                                \
     }                                                                                                                               \
                                                                                                                                     \
     TH_INLINE(V*)                                                                                                                   \
@@ -1229,6 +1252,41 @@ th_hash_cstr(const char* str)
         return NAME##_begin(map);                                                                                                   \
     }
 
+/** TH_DEFINE_HASHMAP_FIND
+ * Define find functions for alternative key types.
+ * !!! Only makes sense if the HASH function for the alternative key type
+ * is the same as the HASH function for the primary key type.
+ */
+#define TH_DEFINE_HASHMAP_FIND(NAME, METHOD, K, K_HASH, K_EQ, K_NULL) \
+    TH_INLINE(NAME##_entry*)                                          \
+    NAME##_##METHOD(const NAME* map, K key)                           \
+    {                                                                 \
+        uint32_t hash = K_HASH(key) & (map->capacity - 1);            \
+        if (map->size == 0) {                                         \
+            return NULL;                                              \
+        }                                                             \
+        for (size_t i = hash; i < map->end; i++) {                    \
+            NAME##_entry* entry = &map->entries[i];                   \
+            if (K_EQ(entry->key, K_NULL)) {                           \
+                return NULL;                                          \
+            }                                                         \
+            if (K_EQ(entry->key, key)) {                              \
+                return entry;                                         \
+            }                                                         \
+        }                                                             \
+        for (size_t i = map->begin; i < hash; i++) {                  \
+            NAME##_entry* entry = &map->entries[i];                   \
+            if (K_EQ(entry->key, K_NULL)) {                           \
+                return NULL;                                          \
+            }                                                         \
+            if (K_EQ(entry->key, key)) {                              \
+                return entry;                                         \
+            }                                                         \
+        }                                                             \
+        return NULL;                                                  \
+    }
+
+#define TH_DEFINE_HASHMAP(NAME, K, V, HASH, K_EQ, K_NULL) TH_DEFINE_HASHMAP2(NAME, K, V, HASH, K_EQ, K_NULL, (void), (void))
 /* default hash maps begin */
 /* th_cstr_map begin */
 
@@ -1325,12 +1383,6 @@ TH_PRIVATE(size_t)
 th_string_find_first(th_string str, size_t start, char c);
 
 TH_PRIVATE(size_t)
-th_string_find_first_not(th_string str, size_t start, char c);
-
-TH_PRIVATE(size_t)
-th_string_find_last_not(th_string str, size_t start, char c);
-
-TH_PRIVATE(size_t)
 th_string_find_first_of(th_string str, size_t start, const char* chars);
 
 /*
@@ -1338,6 +1390,11 @@ TH_PRIVATE(size_t)
 th_string_find_last(th_string str, size_t start, char c);
 */
 
+/** th_string_substr
+ * @brief Returns a substring of a string.
+ * If len == th_string_npos, the substring will go to the end of the string.
+ * If start > len, an empty string is returned (ptr = str.ptr + str.len, len = 0).
+ */
 TH_PRIVATE(th_string)
 th_string_substr(th_string str, size_t start, size_t len);
 
@@ -1352,14 +1409,6 @@ th_string_trim(th_string str);
 
 TH_PRIVATE(uint32_t)
 th_string_hash(th_string str);
-
-typedef struct th_mut_string {
-    char* ptr;
-    size_t len;
-} th_mut_string;
-
-TH_PRIVATE(void)
-th_mut_string_tolower(th_mut_string str);
 
 /* End of th_string.h */
 /* Start of th_vec.h */
@@ -1543,6 +1592,9 @@ TH_PRIVATE(void)
 th_heap_string_init(th_heap_string* self, th_allocator* allocator);
 
 TH_PRIVATE(th_err)
+th_heap_string_init_with(th_heap_string* self, th_string str, th_allocator* allocator);
+
+TH_PRIVATE(th_err)
 th_heap_string_set(th_heap_string* self, th_string str);
 
 TH_PRIVATE(th_err)
@@ -1555,13 +1607,16 @@ TH_PRIVATE(th_err)
 th_heap_string_resize(th_heap_string* self, size_t new_len, char fill);
 
 TH_PRIVATE(th_string)
-th_heap_string_view(th_heap_string* self);
+th_heap_string_view(const th_heap_string* self);
 
 TH_PRIVATE(char*)
-th_heap_string_data(th_heap_string* self);
+th_heap_string_at(th_heap_string* self, size_t index);
+
+TH_PRIVATE(const char*)
+th_heap_string_data(const th_heap_string* self);
 
 TH_PRIVATE(size_t)
-th_heap_string_len(th_heap_string* self);
+th_heap_string_len(const th_heap_string* self);
 
 TH_PRIVATE(void)
 th_heap_string_deinit(th_heap_string* self);
@@ -1569,14 +1624,15 @@ th_heap_string_deinit(th_heap_string* self);
 TH_PRIVATE(void)
 th_heap_string_clear(th_heap_string* self);
 
-/*
+TH_PRIVATE(void)
+th_heap_string_to_lower(th_heap_string* self);
+
 TH_PRIVATE(bool)
-th_heap_string_eq(th_heap_string* self, th_string other);
-*/
-/*
+th_heap_string_eq(const th_heap_string* self, th_string other);
+
 TH_PRIVATE(uint32_t)
-th_heap_string_hash(th_heap_string* self);
-*/
+th_heap_string_hash(const th_heap_string* self);
+
 TH_DEFINE_VEC(th_heap_string_vec, th_heap_string, th_heap_string_deinit)
 
 /* End of th_heap_string.h */
@@ -2435,22 +2491,9 @@ th_acceptor_deinit(th_acceptor* acceptor);
 /* Start of th_method.h */
 
 
-typedef enum th_method_internal {
-    TH_METHOD_INTERNAL_GET = TH_METHOD_GET,
-    TH_METHOD_INTERNAL_POST = TH_METHOD_POST,
-    TH_METHOD_INTERNAL_PUT = TH_METHOD_PUT,
-    TH_METHOD_INTERNAL_DELETE = TH_METHOD_DELETE,
-    TH_METHOD_INTERNAL_PATCH = TH_METHOD_PATCH,
-    TH_METHOD_INTERNAL_CONNECT,
-    TH_METHOD_INTERNAL_OPTIONS,
-    TH_METHOD_INTERNAL_TRACE,
-    TH_METHOD_INTERNAL_HEAD,
-    TH_METHOD_INTERNAL_INVALID
-} th_method_internal;
-
 struct th_method_mapping {
     const char* name;
-    th_method_internal method;
+    th_method method;
 };
 
 struct th_method_mapping* th_method_mapping_find(const char* str, size_t len);
@@ -2460,50 +2503,40 @@ struct th_method_mapping* th_method_mapping_find(const char* str, size_t len);
 
 
 
-typedef enum th_request_read_mode {
-    TH_REQUEST_READ_MODE_NORMAL = 0,
-    TH_REQUEST_READ_MODE_REJECT_UNAVAILABLE = (int)TH_ERR_HTTP(TH_CODE_SERVICE_UNAVAILABLE),
-    TH_REQUEST_READ_MODE_REJECT_TOO_MANY_REQUESTS = (int)TH_ERR_HTTP(TH_CODE_TOO_MANY_REQUESTS),
-} th_request_read_mode;
+#define TH_HS_NULL ((th_heap_string){.impl.small.allocator = (void*)-1})
+#define TH_HS_IS_NULL(hs) ((hs).impl.small.allocator == (void*)-1)
 
-#define TH_REQUEST_MAP_ARENA_LEN 512
-#define TH_REQUEST_STRING_ARENA_LEN 512
-#define TH_REQUEST_VEC_ARENA_LEN 1024
+TH_INLINE(bool)
+th_hs_eq(th_heap_string* a, th_heap_string* b)
+{
+    if (TH_HS_IS_NULL(*a) || TH_HS_IS_NULL(*b)) {
+        return TH_HS_IS_NULL(*a) && TH_HS_IS_NULL(*b);
+    }
+    return th_heap_string_eq(a, th_heap_string_view(b));
+}
+
+#define TH_HS_EQ(a, b) th_hs_eq(&a, &b)
+#define TH_HS_HASH(hs) th_heap_string_hash(&hs)
+#define TH_HS_DEINIT(hs) th_heap_string_deinit(&hs)
+TH_DEFINE_HASHMAP2(th_hs_map, th_heap_string, th_heap_string, TH_HS_HASH, TH_HS_EQ, TH_HS_NULL, TH_HS_DEINIT, TH_HS_DEINIT)
+
+#define TH_HS_CSTR_EQ(a, b) (strcmp(th_heap_string_data(&a), b) == 0)
+#define TH_HS_CSTR_HASH(s) th_cstr_hash(s)
+TH_DEFINE_HASHMAP_FIND(th_hs_map, find_by_cstr, const char*, TH_HS_CSTR_HASH, TH_HS_CSTR_EQ, "")
 
 struct th_request {
     th_allocator* allocator;
-    const char* uri_path;
-    const char* uri_query;
-    void* map_arena;
-    void* vec_arena;
-    void* string_arena;
-    th_arena_allocator map_allocator;
-    th_arena_allocator vec_allocator;
-    th_arena_allocator string_allocator;
-    th_cstr_map cookies;
-    th_cstr_map headers;
-    th_cstr_map query_params;
-    th_cstr_map body_params;
-    th_cstr_map path_params;
-    /** heap_strings
-     * This vector is used to store heap allocated strings that are used in the request.
-     * It's used to ensure that all memory is deallocated when the request is destroyed.
-     */
-    th_heap_string_vec heap_strings;
-    th_buf_vec buffer;
-    /* content_len as specified in the Content-Length header */
-    size_t content_len;
-    size_t data_len;
-    size_t content_buf_len;
-    size_t content_buf_pos;
-    char* content_buf;
-    // Method, as it is seen by the server.
-    th_method_internal method_internal;
-    // Method, as it is seen by the user.
+    th_heap_string uri_path;
+    th_heap_string uri_query;
+    th_hs_map cookies;
+    th_hs_map headers;
+    th_hs_map query_params;
+    th_hs_map body_params;
+    th_hs_map path_params;
+    th_string body;
     th_method method;
-    int minor_version;
+    int version;
     bool close;
-    bool parse_body_params;
 };
 
 TH_PRIVATE(void)
@@ -2513,28 +2546,37 @@ TH_PRIVATE(void)
 th_request_deinit(th_request* request);
 
 TH_PRIVATE(void)
-th_request_async_read(th_socket* sock, th_allocator* allocator, th_request* request, th_request_read_mode mode, th_io_handler* on_complete);
+th_request_set_version(th_request* request, int version);
+
+TH_PRIVATE(void)
+th_request_set_method(th_request* request, th_method method);
 
 TH_PRIVATE(th_err)
-th_request_store_cookie(th_request* request, th_string key, th_string value);
+th_request_set_uri_path(th_request* request, th_string path);
 
 TH_PRIVATE(th_err)
-th_request_store_header(th_request* request, th_string key, th_string value);
+th_request_set_uri_query(th_request* request, th_string query);
 
 TH_PRIVATE(th_err)
-th_request_store_query_param(th_request* request, th_string key, th_string value);
+th_request_add_query_param(th_request* request, th_string key, th_string value);
 
 TH_PRIVATE(th_err)
-th_request_store_body_param(th_request* request, th_string key, th_string value);
+th_request_add_body_param(th_request* request, th_string key, th_string value);
 
 TH_PRIVATE(th_err)
-th_request_store_path_param(th_request* request, th_string key, th_string value);
+th_request_add_path_param(th_request* request, th_string key, th_string value);
 
 TH_PRIVATE(th_err)
-th_request_store_uri_path(th_request* request, th_string path);
+th_request_add_cookie(th_request* request, th_string key, th_string value);
 
 TH_PRIVATE(th_err)
-th_request_store_uri_query(th_request* request, th_string query);
+th_request_add_header(th_request* request, th_string key, th_string value);
+
+TH_PRIVATE(void)
+th_request_clear_query_params(th_request* request);
+
+TH_PRIVATE(void)
+th_request_set_body(th_request* request, th_string body);
 
 /* End of th_request.h */
 /* Start of th_dir_mgr.h */
@@ -2821,6 +2863,12 @@ th_router_add_route(th_router* router, th_method method, th_string route, th_han
 
 #define TH_EXCHANGE_CONTINUE (size_t)0
 #define TH_EXCHANGE_CLOSE (size_t)1
+
+typedef enum th_request_read_mode {
+    TH_REQUEST_READ_MODE_NORMAL = 0,
+    TH_REQUEST_READ_MODE_REJECT_UNAVAILABLE = (int)TH_ERR_HTTP(TH_CODE_SERVICE_UNAVAILABLE),
+    TH_REQUEST_READ_MODE_REJECT_TOO_MANY_REQUESTS = (int)TH_ERR_HTTP(TH_CODE_TOO_MANY_REQUESTS),
+} th_request_read_mode;
 
 typedef struct th_exchange th_exchange;
 
@@ -3443,6 +3491,43 @@ th_poll_service_create(th_io_service** out, th_runner* runner, th_allocator* all
 
 #endif /* TH_HAVE_POLL */
 /* End of th_poll_service.h */
+/* Start of th_request_parser.h */
+
+
+
+#include <stddef.h>
+
+typedef enum th_request_parser_state {
+    TH_REQUEST_PARSER_STATE_METHOD,
+    TH_REQUEST_PARSER_STATE_PATH,
+    TH_REQUEST_PARSER_STATE_VERSION,
+    TH_REQUEST_PARSER_STATE_HEADERS,
+    TH_REQUEST_PARSER_STATE_BODY,
+    TH_REQUEST_PARSER_STATE_DONE
+} th_request_parser_state;
+
+typedef struct th_request_parser {
+    size_t content_len;
+    th_request_parser_state state;
+    bool parse_body_params;
+} th_request_parser;
+
+TH_PRIVATE(void)
+th_request_parser_init(th_request_parser* parser);
+
+TH_PRIVATE(size_t)
+th_request_parser_content_len(th_request_parser* parser);
+
+TH_PRIVATE(th_err)
+th_request_parser_parse(th_request_parser* parser, th_request* request, th_string data, size_t* parsed);
+
+TH_PRIVATE(bool)
+th_request_parser_header_done(th_request_parser* parser);
+
+TH_PRIVATE(bool)
+th_request_parser_done(th_request_parser* parser);
+
+/* End of th_request_parser.h */
 /* Start of th_ssl_error.h */
 
 
@@ -3514,92 +3599,6 @@ TH_PRIVATE(th_err)
 th_url_decode_string(th_string input, th_heap_string* output, th_url_decode_type type);
 
 /* End of th_url_decode.h */
-/* Start of picohttpparser.h */
-/*
- * Copyright (c) 2009-2014 Kazuho Oku, Tokuhiro Matsuno, Daisuke Murase,
- *                         Shigeo Mitsunari
- *
- * The software is licensed under either the MIT License (below) or the Perl
- * license.
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to
- * deal in the Software without restriction, including without limitation the
- * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
- * sell copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
- * IN THE SOFTWARE.
- */
-
-
-#include <sys/types.h>
-
-#ifdef _MSC_VER
-#define ssize_t intptr_t
-#endif
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-/* contains name and value of a header (name == NULL if is a continuing line
- * of a multiline header */
-struct phr_header {
-    const char *name;
-    size_t name_len;
-    const char *value;
-    size_t value_len;
-};
-
-/* returns number of bytes consumed if successful, -2 if request is partial,
- * -1 if failed */
-int phr_parse_request(const char *buf, size_t len, const char **method, size_t *method_len, const char **path, size_t *path_len,
-                      int *minor_version, struct phr_header *headers, size_t *num_headers, size_t last_len);
-
-/* ditto */
-int phr_parse_response(const char *_buf, size_t len, int *minor_version, int *status, const char **msg, size_t *msg_len,
-                       struct phr_header *headers, size_t *num_headers, size_t last_len);
-
-/* ditto */
-int phr_parse_headers(const char *buf, size_t len, struct phr_header *headers, size_t *num_headers, size_t last_len);
-
-/* should be zero-filled before start */
-struct phr_chunked_decoder {
-    size_t bytes_left_in_chunk; /* number of bytes left in current chunk */
-    char consume_trailer;       /* if trailing headers should be consumed */
-    char _hex_count;
-    char _state;
-};
-
-/* the function rewrites the buffer given as (buf, bufsz) removing the chunked-
- * encoding headers.  When the function returns without an error, bufsz is
- * updated to the length of the decoded data available.  Applications should
- * repeatedly call the function while it returns -2 (incomplete) every time
- * supplying newly arrived data.  If the end of the chunked-encoded data is
- * found, the function returns a non-negative number indicating the number of
- * octets left undecoded, that starts from the offset returned by `*bufsz`.
- * Returns -1 on error.
- */
-ssize_t phr_decode_chunked(struct phr_chunked_decoder *decoder, char *buf, size_t *bufsz);
-
-/* returns if the chunked decoder is in middle of chunked data */
-int phr_decode_chunked_is_in_data(struct phr_chunked_decoder *decoder);
-
-#ifdef __cplusplus
-}
-#endif
-
-/* End of picohttpparser.h */
 /* Start of th_align.h */
 
 #include <stdint.h>
@@ -4050,20 +4049,20 @@ th_route_consume_trail(th_route_segment* route, th_request* request, th_string* 
     case TH_CAPTURE_TYPE_INT:
         if (th_string_is_uint(segment)) {
             if (!dry)
-                (void)th_request_store_path_param(request, route_name, segment);
+                (void)th_request_add_path_param(request, route_name, segment);
             *trail = th_string_substr(*trail, segment.len + 1, th_string_npos);
             *result = true;
         }
         break;
     case TH_CAPTURE_TYPE_STRING:
         if (!dry)
-            (void)th_request_store_path_param(request, route_name, segment);
+            (void)th_request_add_path_param(request, route_name, segment);
         *trail = th_string_substr(*trail, segment.len + 1, th_string_npos);
         *result = true;
         break;
     case TH_CAPTURE_TYPE_PATH:
         if (!dry)
-            (void)th_request_store_path_param(request, route_name, *trail);
+            (void)th_request_add_path_param(request, route_name, *trail);
         *trail = th_string_make(NULL, 0);
         *result = true;
         break;
@@ -4078,10 +4077,10 @@ cleanup:
 TH_LOCAL(th_err)
 th_router_do_handle(th_router* router, th_method method, th_request* request, th_response* response, bool dry)
 {
-    TH_LOG_DEBUG("Handling request %p: %s", request, request->uri_path);
-    if (request->uri_path[0] != '/')
+    TH_LOG_DEBUG("Handling request %p: %s", request, th_heap_string_data(&request->uri_path));
+    if (*th_heap_string_at(&request->uri_path, 0) != '/')
         return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
-    th_string trail = th_string_from_cstr(request->uri_path + 1);
+    th_string trail = th_string_substr(th_heap_string_view(&request->uri_path), 1, th_string_npos);
     th_route_segment* route = router->routes;
     while (1) {
         th_err err = TH_ERR_OK;
@@ -4478,16 +4477,16 @@ th_method_mapping_find (register const char *str, register size_t len)
   static struct th_method_mapping wordlist[] =
     {
       {""}, {""}, {""},
-      {"GET",  TH_METHOD_INTERNAL_GET},
-      {"HEAD", TH_METHOD_INTERNAL_HEAD},
-      {"TRACE", TH_METHOD_INTERNAL_TRACE},
-      {"DELETE", TH_METHOD_INTERNAL_DELETE},
-      {"OPTIONS", TH_METHOD_INTERNAL_OPTIONS},
-      {"PUT",  TH_METHOD_INTERNAL_PUT},
-      {"POST", TH_METHOD_INTERNAL_POST},
-      {"PATCH", TH_METHOD_INTERNAL_PATCH},
+      {"GET",  TH_METHOD_GET},
+      {"HEAD", TH_METHOD_HEAD},
+      {"TRACE", TH_METHOD_TRACE},
+      {"DELETE", TH_METHOD_DELETE},
+      {"OPTIONS", TH_METHOD_OPTIONS},
+      {"PUT",  TH_METHOD_PUT},
+      {"POST", TH_METHOD_POST},
+      {"PATCH", TH_METHOD_PATCH},
       {""},
-      {"CONNECT", TH_METHOD_INTERNAL_CONNECT}
+      {"CONNECT", TH_METHOD_CONNECT}
     };
 
   if (len <= TH_METHOD_MAX_WORD_LENGTH && len >= TH_METHOD_MIN_WORD_LENGTH)
@@ -6673,67 +6672,61 @@ th_tcp_socket_deinit(th_tcp_socket* sock)
 
 /* th_socket functions end */
 /* End of src/th_tcp_socket.c */
-/* Start of src/th_request.c */
+/* Start of src/th_request_parser.c */
 
-
-#include <assert.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 
 #undef TH_LOG_TAG
-#define TH_LOG_TAG "request"
+#define TH_LOG_TAG "request_parser"
 
-typedef enum th_request_read_state {
-    TH_REQUEST_READ_STATE_HEADER,
-    TH_REQUEST_READ_STATE_PAYLOAD
-} th_request_read_state;
-
-typedef struct th_request_read_handler {
-    th_io_composite base;
-    th_allocator* allocator;
-    th_socket* sock;
-    th_request* request;
-    th_request_read_mode mode;
-    th_request_read_state state;
-} th_request_read_handler;
-
-TH_LOCAL(void)
-th_request_read_handler_fn(void* self, size_t len, th_err err);
-
-TH_LOCAL(void)
-th_request_read_handler_destroy(void* self)
+TH_PRIVATE(void)
+th_request_parser_init(th_request_parser* parser)
 {
-    th_request_read_handler* handler = self;
-    th_allocator_free(handler->allocator, handler);
+    parser->state = TH_REQUEST_PARSER_STATE_METHOD;
+    parser->content_len = 0;
+    parser->parse_body_params = false;
 }
 
-TH_LOCAL(void)
-th_request_read_handler_complete(th_request_read_handler* handler, size_t len, th_err err)
+TH_PRIVATE(size_t)
+th_request_parser_content_len(th_request_parser* parser)
 {
-    th_io_composite_complete(&handler->base, len, err);
+    return parser->content_len;
 }
 
 TH_LOCAL(th_err)
-th_request_read_handler_create(th_request_read_handler** handler, th_allocator* allocator, th_socket* sock, th_request* request, th_request_read_mode mode, th_io_handler* on_complete)
+th_request_parser_do_cookie(th_request* request, th_string cookie)
 {
-    *handler = th_allocator_alloc(allocator, sizeof(th_request_read_handler));
-    if (!*handler)
-        return TH_ERR_BAD_ALLOC;
-    th_io_composite_init(&(*handler)->base, th_request_read_handler_fn, th_request_read_handler_destroy, on_complete);
-    (*handler)->allocator = allocator;
-    (*handler)->sock = sock;
-    (*handler)->request = request;
-    (*handler)->mode = mode;
-    (*handler)->state = TH_REQUEST_READ_STATE_HEADER;
+    size_t eq = th_string_find_first(cookie, 0, '=');
+    if (eq == th_string_npos) {
+        return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
+    }
+    th_string key = th_string_trim(th_string_substr(cookie, 0, eq));
+    th_string value = th_string_trim(th_string_substr(cookie, eq + 1, cookie.len));
+    th_err err = TH_ERR_OK;
+    if ((err = th_request_add_cookie(request, key, value)) != TH_ERR_OK) {
+        return err;
+    }
     return TH_ERR_OK;
 }
 
-/* th_request_read_handler end */
-/* th_request implementation begin */
+TH_LOCAL(th_err)
+th_request_parser_do_cookie_list(th_request* request, th_string cookie_list)
+{
+    size_t start = 0;
+    size_t pos = 0;
+    while (pos != th_string_npos) {
+        pos = th_string_find_first(cookie_list, start, ';');
+        th_string cookie = th_string_trim(th_string_substr(cookie_list, start, pos - start));
+        th_err err = th_request_parser_do_cookie(request, cookie);
+        if (err != TH_ERR_OK) {
+            return err;
+        }
+        start = pos + 1;
+    }
+    return TH_ERR_OK;
+}
 
 TH_LOCAL(th_err)
-th_request_parse_next_query_param(th_string string, size_t* pos, th_string* key, th_string* value)
+th_request_parser_do_next_query_param(th_string string, size_t* pos, th_string* key, th_string* value)
 {
     size_t eq = th_string_find_first(string, *pos, '=');
     if (eq == th_string_npos) {
@@ -6753,17 +6746,99 @@ th_request_parse_next_query_param(th_string string, size_t* pos, th_string* key,
 }
 
 TH_LOCAL(th_err)
-th_request_parse_path_query(th_request* request, th_string path)
+th_request_parser_do_body_params(th_request* request, th_string body)
+{
+    th_err err = TH_ERR_OK;
+    size_t pos = 0;
+    while (pos != th_string_npos) {
+        th_string key;
+        th_string value;
+        err = th_request_parser_do_next_query_param(body, &pos, &key, &value);
+        if (err != TH_ERR_OK) {
+            return err;
+        }
+        if ((err = th_request_add_body_param(request, key, value)) != TH_ERR_OK) {
+            return err;
+        }
+    }
+    return err;
+}
+
+/* Get the next HTTP token from the buffer, stopping at the given character */
+TH_LOCAL(th_err)
+th_request_parser_next_token(th_string buffer, th_string* token, char until, size_t* parsed)
+{
+    static const int token_char[256] = {
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 0-15
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 16-31
+        0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, // 32-47 (don't allow space, ")
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1,                   // 48-57 (0-9)
+        1, 1, 0, 1, 0, 1, 1,                            // 58-64 (don't allow <,>)
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, // 65-80 (A-P)
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1,                   // 81-90 (Q-Z)
+        0, 0, 0, 1, 1, 1,                               // 91-96 (don't allow [, \, ])
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, // 97-112 (a-p)
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1,                   // 113-122 (q-z)
+        0, 1, 0, 1, 0,                                  // 123-127 (don't allow {, }, DEL)
+        // implicitely set to 0 for 128-255
+    };
+    size_t i = 0;
+    while (i < buffer.len && buffer.ptr[i] != until) {
+        if (token_char[(unsigned char)buffer.ptr[i]] == 0)
+            return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
+        i++;
+    }
+    if (i == buffer.len)
+        return TH_ERR_OK;
+    if (i == 0)
+        return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
+    *token = th_string_substr(buffer, 0, i);
+    *parsed = i + 1;
+    return TH_ERR_OK;
+}
+
+TH_LOCAL(bool)
+th_request_parser_is_printable_string(th_string input)
+{
+    for (size_t i = 0; i < input.len; i++) {
+        if (input.ptr[i] < 32 || input.ptr[i] > 126) {
+            return false;
+        }
+    }
+    return true;
+}
+
+TH_LOCAL(th_err)
+th_request_parser_do_method(th_request_parser* parser, th_request* request, th_string buffer, size_t* parsed_out)
+{
+    th_string method;
+    size_t parsed = 0;
+    th_err err = th_request_parser_next_token(buffer, &method, ' ', &parsed);
+    if (err != TH_ERR_OK || parsed == 0) {
+        return err;
+    }
+    struct th_method_mapping* mm = th_method_mapping_find(method.ptr, method.len);
+    if (!mm) {
+        return TH_ERR_HTTP(TH_CODE_NOT_IMPLEMENTED);
+    }
+    th_request_set_method(request, mm->method);
+    *parsed_out = parsed;
+    parser->state = TH_REQUEST_PARSER_STATE_PATH;
+    return TH_ERR_OK;
+}
+
+TH_LOCAL(th_err)
+th_request_parser_do_uri_query(th_request* request, th_string path)
 {
     size_t pos = 0;
     while (pos != th_string_npos) {
         th_string key;
         th_string value;
-        th_err err = th_request_parse_next_query_param(path, &pos, &key, &value);
+        th_err err = th_request_parser_do_next_query_param(path, &pos, &key, &value);
         if (err != TH_ERR_OK) {
             return err;
         }
-        if (th_request_store_query_param(request, key, value) != TH_ERR_OK) {
+        if (th_request_add_query_param(request, key, value) != TH_ERR_OK) {
             return TH_ERR_BAD_ALLOC;
         }
     }
@@ -6771,503 +6846,394 @@ th_request_parse_path_query(th_request* request, th_string path)
 }
 
 TH_LOCAL(th_err)
-th_request_parse_path(th_request* request, th_string path)
+th_request_parser_next_path_segment(th_string buffer, th_string* segment, size_t* parsed)
 {
-    th_err err = TH_ERR_OK;
-    size_t query_start = th_string_find_first(path, 0, '?');
-    if (query_start == th_string_npos || query_start == path.len - 1) {
-        if ((err = th_request_store_uri_path(request, path)) != TH_ERR_OK)
-            return err;
-        if ((err = th_request_store_uri_query(request, TH_STRING(""))) != TH_ERR_OK)
-            return err;
+    static const int uri_char[256] = {
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 0-15
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 16-31
+        0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, // 32-47 (don't allow space, ")
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1,                   // 48-57 (0-9)
+        1, 1, 0, 1, 0, 1, 1,                            // 58-64 (don't allow <,>)
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, // 65-80 (A-P)
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1,                   // 81-90 (Q-Z)
+        0, 0, 0, 0, 1, 0,                               // 91-96 (don't allow [, \, ], ^, `)
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, // 97-112 (a-p)
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1,                   // 113-122 (q-z)
+        0, 0, 0, 1, 0,                                  // 123-127 (don't allow {, |, }, DEL)
+        // implicitely set to 0 for 128-255
+    };
+    size_t i = 0;
+    while (i < buffer.len && buffer.ptr[i] != ' ' && buffer.ptr[i] != '?') {
+        if (uri_char[(unsigned char)buffer.ptr[i]] == 0)
+            return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
+        i++;
+    }
+    if (i == buffer.len)
         return TH_ERR_OK;
-    }
-    if ((err = th_request_store_uri_path(request, th_string_trim(th_string_substr(path, 0, query_start)))) != TH_ERR_OK)
+    *segment = th_string_substr(buffer, 0, i);
+    *parsed = i + 1;
+    return TH_ERR_OK;
+}
+
+TH_LOCAL(th_err)
+th_request_parser_do_path(th_request_parser* parser, th_request* request, th_string path, size_t* parsed)
+{
+    th_string segment;
+    size_t uri_parsed = 0;
+    th_err err = th_request_parser_next_path_segment(path, &segment, &uri_parsed);
+    if (err != TH_ERR_OK || uri_parsed == 0)
         return err;
-    th_string uri_query = th_string_trim(th_string_substr(path, query_start + 1, path.len - query_start - 1));
-    if ((err = th_request_store_uri_query(request, uri_query)) != TH_ERR_OK)
+    if ((err = th_request_set_uri_path(request, segment)) != TH_ERR_OK)
         return err;
-    if (th_request_parse_path_query(request, uri_query) != TH_ERR_OK) {
-        // If we can't parse the query, that's ok, we just ignore it
-        // restore the original state and continue
-        th_cstr_map_reset(&request->query_params);
-        // TODO, clean up the allocated strings
-    }
-    return TH_ERR_OK;
-}
-
-TH_LOCAL(th_err)
-th_request_parse_cookie(th_request* request, th_string cookie)
-{
-    size_t eq = th_string_find_first(cookie, 0, '=');
-    if (eq == th_string_npos) {
-        return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
-    }
-    th_string key = th_string_trim(th_string_substr(cookie, 0, eq));
-    th_string value = th_string_trim(th_string_substr(cookie, eq + 1, cookie.len));
-    th_err err = TH_ERR_OK;
-    if ((err = th_request_store_cookie(request, key, value)) != TH_ERR_OK) {
-        return err;
-    }
-    return TH_ERR_OK;
-}
-
-TH_LOCAL(th_err)
-th_request_parse_cookie_list(th_request* request, th_string cookie_list)
-{
-    size_t start = 0;
-    size_t pos = 0;
-    while (pos != th_string_npos) {
-        pos = th_string_find_first(cookie_list, start, ';');
-        th_string cookie = th_string_trim(th_string_substr(cookie_list, start, pos - start));
-        th_err err = th_request_parse_cookie(request, cookie);
-        if (err != TH_ERR_OK) {
+    if (segment.ptr[segment.len] == '?') { // got a query
+        size_t query_parsed = 0;
+        err = th_request_parser_next_path_segment(th_string_substr(path, uri_parsed, th_string_npos), &segment, &query_parsed);
+        if (err != TH_ERR_OK || query_parsed == 0)
             return err;
-        }
-        start = pos + 1;
-    }
-    return TH_ERR_OK;
-}
-
-TH_LOCAL(th_err)
-th_request_parse_body_params(th_request* request)
-{
-    th_err err = TH_ERR_OK;
-    th_cstr_map_iter iter = th_cstr_map_find(&request->headers, "content-type");
-    if (!iter)
-        return TH_ERR_OK;
-    if (th_cstr_eq(iter->value, "application/x-www-form-urlencoded")) {
-        th_buffer body = th_get_body(request);
-        size_t pos = 0;
-        while (pos != th_string_npos) {
-            th_string key;
-            th_string value;
-            err = th_request_parse_next_query_param(th_string_make(body.ptr, body.len), &pos, &key, &value);
-            if (err != TH_ERR_OK) {
-                return err;
-            }
-            if ((err = th_request_store_body_param(request, key, value)) != TH_ERR_OK) {
-                return err;
-            }
-        }
-    }
-    return err;
-}
-
-TH_LOCAL(void)
-th_request_read_handle_content(th_request_read_handler* handler, size_t len)
-{
-    th_request* request = handler->request;
-    size_t body_len = request->content_buf_pos + len;
-    if (body_len != request->content_buf_len) { // basically means eof, as we requested exact read
-        th_request_read_handler_complete(handler, 0, TH_ERR_EOF);
-        return;
-    }
-    // got the whole body, let's parse it if needed
-    if (request->parse_body_params) {
-        th_err err = th_request_parse_body_params(request);
-        if (err != TH_ERR_OK) {
-            th_request_read_handler_complete(handler, 0, err);
-            return;
-        }
-    }
-    th_request_read_handler_complete(handler, body_len, TH_ERR_OK);
-}
-
-TH_LOCAL(th_err)
-th_request_handle_headers(th_request* request, struct phr_header* headers, size_t num_headers)
-{
-    // indirection array for cookie headers
-    // Some clients send multiple cookie headers even though it's not allowed
-    size_t cookie_headers[TH_CONFIG_MAX_HEADER_NUM];
-    size_t num_cookie_headers = 0;
-    // copy headers and parse the most important ones
-    th_cstr_map_reserve(&request->headers, num_headers);
-    th_err err = TH_ERR_OK;
-    for (size_t i = 0; i < num_headers; i++) {
-        th_string key = th_string_make(headers[i].name, headers[i].name_len);
-        th_string value = th_string_make(headers[i].value, headers[i].value_len);
-        th_mut_string_tolower((th_mut_string){th_buf_vec_at(&request->buffer, (size_t)(key.ptr - th_buf_vec_begin(&request->buffer))), key.len});
-        th_header_id hid = th_header_id_from_string(key.ptr, key.len);
-        switch (hid) {
-        case TH_HEADER_ID_CONTENT_LENGTH: {
-            unsigned int len;
-            if ((err = th_string_to_uint(value, &len)) != TH_ERR_OK) {
-                return err;
-            }
-            request->content_len = len;
-            break;
-        }
-        case TH_HEADER_ID_CONNECTION:
-            if (TH_STRING_EQ(value, "close")) {
-                request->close = true;
-            } else if (TH_STRING_EQ(value, "keep-alive")) {
-                request->close = false;
-            }
-            break;
-        case TH_HEADER_ID_RANGE:
-            if (request->method == TH_METHOD_GET) {
-                return TH_ERR_HTTP(TH_CODE_RANGE_NOT_SATISFIABLE);
-            } else {
-                return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
-            }
-        case TH_HEADER_ID_COOKIE:
-            // Handle cookie headers later to better use the arena allocator
-            if (num_cookie_headers == TH_CONFIG_MAX_HEADER_NUM) {
-                return TH_ERR_HTTP(TH_CODE_REQUEST_HEADER_FIELDS_TOO_LARGE);
-            }
-            cookie_headers[num_cookie_headers++] = i;
-            break;
-        case TH_HEADER_ID_CONTENT_TYPE:
-            if (request->method == TH_METHOD_POST) {
-                if (th_string_eq(value, TH_STRING("application/x-www-form-urlencoded"))) {
-                    request->parse_body_params = true;
-                    //} else if (th_string_eq(th_string_substr(value, 0, th_string_find_first(value, 0, ';')), TH_STRING("multipart/form-data"))) {
-                } else {
-                    return TH_ERR_HTTP(TH_CODE_UNSUPPORTED_MEDIA_TYPE);
-                }
-            }
-            break;
-        case TH_HEADER_ID_TRANSFER_ENCODING:
-            return TH_ERR_HTTP(TH_CODE_NOT_IMPLEMENTED);
-        default:
-            break;
-        }
-        // store the header
-        if ((err = th_request_store_header(request, key, value)) != TH_ERR_OK) {
+        if ((err = th_request_set_uri_query(request, segment)) != TH_ERR_OK)
             return err;
+        if ((err = th_request_parser_do_uri_query(request, segment)) != TH_ERR_OK) {
+            // If we can't parse the query, that's ok, we just ignore it
+            // restore the original state and continue
+            th_request_clear_query_params(request);
         }
-    }
-
-    // parse cookie headers
-    for (size_t i = 0; i < num_cookie_headers; i++) {
-        th_string value = th_string_make(headers[cookie_headers[i]].value, headers[cookie_headers[i]].value_len);
-        if ((err = th_request_parse_cookie_list(request, value)) != TH_ERR_OK) {
-            return err;
-        }
-    }
-    return TH_ERR_OK;
-}
-
-TH_LOCAL(th_method)
-th_request_map_method(th_method_internal method)
-{
-    switch (method) {
-    case TH_METHOD_INTERNAL_HEAD:
-        return TH_METHOD_GET;
-    default:
-        return (th_method)method;
-    }
-}
-
-TH_LOCAL(void)
-th_request_read_handle_header(th_request_read_handler* handler, size_t len)
-{
-    th_request* request = handler->request;
-    th_request_read_mode mode = handler->mode;
-    th_string path;
-    th_string method;
-    size_t num_headers = TH_CONFIG_MAX_HEADER_NUM;
-    struct phr_header headers[TH_CONFIG_MAX_HEADER_NUM];
-    size_t data_len = request->data_len + len;
-    int pret = phr_parse_request(th_buf_vec_at(&request->buffer, 0), data_len, &method.ptr, &method.len, &path.ptr, &path.len, &request->minor_version, headers, &num_headers, request->data_len);
-    request->data_len = data_len;
-    if (pret == -1) {
-        TH_LOG_DEBUG("%p: Failed to parse request", request);
-        th_request_read_handler_complete(handler, 0, TH_ERR_HTTP(TH_CODE_BAD_REQUEST));
-        return;
-    } else if (pret == -2) { // we need more data
-        size_t buf_len = th_buf_vec_size(&request->buffer);
-        if (data_len == buf_len) {
-            if (buf_len == TH_CONFIG_LARGE_HEADER_LEN) {
-                // We have reached the maximum header length
-                th_request_read_handler_complete(handler, 0, TH_ERR_HTTP(TH_CODE_REQUEST_HEADER_FIELDS_TOO_LARGE));
-                return;
-            }
-            th_buf_vec_resize(&request->buffer, TH_CONFIG_LARGE_HEADER_LEN);
-        }
-        th_socket_async_read(handler->sock, th_buf_vec_at(&request->buffer, data_len), th_buf_vec_size(&request->buffer) - data_len, (th_io_handler*)th_io_composite_ref(&handler->base));
-        return;
-    }
-    size_t header_len = (size_t)pret;
-    TH_LOG_DEBUG("%p: Parsed request: %.*s %.*s HTTP/%d.%d", request, (int)method.len, method.ptr, (int)path.len, path.ptr, 1, request->minor_version);
-    if (mode != TH_REQUEST_READ_MODE_NORMAL) {
-        // Unless we are in normal mode, we don't need to parse the request further
-        th_request_read_handler_complete(handler, 0, (th_err)mode);
-        return;
-    }
-    if (request->minor_version == 0)
-        request->close = true; // HTTP/1.0 defaults to close
-    // find method
-    struct th_method_mapping* mm = th_method_mapping_find(method.ptr, method.len);
-    if (!mm) {
-        th_request_read_handler_complete(handler, 0, TH_ERR_HTTP(TH_CODE_NOT_IMPLEMENTED));
-        return;
-    }
-    request->method_internal = mm->method;
-    // Reject all methods that we don't support yet
-    if (request->method_internal == TH_METHOD_INTERNAL_TRACE
-        || request->method_internal == TH_METHOD_INTERNAL_CONNECT) {
-        th_request_read_handler_complete(handler, 0, TH_ERR_HTTP(TH_CODE_METHOD_NOT_ALLOWED));
-        return;
-    }
-    request->method = th_request_map_method(request->method_internal);
-
-    // find path query
-    th_err err = TH_ERR_OK;
-    if ((err = th_request_parse_path(request, path)) != TH_ERR_OK) {
-        TH_LOG_DEBUG("%p: Failed to parse uri: %s", request, th_strerror(err));
-        th_request_read_handler_complete(handler, 0, TH_ERR_HTTP(TH_CODE_BAD_REQUEST));
-        return;
-    }
-
-    // handle headers
-    if ((err = th_request_handle_headers(request, headers, num_headers)) != TH_ERR_OK) {
-        TH_LOG_DEBUG("%p: Failed to handle headers: %s", request, th_strerror(err));
-        th_request_read_handler_complete(handler, 0, err);
-        return;
-    }
-
-    // Get is not allowed to have a body
-    if (request->method == TH_METHOD_GET && request->content_len > 0) {
-        TH_LOG_DEBUG("%p: Rejecting GET request with body", request);
-        th_request_read_handler_complete(handler, 0, TH_ERR_HTTP(TH_CODE_BAD_REQUEST));
-        return;
-    }
-
-    // let's check whether we have all the content
-    size_t trailing = data_len - header_len;
-    if (request->content_len == trailing) {
-        th_buf_vec_resize(&request->buffer, data_len);
-        th_buf_vec_shrink_to_fit(&request->buffer);
-        request->content_buf = th_buf_vec_at(&request->buffer, header_len);
-        request->content_buf_len = request->content_buf_pos = trailing;
-        th_request_read_handle_content(handler, 0);
-        return;
-    } else if (request->content_len == 0) { // trailing is not 0
-        th_buf_vec_resize(&request->buffer, data_len);
-        th_buf_vec_shrink_to_fit(&request->buffer);
-        th_request_read_handler_complete(handler, 0, TH_ERR_HTTP(TH_CODE_BAD_REQUEST));
-        return;
-    }
-
-    // check whether the content length is ok
-    if (request->content_len > TH_CONFIG_MAX_CONTENT_LEN) {
-        TH_LOG_DEBUG("%p: Rejecting request with too large content length", request);
-        th_request_read_handler_complete(handler, 0, TH_ERR_HTTP(TH_CODE_PAYLOAD_TOO_LARGE));
-        return;
-    }
-
-    // we have more content, set up the buffer
-    size_t remaining_buf = th_buf_vec_size(&request->buffer) - data_len;
-    request->content_buf_pos = data_len - header_len; // content length we have so far
-    if (remaining_buf >= request->content_len) {
-        request->content_buf = th_buf_vec_at(&request->buffer, header_len);
-        request->content_buf_len = remaining_buf;
-    } else if (th_buf_vec_size(&request->buffer) >= request->content_len) {
-        memmove(th_buf_vec_at(&request->buffer, 0), th_buf_vec_at(&request->buffer, header_len), request->content_buf_pos);
-        request->content_buf = th_buf_vec_at(&request->buffer, 0);
-        request->content_buf_len = th_buf_vec_size(&request->buffer) - request->content_buf_pos;
+        uri_parsed += query_parsed;
     } else {
-        th_buf_vec_resize(&request->buffer, request->content_len);
-        memmove(th_buf_vec_at(&request->buffer, 0), th_buf_vec_at(&request->buffer, header_len), request->content_buf_pos);
-        request->content_buf = th_buf_vec_at(&request->buffer, 0);
-        request->content_buf_len = th_buf_vec_size(&request->buffer) - request->content_buf_pos;
+        if ((err = th_request_set_uri_query(request, TH_STRING(""))) != TH_ERR_OK)
+            return err;
     }
-
-    // read the rest of the content
-    handler->state = TH_REQUEST_READ_STATE_PAYLOAD;
-    char* read_pos = request->content_buf + request->content_buf_pos;
-    th_socket_async_read_exact(handler->sock, read_pos,
-                               request->content_buf_len - request->content_buf_pos,
-                               (th_io_handler*)th_io_composite_ref(&handler->base));
-}
-
-TH_LOCAL(void)
-th_request_read_handler_fn(void* self, size_t len, th_err err)
-{
-    th_request_read_handler* handler = self;
-    if (err) {
-        th_request_read_handler_complete(handler, 0, err);
-        return;
-    }
-    if (len == 0) { // unexpected EOF
-        th_request_read_handler_complete(handler, 0, TH_ERR_EOF);
-        return;
-    }
-
-    switch (handler->state) {
-    case TH_REQUEST_READ_STATE_HEADER:
-        th_request_read_handle_header(handler, len);
-        break;
-    case TH_REQUEST_READ_STATE_PAYLOAD:
-        th_request_read_handle_content(handler, len);
-        break;
-    default:
-        assert(0 && "Invalid state");
-        break;
-    }
-}
-
-TH_PRIVATE(void)
-th_request_async_read(th_socket* sock, th_allocator* allocator, th_request* request, th_request_read_mode mode, th_io_handler* on_complete)
-{
-    th_request_read_handler* handler = NULL;
-    th_err err = TH_ERR_OK;
-    if ((err = th_request_read_handler_create(&handler, allocator, sock, request, mode, on_complete)) != TH_ERR_OK) {
-        th_context_dispatch_handler(th_socket_get_context(sock), on_complete, 0, err);
-        return;
-    }
-    if ((err = th_buf_vec_resize(&request->buffer, TH_CONFIG_SMALL_HEADER_LEN)) != TH_ERR_OK) {
-        th_context_dispatch_handler(th_socket_get_context(sock), (th_io_handler*)handler, 0, err);
-        return;
-    }
-    th_socket_async_read(sock, th_buf_vec_at(&request->buffer, 0), th_buf_vec_size(&request->buffer), (th_io_handler*)handler);
-}
-
-TH_LOCAL(const char*)
-th_request_store_string(th_request* request, th_string str)
-{
-    th_heap_string hstr = {0};
-    th_heap_string_init(&hstr, &request->string_allocator.base);
-    if (th_heap_string_set(&hstr, str) != TH_ERR_OK) {
-        th_heap_string_deinit(&hstr);
-        return NULL;
-    }
-    if (th_heap_string_vec_push_back(&request->heap_strings, hstr) != TH_ERR_OK) {
-        th_heap_string_deinit(&hstr);
-        return NULL;
-    }
-    return th_heap_string_data(th_heap_string_vec_end(&request->heap_strings) - 1);
-}
-
-TH_LOCAL(const char*)
-th_request_store_string_url_decoded(th_request* request, th_string str, th_url_decode_type type)
-{
-    th_heap_string hstr = {0};
-    th_heap_string_init(&hstr, &request->string_allocator.base);
-    if (th_url_decode_string(str, &hstr, type) != TH_ERR_OK) {
-        th_heap_string_deinit(&hstr);
-        return NULL;
-    }
-    if (th_heap_string_vec_push_back(&request->heap_strings, hstr) != TH_ERR_OK) {
-        th_heap_string_deinit(&hstr);
-        return NULL;
-    }
-    return th_heap_string_data(th_heap_string_vec_end(&request->heap_strings) - 1);
-}
-
-TH_LOCAL(th_err)
-th_request_map_store(th_request* request, th_cstr_map* map, th_string key, th_string value)
-{
-    const char* k = th_request_store_string(request, key);
-    const char* v = th_request_store_string(request, value);
-    if (!k || !v)
-        return TH_ERR_BAD_ALLOC;
-    return th_cstr_map_set(map, k, v);
-}
-
-TH_LOCAL(th_err)
-th_request_map_store_url_decoded(th_request* request, th_cstr_map* map, th_string key, th_string value, th_url_decode_type type)
-{
-    const char* k = th_request_store_string_url_decoded(request, key, type);
-    const char* v = th_request_store_string_url_decoded(request, value, type);
-    if (!k || !v)
-        return TH_ERR_BAD_ALLOC;
-    return th_cstr_map_set(map, k, v);
+    *parsed = uri_parsed;
+    parser->state = TH_REQUEST_PARSER_STATE_VERSION;
+    return TH_ERR_OK;
 }
 
 TH_PRIVATE(th_err)
-th_request_store_cookie(th_request* request, th_string key, th_string value)
+th_request_parser_do_version(th_request_parser* parser, th_request* request, th_string buffer, size_t* parsed)
+{
+    size_t n = th_string_find_first(buffer, 0, '\r');
+    if (n == th_string_npos || n + 1 == buffer.len)
+        return TH_ERR_OK;
+    if (buffer.ptr[n + 1] != '\n')
+        return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
+    th_string version = th_string_substr(buffer, 0, n);
+    if (version.len < 8)
+        return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
+    if (version.ptr[0] != 'H')
+        return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
+    if (version.ptr[1] != 'T')
+        return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
+    if (version.ptr[2] != 'T')
+        return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
+    if (version.ptr[3] != 'P')
+        return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
+    if (version.ptr[4] != '/')
+        return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
+    if (version.ptr[5] != '1')
+        return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
+    if (version.ptr[6] != '.')
+        return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
+    if (version.ptr[7] < '0' || version.ptr[7] > '9')
+        return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
+    th_request_set_version(request, version.ptr[7] - '0');
+    *parsed = n + 2;
+    parser->state = TH_REQUEST_PARSER_STATE_HEADERS;
+    return TH_ERR_OK;
+}
+
+TH_PRIVATE(th_err)
+th_request_parse_handle_header(th_request_parser* parser, th_request* request, th_string name, th_string value)
+{
+    char arena[1024] = {0};
+    th_arena_allocator arena_allocator;
+    th_arena_allocator_init(&arena_allocator, arena, sizeof(arena), NULL);
+    th_heap_string normalized_name;
+    th_heap_string_init(&normalized_name, &arena_allocator.base);
+    if (th_heap_string_set(&normalized_name, name) != TH_ERR_OK) {
+        // This can only happen if the name is too long
+        return TH_ERR_HTTP(TH_CODE_REQUEST_HEADER_FIELDS_TOO_LARGE);
+    }
+    th_heap_string_to_lower(&normalized_name);
+    th_header_id id = th_header_id_from_string(th_heap_string_data(&normalized_name), th_heap_string_len(&normalized_name));
+    switch (id) {
+    case TH_HEADER_ID_COOKIE:
+        return th_request_parser_do_cookie_list(request, value);
+    case TH_HEADER_ID_CONTENT_LENGTH:
+        return th_string_to_uint(value, (unsigned*)&parser->content_len);
+    case TH_HEADER_ID_CONNECTION:
+        if (th_string_eq(value, TH_STRING("close"))) {
+            request->close = true;
+        } else if (th_string_eq(value, TH_STRING("keep-alive"))) {
+            request->close = false;
+        }
+        return TH_ERR_OK;
+    case TH_HEADER_ID_CONTENT_TYPE:
+        if (th_string_eq(value, TH_STRING("application/x-www-form-urlencoded"))) {
+            parser->parse_body_params = true;
+        } else if (th_string_eq(value, TH_STRING("multipart/form-data"))) {
+            // not supported right now
+            return TH_ERR_HTTP(TH_CODE_UNSUPPORTED_MEDIA_TYPE);
+        }
+        break;
+    default:
+        break;
+    }
+    return th_request_add_header(request, th_heap_string_view(&normalized_name), value);
+}
+
+TH_PRIVATE(th_err)
+th_request_parser_do_header(th_request_parser* parser, th_request* request, th_string buffer, size_t* parsed)
+{
+    size_t n = th_string_find_first(buffer, 0, '\r');
+    if (n == th_string_npos || n + 1 == buffer.len)
+        return TH_ERR_OK;
+    if (buffer.ptr[n + 1] != '\n')
+        return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
+    if (n == 0) {
+        *parsed = 2;
+        if (parser->content_len == 0) {
+            th_request_set_body(request, th_string_make(&buffer.ptr[2], 0));
+            parser->state = TH_REQUEST_PARSER_STATE_DONE;
+        } else {
+            if (request->method == TH_METHOD_GET || request->method == TH_METHOD_HEAD)
+                return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
+            parser->state = TH_REQUEST_PARSER_STATE_BODY;
+        }
+        return TH_ERR_OK;
+    }
+    size_t key_parsed = 0;
+    th_string key;
+    th_err err = TH_ERR_OK;
+    if ((err = th_request_parser_next_token(buffer, &key, ':', &key_parsed)) != TH_ERR_OK
+        || key_parsed == 0)
+        return err;
+    th_string value = th_string_substr(buffer, key_parsed, n - key_parsed);
+    if (!th_request_parser_is_printable_string(value))
+        return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
+    if ((err = th_request_parse_handle_header(parser, request, th_string_trim(key), th_string_trim(value)))
+        != TH_ERR_OK)
+        return err;
+    *parsed = n + 2;
+    return TH_ERR_OK;
+}
+
+TH_PRIVATE(th_err)
+th_request_parser_do_body(th_request_parser* parser, th_request* request, th_string buffer, size_t* parsed)
+{
+    if (buffer.len < parser->content_len) {
+        *parsed = 0;
+        return TH_ERR_OK;
+    }
+    // Got the whole body
+    th_string body = th_string_substr(buffer, 0, parser->content_len);
+    if (parser->parse_body_params) {
+        th_err err = TH_ERR_OK;
+        if ((err = th_request_parser_do_body_params(request, body)) != TH_ERR_OK)
+            return err;
+    }
+    th_request_set_body(request, body);
+    *parsed = parser->content_len;
+    parser->state = TH_REQUEST_PARSER_STATE_DONE;
+    return TH_ERR_OK;
+}
+
+TH_LOCAL(th_err)
+th_request_parser_parse_next(th_request_parser* parser, th_request* request, th_string data, size_t* parsed)
+{
+    switch (parser->state) {
+    case TH_REQUEST_PARSER_STATE_METHOD:
+        return th_request_parser_do_method(parser, request, data, parsed);
+    case TH_REQUEST_PARSER_STATE_PATH:
+        return th_request_parser_do_path(parser, request, data, parsed);
+    case TH_REQUEST_PARSER_STATE_VERSION:
+        return th_request_parser_do_version(parser, request, data, parsed);
+    case TH_REQUEST_PARSER_STATE_HEADERS:
+        return th_request_parser_do_header(parser, request, data, parsed);
+    case TH_REQUEST_PARSER_STATE_BODY:
+        return th_request_parser_do_body(parser, request, data, parsed);
+    default:
+        *parsed = 0;
+        break;
+    }
+    return TH_ERR_OK;
+}
+
+TH_PRIVATE(th_err)
+th_request_parser_parse(th_request_parser* parser, th_request* request, th_string data, size_t* parsed)
+{
+    th_err err = TH_ERR_OK;
+    while (data.len > 0) {
+        size_t p = 0;
+        if ((err = th_request_parser_parse_next(parser, request, th_string_substr(data, p, data.len), &p)) != TH_ERR_OK) {
+            *parsed = p;
+            return err;
+        }
+        data.ptr += p;
+        data.len -= p;
+        *parsed += p;
+        if (p == 0 || parser->state == TH_REQUEST_PARSER_STATE_DONE) {
+            return TH_ERR_OK;
+        }
+    }
+    return TH_ERR_OK;
+}
+
+TH_PRIVATE(bool)
+th_request_parser_header_done(th_request_parser* parser)
+{
+    return parser->state > TH_REQUEST_PARSER_STATE_HEADERS;
+}
+
+TH_PRIVATE(bool)
+th_request_parser_done(th_request_parser* parser)
+{
+    return parser->state == TH_REQUEST_PARSER_STATE_DONE;
+}
+/* End of src/th_request_parser.c */
+/* Start of src/th_request.c */
+
+
+#include <assert.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#undef TH_LOG_TAG
+#define TH_LOG_TAG "request"
+
+TH_LOCAL(th_err)
+th_request_map_store(th_request* request, th_hs_map* map, th_string key, th_string value)
+{
+    th_err err = TH_ERR_OK;
+    th_heap_string k;
+    th_heap_string v;
+    if ((err = th_heap_string_init_with(&k, key, request->allocator)) != TH_ERR_OK)
+        return err;
+    if ((err = th_heap_string_init_with(&v, value, request->allocator)) != TH_ERR_OK)
+        goto cleanup_key;
+    if ((err = th_hs_map_set(map, k, v)) != TH_ERR_OK)
+        goto cleanup_value;
+    return TH_ERR_OK;
+cleanup_value:
+    th_heap_string_deinit(&v);
+cleanup_key:
+    th_heap_string_deinit(&k);
+    return err;
+}
+
+TH_LOCAL(th_err)
+th_request_map_store_url_decoded(th_request* request, th_hs_map* map, th_string key, th_string value, th_url_decode_type type)
+{
+    th_err err = TH_ERR_OK;
+    th_heap_string k;
+    th_heap_string v;
+    th_heap_string_init(&k, request->allocator);
+    th_heap_string_init(&v, request->allocator);
+    if ((err = th_url_decode_string(key, &k, type)) != TH_ERR_OK)
+        goto cleanup;
+    if ((err = th_url_decode_string(value, &v, type)) != TH_ERR_OK)
+        goto cleanup;
+    if ((err = th_hs_map_set(map, k, v)) != TH_ERR_OK)
+        goto cleanup;
+    return TH_ERR_OK;
+cleanup:
+    th_heap_string_deinit(&v);
+    th_heap_string_deinit(&k);
+    return err;
+}
+
+TH_PRIVATE(th_err)
+th_request_add_cookie(th_request* request, th_string key, th_string value)
 {
     return th_request_map_store(request, &request->cookies, key, value);
 }
 
 TH_PRIVATE(th_err)
-th_request_store_header(th_request* request, th_string key, th_string value)
+th_request_add_header(th_request* request, th_string key, th_string value)
 {
     return th_request_map_store(request, &request->headers, key, value);
 }
 
 TH_PRIVATE(th_err)
-th_request_store_query_param(th_request* request, th_string key, th_string value)
+th_request_add_query_param(th_request* request, th_string key, th_string value)
 {
     return th_request_map_store_url_decoded(request, &request->query_params, key, value, TH_URL_DECODE_TYPE_QUERY);
 }
 
 TH_PRIVATE(th_err)
-th_request_store_body_param(th_request* request, th_string key, th_string value)
+th_request_add_body_param(th_request* request, th_string key, th_string value)
 {
     return th_request_map_store_url_decoded(request, &request->body_params, key, value, TH_URL_DECODE_TYPE_QUERY);
 }
 
 TH_PRIVATE(th_err)
-th_request_store_path_param(th_request* request, th_string key, th_string value)
+th_request_add_path_param(th_request* request, th_string key, th_string value)
 {
     return th_request_map_store(request, &request->path_params, key, value);
 }
 
 TH_PRIVATE(th_err)
-th_request_store_uri_path(th_request* request, th_string path)
+th_request_set_uri_path(th_request* request, th_string path)
 {
-    const char* p = th_request_store_string(request, path);
-    if (!p)
-        return TH_ERR_BAD_ALLOC;
-    request->uri_path = p;
-    return TH_ERR_OK;
+    return th_heap_string_set(&request->uri_path, path);
 }
 
 TH_PRIVATE(th_err)
-th_request_store_uri_query(th_request* request, th_string query)
+th_request_set_uri_query(th_request* request, th_string query)
 {
-    const char* q = th_request_store_string(request, query);
-    if (!q)
-        return TH_ERR_BAD_ALLOC;
-    request->uri_query = q;
-    return TH_ERR_OK;
+    return th_heap_string_set(&request->uri_query, query);
+}
+
+TH_PRIVATE(void)
+th_request_set_version(th_request* request, int version)
+{
+    request->version = version;
+}
+
+TH_PRIVATE(void)
+th_request_set_method(th_request* request, th_method method)
+{
+    request->method = method;
+}
+
+TH_PRIVATE(void)
+th_request_clear_query_params(th_request* request)
+{
+    th_hs_map_reset(&request->query_params);
+    // TODO: clear heap strings
+}
+
+TH_PRIVATE(void)
+th_request_set_body(th_request* request, th_string body)
+{
+    request->body = body;
 }
 
 TH_PRIVATE(void)
 th_request_init(th_request* request, th_allocator* allocator)
 {
     request->allocator = allocator ? allocator : th_default_allocator_get();
-    request->uri_path = NULL;
-    request->uri_query = NULL;
-    request->map_arena = th_allocator_alloc(request->allocator, TH_REQUEST_MAP_ARENA_LEN);
-    request->vec_arena = th_allocator_alloc(request->allocator, TH_REQUEST_VEC_ARENA_LEN);
-    request->string_arena = th_allocator_alloc(request->allocator, TH_REQUEST_STRING_ARENA_LEN);
-    th_arena_allocator_init(&request->map_allocator, request->map_arena, TH_REQUEST_MAP_ARENA_LEN, request->allocator);
-    th_arena_allocator_init(&request->vec_allocator, request->vec_arena, TH_REQUEST_VEC_ARENA_LEN, request->allocator);
-    th_arena_allocator_init(&request->string_allocator, request->string_arena, TH_REQUEST_STRING_ARENA_LEN, request->allocator);
-    th_cstr_map_init(&request->cookies, &request->map_allocator.base);
-    th_cstr_map_init(&request->headers, &request->map_allocator.base);
-    th_cstr_map_init(&request->query_params, &request->map_allocator.base);
-    th_cstr_map_init(&request->body_params, &request->map_allocator.base);
-    th_cstr_map_init(&request->path_params, &request->map_allocator.base);
-    th_heap_string_vec_init(&request->heap_strings, &request->vec_allocator.base);
-    th_buf_vec_init(&request->buffer, request->allocator);
-    request->data_len = 0;
-    request->content_len = 0;
-    request->content_buf = NULL;
-    request->content_buf_len = 0;
-    request->content_buf_pos = 0;
+    th_heap_string_init(&request->uri_path, request->allocator);
+    th_heap_string_init(&request->uri_query, request->allocator);
+    th_hs_map_init(&request->cookies, request->allocator);
+    th_hs_map_init(&request->headers, request->allocator);
+    th_hs_map_init(&request->query_params, request->allocator);
+    th_hs_map_init(&request->body_params, request->allocator);
+    th_hs_map_init(&request->path_params, request->allocator);
+    request->body = (th_string){0};
+    request->version = 0;
     request->close = false;
-    request->parse_body_params = false;
 }
 
 TH_PRIVATE(void)
 th_request_deinit(th_request* request)
 {
-    th_buf_vec_deinit(&request->buffer);
-    th_heap_string_vec_deinit(&request->heap_strings);
-    th_cstr_map_deinit(&request->cookies);
-    th_cstr_map_deinit(&request->headers);
-    th_cstr_map_deinit(&request->query_params);
-    th_cstr_map_deinit(&request->body_params);
-    th_cstr_map_deinit(&request->path_params);
-    th_allocator_free(request->allocator, request->map_arena);
-    th_allocator_free(request->allocator, request->vec_arena);
-    th_allocator_free(request->allocator, request->string_arena);
+    th_heap_string_deinit(&request->uri_path);
+    th_heap_string_deinit(&request->uri_query);
+    th_hs_map_deinit(&request->cookies);
+    th_hs_map_deinit(&request->headers);
+    th_hs_map_deinit(&request->query_params);
+    th_hs_map_deinit(&request->body_params);
+    th_hs_map_deinit(&request->path_params);
 }
 
 /* Public request API begin */
@@ -7275,54 +7241,64 @@ th_request_deinit(th_request* request)
 TH_PUBLIC(th_buffer)
 th_get_body(const th_request* req)
 {
-    return (th_buffer){req->content_buf, req->content_buf_pos};
+    return (th_buffer){req->body.ptr, req->body.len};
 }
 
 TH_PUBLIC(const char*)
 th_get_path(const th_request* req)
 {
-    return req->uri_path;
+    return th_heap_string_data(&req->uri_path);
 }
 
 TH_PUBLIC(const char*)
 th_get_query(const th_request* req)
 {
-    return req->uri_query;
+    return th_heap_string_data(&req->uri_query);
 }
 
 TH_PUBLIC(const char*)
 th_try_get_header(const th_request* req, const char* key)
 {
-    const char** r = th_cstr_map_try_get(&req->headers, key);
-    return r ? *r : NULL;
+    th_hs_map_iter iter = th_hs_map_find_by_cstr(&req->headers, key);
+    if (iter == NULL)
+        return NULL;
+    return th_heap_string_data(&iter->value);
 }
 
 TH_PUBLIC(const char*)
 th_try_get_cookie(const th_request* req, const char* key)
 {
-    const char** r = th_cstr_map_try_get(&req->cookies, key);
-    return r ? *r : NULL;
+    th_hs_map_iter iter = th_hs_map_find_by_cstr(&req->cookies, key);
+    if (iter == NULL)
+        return NULL;
+    return th_heap_string_data(&iter->value);
 }
 
 TH_PUBLIC(const char*)
 th_try_get_query_param(const th_request* req, const char* key)
 {
-    const char** r = th_cstr_map_try_get(&req->query_params, key);
-    return r ? *r : NULL;
+    th_hs_map_iter iter = th_hs_map_find_by_cstr(&req->query_params, key);
+    if (iter == NULL)
+        return NULL;
+    return th_heap_string_data(&iter->value);
 }
 
 TH_PUBLIC(const char*)
 th_try_get_body_param(const th_request* req, const char* key)
 {
-    const char** r = th_cstr_map_try_get(&req->body_params, key);
-    return r ? *r : NULL;
+    th_hs_map_iter iter = th_hs_map_find_by_cstr(&req->body_params, key);
+    if (iter == NULL)
+        return NULL;
+    return th_heap_string_data(&iter->value);
 }
 
 TH_PUBLIC(const char*)
 th_try_get_path_param(const th_request* req, const char* key)
 {
-    const char** r = th_cstr_map_try_get(&req->path_params, key);
-    return r ? *r : NULL;
+    th_hs_map_iter iter = th_hs_map_find_by_cstr(&req->path_params, key);
+    if (iter == NULL)
+        return NULL;
+    return th_heap_string_data(&iter->value);
 }
 
 TH_PUBLIC(th_method)
@@ -7364,19 +7340,31 @@ th_get_path_params(const th_request* req)
 TH_PUBLIC(th_map_iter)
 th_map_find(th_map* map, const char* key)
 {
-    return (th_map_iter)th_cstr_map_find((th_cstr_map*)map, key);
+    return (th_map_iter)th_hs_map_find_by_cstr((th_hs_map*)map, key);
 }
 
 TH_PUBLIC(th_map_iter)
 th_map_begin(th_map* map)
 {
-    return (th_map_iter)th_cstr_map_begin((th_cstr_map*)map);
+    return (th_map_iter)th_hs_map_begin((th_hs_map*)map);
 }
 
 TH_PUBLIC(th_map_iter)
 th_map_next(th_map* map, th_map_iter iter)
 {
-    return (th_map_iter)th_cstr_map_next((th_cstr_map*)map, (th_cstr_map_iter)iter);
+    return (th_map_iter)th_hs_map_next((th_hs_map*)map, (th_hs_map_iter)iter);
+}
+
+TH_PUBLIC(const char*)
+th_map_iter_key(th_map_iter iter)
+{
+    return th_heap_string_data(&((th_hs_map_iter)iter)->key);
+}
+
+TH_PUBLIC(const char*)
+th_map_iter_value(th_map_iter iter)
+{
+    return th_heap_string_data(&((th_hs_map_iter)iter)->value);
 }
 
 /* Public request API end */
@@ -7597,7 +7585,7 @@ th_response_set_body_va(th_response* response, const char* fmt, va_list args)
         }
     } else {
         th_heap_string_resize(&response->body, (size_t)len, ' ');
-        vsnprintf(th_heap_string_data(&response->body), len, fmt, args);
+        vsnprintf(th_heap_string_at(&response->body, 0), len, fmt, args);
     }
     response->is_file = 0;
     response->last_chunk_type = TH_CHUNK_TYPE_BODY;
@@ -9288,28 +9276,6 @@ th_string_find_first(th_string str, size_t start, char c)
 }
 
 TH_PRIVATE(size_t)
-th_string_find_first_not(th_string str, size_t start, char c)
-{
-    for (size_t i = start; i < str.len; i++) {
-        if (str.ptr[i] != c) {
-            return i;
-        }
-    }
-    return th_string_npos;
-}
-
-TH_PRIVATE(size_t)
-th_string_find_last_not(th_string str, size_t start, char c)
-{
-    for (size_t i = str.len - 1; i >= start; i--) {
-        if (str.ptr[i] != c) {
-            return i;
-        }
-    }
-    return th_string_npos;
-}
-
-TH_PRIVATE(size_t)
 th_string_find_first_of(th_string str, size_t start, const char* chars)
 {
     for (size_t i = start; i < str.len; i++) {
@@ -9339,7 +9305,7 @@ TH_PRIVATE(th_string)
 th_string_substr(th_string str, size_t start, size_t len)
 {
     if (start >= str.len) {
-        return th_string_make(NULL, 0);
+        return th_string_make(str.ptr + len, 0);
     }
     if (len == th_string_npos || start + len > str.len) {
         len = str.len - start;
@@ -9350,12 +9316,15 @@ th_string_substr(th_string str, size_t start, size_t len)
 TH_PRIVATE(th_string)
 th_string_trim(th_string str)
 {
-    size_t start = th_string_find_first_not(str, 0, ' ');
-    if (start == th_string_npos) {
-        return th_string_make(NULL, 0);
+    size_t start = 0;
+    while (start < str.len && (str.ptr[start] == ' ' || str.ptr[start] == '\t')) {
+        start++;
     }
-    size_t end = th_string_find_last_not(str, start, ' ');
-    return th_string_substr(str, start, end - start + 1);
+    size_t end = str.len;
+    while (end > start && (str.ptr[end - 1] == ' ' || str.ptr[end - 1] == '\t')) {
+        end--;
+    }
+    return th_string_substr(str, start, end - start);
 }
 
 TH_PRIVATE(uint32_t)
@@ -9363,22 +9332,10 @@ th_string_hash(th_string str)
 {
     return th_hash_bytes(str.ptr, str.len);
 }
-
-/* th_mut_string implementation begin */
-
-TH_PRIVATE(void)
-th_mut_string_tolower(th_mut_string str)
-{
-    for (size_t i = 0; i < str.len; i++) {
-        if (str.ptr[i] >= 'A' && str.ptr[i] <= 'Z') {
-            str.ptr[i] += 'a' - 'A';
-        }
-    }
-}
-
-/* th_mut_string implementation end */
 /* End of src/th_string.c */
 /* Start of src/th_heap_string.c */
+
+#include <ctype.h>
 
 #define TH_HEAP_STRING_SMALL (sizeof(char*) + sizeof(size_t) + sizeof(size_t) - 2)
 #define TH_HEAP_STRING_ALIGNUP(size) TH_ALIGNUP(size, 16)
@@ -9400,11 +9357,19 @@ th_heap_string_init(th_heap_string* self, th_allocator* allocator)
     th_detail_small_string_init(&self->impl.small, allocator);
 }
 
+TH_PRIVATE(th_err)
+th_heap_string_init_with(th_heap_string* self, th_string str, th_allocator* allocator)
+{
+    th_heap_string_init(self, allocator);
+    return th_heap_string_set(self, str);
+}
+
 TH_LOCAL(void)
 th_detail_small_string_set(th_detail_small_string* self, th_string str)
 {
     TH_ASSERT(str.len <= TH_HEAP_STRING_SMALL_MAX_LEN);
-    memcpy(self->buf, str.ptr, str.len);
+    if (str.len > 0)
+        memcpy(self->buf, str.ptr, str.len);
     self->buf[str.len] = '\0';
     self->len = str.len;
 }
@@ -9423,7 +9388,8 @@ th_detail_large_string_set(th_detail_large_string* self, th_string str)
         self->capacity = new_capacity;
     }
     self->len = str.len;
-    memcpy(self->ptr, str.ptr, str.len);
+    if (str.len > 0)
+        memcpy(self->ptr, str.ptr, str.len);
     self->ptr[str.len] = '\0';
     return TH_ERR_OK;
 }
@@ -9450,6 +9416,7 @@ th_heap_string_small_to_large(th_heap_string* self, size_t capacity)
 TH_PRIVATE(th_err)
 th_heap_string_set(th_heap_string* self, th_string str)
 {
+    TH_ASSERT(str.ptr != NULL && "Invalid string");
     if (self->impl.small.small) {
         if (str.len <= TH_HEAP_STRING_SMALL_MAX_LEN) {
             th_detail_small_string_set(&self->impl.small, str);
@@ -9559,7 +9526,7 @@ th_heap_string_resize(th_heap_string* self, size_t new_len, char fill)
 }
 
 TH_PRIVATE(th_string)
-th_heap_string_view(th_heap_string* self)
+th_heap_string_view(const th_heap_string* self)
 {
     if (self->impl.small.small) {
         return (th_string){self->impl.small.buf, self->impl.small.len};
@@ -9568,8 +9535,8 @@ th_heap_string_view(th_heap_string* self)
     }
 }
 
-TH_PRIVATE(char*)
-th_heap_string_data(th_heap_string* self)
+TH_PRIVATE(const char*)
+th_heap_string_data(const th_heap_string* self)
 {
     if (self->impl.small.small) {
         return self->impl.small.buf;
@@ -9578,8 +9545,19 @@ th_heap_string_data(th_heap_string* self)
     }
 }
 
+TH_PRIVATE(char*)
+th_heap_string_at(th_heap_string* self, size_t index)
+{
+    TH_ASSERT(index < th_heap_string_len(self) && "Index out of bounds");
+    if (self->impl.small.small) {
+        return &self->impl.small.buf[index];
+    } else {
+        return &self->impl.large.ptr[index];
+    }
+}
+
 TH_PRIVATE(size_t)
-th_heap_string_len(th_heap_string* self)
+th_heap_string_len(const th_heap_string* self)
 {
     if (self->impl.small.small) {
         return self->impl.small.len;
@@ -9599,9 +9577,19 @@ th_heap_string_clear(th_heap_string* self)
         self->impl.large.ptr[0] = '\0';
     }
 }
-/*
+
+TH_PRIVATE(void)
+th_heap_string_to_lower(th_heap_string* self)
+{
+    char* ptr = th_heap_string_at(self, 0);
+    size_t n = th_heap_string_len(self);
+    for (size_t i = 0; i < n; i++) {
+        ptr[i] = (char)tolower((int)ptr[i]);
+    }
+}
+
 TH_PRIVATE(bool)
-th_heap_string_eq(th_heap_string* self, th_string other)
+th_heap_string_eq(const th_heap_string* self, th_string other)
 {
     const char* ptr = NULL;
     size_t n = 0;
@@ -9612,12 +9600,11 @@ th_heap_string_eq(th_heap_string* self, th_string other)
         ptr = self->impl.large.ptr;
         n = self->impl.large.len;
     }
-    return n == other.len && memcmp(ptr, other.ptr, n) == 0;
+    return n == other.len && (n == 0 || memcmp(ptr, other.ptr, n) == 0);
 }
-*/
-/*
+
 TH_PRIVATE(uint32_t)
-th_heap_string_hash(th_heap_string* self)
+th_heap_string_hash(const th_heap_string* self)
 {
     const char* ptr = NULL;
     size_t n = 0;
@@ -9630,7 +9617,7 @@ th_heap_string_hash(th_heap_string* self)
     }
     return th_hash_bytes(ptr, n);
 }
-*/
+
 TH_PRIVATE(void)
 th_heap_string_deinit(th_heap_string* self)
 {
@@ -9725,12 +9712,17 @@ struct th_exchange {
     th_socket* socket;
     th_router* router;
     th_fcache* fcache;
+    th_buf_vec buf;
+    th_request_parser parser;
     th_request request;
     th_response response;
+    th_request_read_mode mode;
     enum {
-        TH_EXCHANGE_STATE_START,
-        TH_EXCHANGE_STATE_HANDLE,
+        TH_EXCHANGE_STATE_READ,
+        TH_EXCHANGE_STATE_WRITE,
     } state;
+    size_t read;
+    size_t parsed;
     bool close;
 };
 
@@ -9741,6 +9733,7 @@ th_exchange_destroy(void* self)
     TH_LOG_TRACE("%p: Destroying", handler);
     th_request_deinit(&handler->request);
     th_response_deinit(&handler->response);
+    th_buf_vec_deinit(&handler->buf);
     th_allocator_free(handler->allocator, handler);
 }
 
@@ -9752,7 +9745,7 @@ th_exchange_write_error_response(th_exchange* handler, th_err err)
     th_printf_body(&handler->response, "%d %s", TH_ERR_CODE(http_error), th_http_strerror(http_error));
     th_response_add_header(&handler->response, TH_STRING("Connection"), TH_STRING("close"));
     handler->close = true;
-    handler->state = TH_EXCHANGE_STATE_HANDLE;
+    handler->state = TH_EXCHANGE_STATE_WRITE;
     th_response_async_write(&handler->response, handler->socket, (th_io_handler*)handler);
 }
 
@@ -9764,7 +9757,7 @@ th_exchange_write_require_1_1_response(th_exchange* handler)
     th_response_set_body(&handler->response, TH_STRING("HTTP/1.1 required for this request"));
     th_response_add_header(&handler->response, TH_STRING("Connection"), TH_STRING("close"));
     handler->close = true;
-    handler->state = TH_EXCHANGE_STATE_HANDLE;
+    handler->state = TH_EXCHANGE_STATE_WRITE;
     th_response_async_write(&handler->response, handler->socket, (th_io_handler*)handler);
 }
 
@@ -9784,7 +9777,7 @@ th_exchange_handle_options(th_exchange* exchange, th_request* request, th_respon
     };
     char allow[512] = {0};
     size_t pos = th_fmt_str_append(allow, 0, sizeof(allow), "OPTIONS"); // OPTIONS is always allowed
-    if (strcmp(request->uri_path, "*") != 0) {
+    if (strcmp(th_heap_string_data(&request->uri_path), "*") != 0) {
         th_router* router = exchange->router;
         for (size_t i = 0; i < TH_ARRAY_SIZE(methods); i++) {
             if (th_router_would_handle(router, methods[i].method, request)) {
@@ -9810,7 +9803,7 @@ TH_LOCAL(th_err)
 th_exchange_handle_route(th_exchange* exchange, th_request* request, th_response* response)
 {
     th_router* router = exchange->router;
-    if (request->method_internal == TH_METHOD_INTERNAL_OPTIONS) {
+    if (request->method == TH_METHOD_OPTIONS) {
         return th_exchange_handle_options(exchange, request, response);
     } else {
         return th_http_error(th_router_handle(router, request, response));
@@ -9820,16 +9813,17 @@ th_exchange_handle_route(th_exchange* exchange, th_request* request, th_response
 TH_LOCAL(void)
 th_exchange_handle_request(th_exchange* handler)
 {
-    handler = (th_exchange*)th_io_composite_ref(&handler->base);
     th_socket* socket = handler->socket;
     th_request* request = &handler->request;
     th_response* response = &handler->response;
-    // We only need to write headers if it's a HEAD request
-    response->only_headers = (request->method_internal == TH_METHOD_INTERNAL_HEAD);
+    if (request->method == TH_METHOD_HEAD) {
+        response->only_headers = true;   // only write headers
+        request->method = TH_METHOD_GET; // pretend it's a GET request
+    }
     th_err err = th_http_error(th_exchange_handle_route(handler, request, response));
     switch (th_http_code_get_type(TH_ERR_CODE(err))) {
     case TH_HTTP_CODE_TYPE_INFORMATIONAL:
-        if (request->minor_version == 0) {
+        if (request->version == 0) {
             th_exchange_write_require_1_1_response(handler);
             return;
         }
@@ -9848,14 +9842,63 @@ th_exchange_handle_request(th_exchange* handler)
         th_response_add_header(response, TH_STRING("Connection"), TH_STRING("keep-alive"));
     }
     TH_LOG_TRACE("%p: Write response %p", handler, response);
-    handler->state = TH_EXCHANGE_STATE_HANDLE;
+    handler->state = TH_EXCHANGE_STATE_WRITE;
     th_response_async_write(response, socket, (th_io_handler*)handler);
 }
 
-TH_LOCAL(bool)
-th_exchange_is_io_error(th_err err)
+TH_LOCAL(void)
+th_exchange_handle_read(th_exchange* handler, size_t len, th_err err)
 {
-    return err == TH_ERR_EOF || err == TH_EBADF || err == TH_EIO;
+    if (err != TH_ERR_OK) {
+        th_io_composite_complete(&handler->base, TH_EXCHANGE_CLOSE, err);
+        return;
+    }
+    handler = (th_exchange*)th_io_composite_ref(&handler->base);
+    handler->read += len;
+    size_t parsed = 0;
+    th_string parser_input = (th_string){.ptr = th_buf_vec_at(&handler->buf, handler->parsed),
+                                         .len = handler->read - handler->parsed};
+    if ((err = th_request_parser_parse(&handler->parser, &handler->request, parser_input, &parsed)) != TH_ERR_OK) {
+        th_exchange_write_error_response(handler, th_http_error(err));
+        return;
+    }
+    if (th_request_parser_done(&handler->parser)) {
+        th_exchange_handle_request(handler);
+        return;
+    }
+    // If we haven't parsed the whole request, we need to read more data
+    handler->parsed += parsed;
+    if (!th_request_parser_header_done(&handler->parser)) {
+        if (handler->read == th_buf_vec_size(&handler->buf)) {
+            if (th_buf_vec_size(&handler->buf) < TH_CONFIG_LARGE_HEADER_LEN) {
+                th_buf_vec_resize(&handler->buf, TH_CONFIG_LARGE_HEADER_LEN);
+            } else {
+                th_exchange_write_error_response(handler, TH_ERR_HTTP(TH_CODE_REQUEST_HEADER_FIELDS_TOO_LARGE));
+                return;
+            }
+        }
+        th_socket_async_read(handler->socket, th_buf_vec_at(&handler->buf, handler->read),
+                             th_buf_vec_size(&handler->buf) - handler->read, (th_io_handler*)handler);
+    } else {
+        if (handler->mode == TH_REQUEST_READ_MODE_REJECT_UNAVAILABLE) {
+            th_exchange_write_error_response(handler, TH_ERR_HTTP(TH_CODE_SERVICE_UNAVAILABLE));
+            return;
+        } else if (handler->mode == TH_REQUEST_READ_MODE_REJECT_TOO_MANY_REQUESTS) {
+            th_exchange_write_error_response(handler, TH_ERR_HTTP(TH_CODE_TOO_MANY_REQUESTS));
+            return;
+        }
+        size_t content_received = handler->read - handler->parsed;
+        size_t remaining = th_request_parser_content_len(&handler->parser) - content_received;
+        if (handler->read + remaining > th_buf_vec_size(&handler->buf)) {
+            memcpy(th_buf_vec_at(&handler->buf, 0), th_buf_vec_at(&handler->buf, handler->parsed), content_received);
+            handler->read = content_received;
+            if (th_request_parser_content_len(&handler->parser) > th_buf_vec_size(&handler->buf)) {
+                th_buf_vec_resize(&handler->buf, th_request_parser_content_len(&handler->parser));
+            }
+        }
+        th_socket_async_read_exact(handler->socket, th_buf_vec_at(&handler->buf, handler->read),
+                                   remaining, (th_io_handler*)handler);
+    }
 }
 
 TH_LOCAL(void)
@@ -9864,23 +9907,11 @@ th_exchange_fn(void* self, size_t len, th_err err)
     (void)len;
     th_exchange* handler = self;
     switch (handler->state) {
-    case TH_EXCHANGE_STATE_START: {
-        if (err != TH_ERR_OK) {
-            if (!th_exchange_is_io_error(err)) {
-                // Unless it's an I/O error, we should send a response
-                TH_LOG_DEBUG("%p: Rejecting request with error %s", handler, th_strerror(err));
-                th_exchange_write_error_response((th_exchange*)th_io_composite_ref(&handler->base), err);
-            } else {
-                TH_LOG_DEBUG("%p: Failed to read request: %s", handler, th_strerror(err));
-                th_io_composite_complete(&handler->base, TH_EXCHANGE_CLOSE, err);
-            }
-            return;
-        }
-        TH_LOG_TRACE("%p: Read request %p of length %zu", handler, &handler->request, len);
-        th_exchange_handle_request(handler);
-        break;
+    case TH_EXCHANGE_STATE_READ: {
+        th_exchange_handle_read(handler, len, err);
+        return;
     }
-    case TH_EXCHANGE_STATE_HANDLE: {
+    case TH_EXCHANGE_STATE_WRITE: {
         if (err != TH_ERR_OK) {
             TH_LOG_ERROR("%p: Failed to write response: %s", handler, th_strerror(err));
             th_io_composite_complete(&handler->base, TH_EXCHANGE_CLOSE, err);
@@ -9904,8 +9935,12 @@ th_exchange_init(th_exchange* exchange, th_socket* socket,
     exchange->router = router;
     exchange->fcache = fcache;
     exchange->allocator = allocator ? allocator : th_default_allocator_get();
+    th_buf_vec_init(&exchange->buf, exchange->allocator);
+    th_request_parser_init(&exchange->parser);
     th_request_init(&exchange->request, allocator);
     th_response_init(&exchange->response, exchange->fcache, allocator);
+    exchange->read = 0;
+    exchange->parsed = 0;
     exchange->close = false;
 }
 
@@ -9926,9 +9961,11 @@ th_exchange_create(th_exchange** out, th_socket* socket,
 TH_PRIVATE(void)
 th_exchange_start(th_exchange* handler, th_request_read_mode mode)
 {
-    handler->state = TH_EXCHANGE_STATE_START;
+    handler->mode = mode;
+    handler->state = TH_EXCHANGE_STATE_READ;
     TH_LOG_TRACE("%p: Reading request %p", handler, &handler->request);
-    th_request_async_read(handler->socket, handler->allocator, &handler->request, mode, (th_io_handler*)handler);
+    th_buf_vec_resize(&handler->buf, TH_CONFIG_SMALL_HEADER_LEN);
+    th_socket_async_read(handler->socket, th_buf_vec_begin(&handler->buf), th_buf_vec_size(&handler->buf), (th_io_handler*)handler);
 }
 /* End of src/th_exchange.c */
 /* Start of src/th_fmt.c */
@@ -10497,7 +10534,7 @@ th_path_resolve_posix(th_string path, th_heap_string* out)
     pos += th_fmt_strn_append(in, pos, sizeof(in) - pos, path.ptr, path.len);
     in[pos] = '\0';
     th_heap_string_resize(out, TH_CONFIG_MAX_PATH_LEN, 0);
-    char* out_ptr = th_heap_string_data(out);
+    char* out_ptr = th_heap_string_at(out, 0);
     char* ret = realpath(in, out_ptr);
     if (ret == NULL)
         return TH_ERR_SYSTEM(errno);
@@ -11580,669 +11617,3 @@ th_ssl_handle_error_stack(void)
 
 #endif // TH_WITH_SSL
 /* End of src/th_ssl_error.c */
-/* Start of src/picohttpparser.c */
-/*
- * Copyright (c) 2009-2014 Kazuho Oku, Tokuhiro Matsuno, Daisuke Murase,
- *                         Shigeo Mitsunari
- *
- * The software is licensed under either the MIT License (below) or the Perl
- * license.
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to
- * deal in the Software without restriction, including without limitation the
- * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
- * sell copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
- * IN THE SOFTWARE.
- */
-
-#include <assert.h>
-#include <stddef.h>
-#include <string.h>
-#ifdef __SSE4_2__
-#ifdef _MSC_VER
-#include <nmmintrin.h>
-#else
-#include <x86intrin.h>
-#endif
-#endif
-
-#if __GNUC__ >= 3
-#define likely(x) __builtin_expect(!!(x), 1)
-#define unlikely(x) __builtin_expect(!!(x), 0)
-#else
-#define likely(x) (x)
-#define unlikely(x) (x)
-#endif
-
-#ifdef _MSC_VER
-#define ALIGNED(n) _declspec(align(n))
-#else
-#define ALIGNED(n) __attribute__((aligned(n)))
-#endif
-
-#define IS_PRINTABLE_ASCII(c) ((unsigned char)(c)-040u < 0137u)
-
-#define CHECK_EOF()                                                                                                                \
-    if (buf == buf_end) {                                                                                                          \
-        *ret = -2;                                                                                                                 \
-        return NULL;                                                                                                               \
-    }
-
-#define EXPECT_CHAR_NO_CHECK(ch)                                                                                                   \
-    if (*buf++ != ch) {                                                                                                            \
-        *ret = -1;                                                                                                                 \
-        return NULL;                                                                                                               \
-    }
-
-#define EXPECT_CHAR(ch)                                                                                                            \
-    CHECK_EOF();                                                                                                                   \
-    EXPECT_CHAR_NO_CHECK(ch);
-
-#define ADVANCE_TOKEN(tok, toklen)                                                                                                 \
-    do {                                                                                                                           \
-        const char *tok_start = buf;                                                                                               \
-        static const char ALIGNED(16) ranges2[16] = "\000\040\177\177";                                                            \
-        int found2;                                                                                                                \
-        buf = findchar_fast(buf, buf_end, ranges2, 4, &found2);                                                                    \
-        if (!found2) {                                                                                                             \
-            CHECK_EOF();                                                                                                           \
-        }                                                                                                                          \
-        while (1) {                                                                                                                \
-            if (*buf == ' ') {                                                                                                     \
-                break;                                                                                                             \
-            } else if (unlikely(!IS_PRINTABLE_ASCII(*buf))) {                                                                      \
-                if ((unsigned char)*buf < '\040' || *buf == '\177') {                                                              \
-                    *ret = -1;                                                                                                     \
-                    return NULL;                                                                                                   \
-                }                                                                                                                  \
-            }                                                                                                                      \
-            ++buf;                                                                                                                 \
-            CHECK_EOF();                                                                                                           \
-        }                                                                                                                          \
-        tok = tok_start;                                                                                                           \
-        toklen = buf - tok_start;                                                                                                  \
-    } while (0)
-
-static const char *token_char_map = "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"
-                                    "\0\1\0\1\1\1\1\1\0\0\1\1\0\1\1\0\1\1\1\1\1\1\1\1\1\1\0\0\0\0\0\0"
-                                    "\0\1\1\1\1\1\1\1\1\1\1\1\1\1\1\1\1\1\1\1\1\1\1\1\1\1\1\0\0\0\1\1"
-                                    "\1\1\1\1\1\1\1\1\1\1\1\1\1\1\1\1\1\1\1\1\1\1\1\1\1\1\1\0\1\0\1\0"
-                                    "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"
-                                    "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"
-                                    "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"
-                                    "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
-
-static const char *findchar_fast(const char *buf, const char *buf_end, const char *ranges, size_t ranges_size, int *found)
-{
-    *found = 0;
-#if __SSE4_2__
-    if (likely(buf_end - buf >= 16)) {
-        __m128i ranges16 = _mm_loadu_si128((const __m128i *)ranges);
-
-        size_t left = (buf_end - buf) & ~15;
-        do {
-            __m128i b16 = _mm_loadu_si128((const __m128i *)buf);
-            int r = _mm_cmpestri(ranges16, ranges_size, b16, 16, _SIDD_LEAST_SIGNIFICANT | _SIDD_CMP_RANGES | _SIDD_UBYTE_OPS);
-            if (unlikely(r != 16)) {
-                buf += r;
-                *found = 1;
-                break;
-            }
-            buf += 16;
-            left -= 16;
-        } while (likely(left != 0));
-    }
-#else
-    /* suppress unused parameter warning */
-    (void)buf_end;
-    (void)ranges;
-    (void)ranges_size;
-#endif
-    return buf;
-}
-
-static const char *get_token_to_eol(const char *buf, const char *buf_end, const char **token, size_t *token_len, int *ret)
-{
-    const char *token_start = buf;
-
-#ifdef __SSE4_2__
-    static const char ALIGNED(16) ranges1[16] = "\0\010"    /* allow HT */
-                                                "\012\037"  /* allow SP and up to but not including DEL */
-                                                "\177\177"; /* allow chars w. MSB set */
-    int found;
-    buf = findchar_fast(buf, buf_end, ranges1, 6, &found);
-    if (found)
-        goto FOUND_CTL;
-#else
-    /* find non-printable char within the next 8 bytes, this is the hottest code; manually inlined */
-    while (likely(buf_end - buf >= 8)) {
-#define DOIT()                                                                                                                     \
-    do {                                                                                                                           \
-        if (unlikely(!IS_PRINTABLE_ASCII(*buf)))                                                                                   \
-            goto NonPrintable;                                                                                                     \
-        ++buf;                                                                                                                     \
-    } while (0)
-        DOIT();
-        DOIT();
-        DOIT();
-        DOIT();
-        DOIT();
-        DOIT();
-        DOIT();
-        DOIT();
-#undef DOIT
-        continue;
-    NonPrintable:
-        if ((likely((unsigned char)*buf < '\040') && likely(*buf != '\011')) || unlikely(*buf == '\177')) {
-            goto FOUND_CTL;
-        }
-        ++buf;
-    }
-#endif
-    for (;; ++buf) {
-        CHECK_EOF();
-        if (unlikely(!IS_PRINTABLE_ASCII(*buf))) {
-            if ((likely((unsigned char)*buf < '\040') && likely(*buf != '\011')) || unlikely(*buf == '\177')) {
-                goto FOUND_CTL;
-            }
-        }
-    }
-FOUND_CTL:
-    if (likely(*buf == '\015')) {
-        ++buf;
-        EXPECT_CHAR('\012');
-        *token_len = buf - 2 - token_start;
-    } else if (*buf == '\012') {
-        *token_len = buf - token_start;
-        ++buf;
-    } else {
-        *ret = -1;
-        return NULL;
-    }
-    *token = token_start;
-
-    return buf;
-}
-
-static const char *is_complete(const char *buf, const char *buf_end, size_t last_len, int *ret)
-{
-    int ret_cnt = 0;
-    buf = last_len < 3 ? buf : buf + last_len - 3;
-
-    while (1) {
-        CHECK_EOF();
-        if (*buf == '\015') {
-            ++buf;
-            CHECK_EOF();
-            EXPECT_CHAR('\012');
-            ++ret_cnt;
-        } else if (*buf == '\012') {
-            ++buf;
-            ++ret_cnt;
-        } else {
-            ++buf;
-            ret_cnt = 0;
-        }
-        if (ret_cnt == 2) {
-            return buf;
-        }
-    }
-
-    *ret = -2;
-    return NULL;
-}
-
-#define PARSE_INT(valp_, mul_)                                                                                                     \
-    if (*buf < '0' || '9' < *buf) {                                                                                                \
-        buf++;                                                                                                                     \
-        *ret = -1;                                                                                                                 \
-        return NULL;                                                                                                               \
-    }                                                                                                                              \
-    *(valp_) = (mul_) * (*buf++ - '0');
-
-#define PARSE_INT_3(valp_)                                                                                                         \
-    do {                                                                                                                           \
-        int res_ = 0;                                                                                                              \
-        PARSE_INT(&res_, 100)                                                                                                      \
-        *valp_ = res_;                                                                                                             \
-        PARSE_INT(&res_, 10)                                                                                                       \
-        *valp_ += res_;                                                                                                            \
-        PARSE_INT(&res_, 1)                                                                                                        \
-        *valp_ += res_;                                                                                                            \
-    } while (0)
-
-/* returned pointer is always within [buf, buf_end), or null */
-static const char *parse_token(const char *buf, const char *buf_end, const char **token, size_t *token_len, char next_char,
-                               int *ret)
-{
-    /* We use pcmpestri to detect non-token characters. This instruction can take no more than eight character ranges (8*2*8=128
-     * bits that is the size of a SSE register). Due to this restriction, characters `|` and `~` are handled in the slow loop. */
-    static const char ALIGNED(16) ranges[] = "\x00 "  /* control chars and up to SP */
-                                             "\"\""   /* 0x22 */
-                                             "()"     /* 0x28,0x29 */
-                                             ",,"     /* 0x2c */
-                                             "//"     /* 0x2f */
-                                             ":@"     /* 0x3a-0x40 */
-                                             "[]"     /* 0x5b-0x5d */
-                                             "{\xff"; /* 0x7b-0xff */
-    const char *buf_start = buf;
-    int found;
-    buf = findchar_fast(buf, buf_end, ranges, sizeof(ranges) - 1, &found);
-    if (!found) {
-        CHECK_EOF();
-    }
-    while (1) {
-        if (*buf == next_char) {
-            break;
-        } else if (!token_char_map[(unsigned char)*buf]) {
-            *ret = -1;
-            return NULL;
-        }
-        ++buf;
-        CHECK_EOF();
-    }
-    *token = buf_start;
-    *token_len = buf - buf_start;
-    return buf;
-}
-
-/* returned pointer is always within [buf, buf_end), or null */
-static const char *parse_http_version(const char *buf, const char *buf_end, int *minor_version, int *ret)
-{
-    /* we want at least [HTTP/1.<two chars>] to try to parse */
-    if (buf_end - buf < 9) {
-        *ret = -2;
-        return NULL;
-    }
-    EXPECT_CHAR_NO_CHECK('H');
-    EXPECT_CHAR_NO_CHECK('T');
-    EXPECT_CHAR_NO_CHECK('T');
-    EXPECT_CHAR_NO_CHECK('P');
-    EXPECT_CHAR_NO_CHECK('/');
-    EXPECT_CHAR_NO_CHECK('1');
-    EXPECT_CHAR_NO_CHECK('.');
-    PARSE_INT(minor_version, 1);
-    return buf;
-}
-
-static const char *parse_headers(const char *buf, const char *buf_end, struct phr_header *headers, size_t *num_headers,
-                                 size_t max_headers, int *ret)
-{
-    for (;; ++*num_headers) {
-        CHECK_EOF();
-        if (*buf == '\015') {
-            ++buf;
-            EXPECT_CHAR('\012');
-            break;
-        } else if (*buf == '\012') {
-            ++buf;
-            break;
-        }
-        if (*num_headers == max_headers) {
-            *ret = -1;
-            return NULL;
-        }
-        if (!(*num_headers != 0 && (*buf == ' ' || *buf == '\t'))) {
-            /* parsing name, but do not discard SP before colon, see
-             * http://www.mozilla.org/security/announce/2006/mfsa2006-33.html */
-            if ((buf = parse_token(buf, buf_end, &headers[*num_headers].name, &headers[*num_headers].name_len, ':', ret)) == NULL) {
-                return NULL;
-            }
-            if (headers[*num_headers].name_len == 0) {
-                *ret = -1;
-                return NULL;
-            }
-            ++buf;
-            for (;; ++buf) {
-                CHECK_EOF();
-                if (!(*buf == ' ' || *buf == '\t')) {
-                    break;
-                }
-            }
-        } else {
-            headers[*num_headers].name = NULL;
-            headers[*num_headers].name_len = 0;
-        }
-        const char *value;
-        size_t value_len;
-        if ((buf = get_token_to_eol(buf, buf_end, &value, &value_len, ret)) == NULL) {
-            return NULL;
-        }
-        /* remove trailing SPs and HTABs */
-        const char *value_end = value + value_len;
-        for (; value_end != value; --value_end) {
-            const char c = *(value_end - 1);
-            if (!(c == ' ' || c == '\t')) {
-                break;
-            }
-        }
-        headers[*num_headers].value = value;
-        headers[*num_headers].value_len = value_end - value;
-    }
-    return buf;
-}
-
-static const char *parse_request(const char *buf, const char *buf_end, const char **method, size_t *method_len, const char **path,
-                                 size_t *path_len, int *minor_version, struct phr_header *headers, size_t *num_headers,
-                                 size_t max_headers, int *ret)
-{
-    /* skip first empty line (some clients add CRLF after POST content) */
-    CHECK_EOF();
-    if (*buf == '\015') {
-        ++buf;
-        EXPECT_CHAR('\012');
-    } else if (*buf == '\012') {
-        ++buf;
-    }
-
-    /* parse request line */
-    if ((buf = parse_token(buf, buf_end, method, method_len, ' ', ret)) == NULL) {
-        return NULL;
-    }
-    do {
-        ++buf;
-        CHECK_EOF();
-    } while (*buf == ' ');
-    ADVANCE_TOKEN(*path, *path_len);
-    do {
-        ++buf;
-        CHECK_EOF();
-    } while (*buf == ' ');
-    if (*method_len == 0 || *path_len == 0) {
-        *ret = -1;
-        return NULL;
-    }
-    if ((buf = parse_http_version(buf, buf_end, minor_version, ret)) == NULL) {
-        return NULL;
-    }
-    if (*buf == '\015') {
-        ++buf;
-        EXPECT_CHAR('\012');
-    } else if (*buf == '\012') {
-        ++buf;
-    } else {
-        *ret = -1;
-        return NULL;
-    }
-
-    return parse_headers(buf, buf_end, headers, num_headers, max_headers, ret);
-}
-
-int phr_parse_request(const char *buf_start, size_t len, const char **method, size_t *method_len, const char **path,
-                      size_t *path_len, int *minor_version, struct phr_header *headers, size_t *num_headers, size_t last_len)
-{
-    const char *buf = buf_start, *buf_end = buf_start + len;
-    size_t max_headers = *num_headers;
-    int r;
-
-    *method = NULL;
-    *method_len = 0;
-    *path = NULL;
-    *path_len = 0;
-    *minor_version = -1;
-    *num_headers = 0;
-
-    /* if last_len != 0, check if the request is complete (a fast countermeasure
-       againt slowloris */
-    if (last_len != 0 && is_complete(buf, buf_end, last_len, &r) == NULL) {
-        return r;
-    }
-
-    if ((buf = parse_request(buf, buf_end, method, method_len, path, path_len, minor_version, headers, num_headers, max_headers,
-                             &r)) == NULL) {
-        return r;
-    }
-
-    return (int)(buf - buf_start);
-}
-
-static const char *parse_response(const char *buf, const char *buf_end, int *minor_version, int *status, const char **msg,
-                                  size_t *msg_len, struct phr_header *headers, size_t *num_headers, size_t max_headers, int *ret)
-{
-    /* parse "HTTP/1.x" */
-    if ((buf = parse_http_version(buf, buf_end, minor_version, ret)) == NULL) {
-        return NULL;
-    }
-    /* skip space */
-    if (*buf != ' ') {
-        *ret = -1;
-        return NULL;
-    }
-    do {
-        ++buf;
-        CHECK_EOF();
-    } while (*buf == ' ');
-    /* parse status code, we want at least [:digit:][:digit:][:digit:]<other char> to try to parse */
-    if (buf_end - buf < 4) {
-        *ret = -2;
-        return NULL;
-    }
-    PARSE_INT_3(status);
-
-    /* get message including preceding space */
-    if ((buf = get_token_to_eol(buf, buf_end, msg, msg_len, ret)) == NULL) {
-        return NULL;
-    }
-    if (*msg_len == 0) {
-        /* ok */
-    } else if (**msg == ' ') {
-        /* Remove preceding space. Successful return from `get_token_to_eol` guarantees that we would hit something other than SP
-         * before running past the end of the given buffer. */
-        do {
-            ++*msg;
-            --*msg_len;
-        } while (**msg == ' ');
-    } else {
-        /* garbage found after status code */
-        *ret = -1;
-        return NULL;
-    }
-
-    return parse_headers(buf, buf_end, headers, num_headers, max_headers, ret);
-}
-
-int phr_parse_response(const char *buf_start, size_t len, int *minor_version, int *status, const char **msg, size_t *msg_len,
-                       struct phr_header *headers, size_t *num_headers, size_t last_len)
-{
-    const char *buf = buf_start, *buf_end = buf + len;
-    size_t max_headers = *num_headers;
-    int r;
-
-    *minor_version = -1;
-    *status = 0;
-    *msg = NULL;
-    *msg_len = 0;
-    *num_headers = 0;
-
-    /* if last_len != 0, check if the response is complete (a fast countermeasure
-       against slowloris */
-    if (last_len != 0 && is_complete(buf, buf_end, last_len, &r) == NULL) {
-        return r;
-    }
-
-    if ((buf = parse_response(buf, buf_end, minor_version, status, msg, msg_len, headers, num_headers, max_headers, &r)) == NULL) {
-        return r;
-    }
-
-    return (int)(buf - buf_start);
-}
-
-int phr_parse_headers(const char *buf_start, size_t len, struct phr_header *headers, size_t *num_headers, size_t last_len)
-{
-    const char *buf = buf_start, *buf_end = buf + len;
-    size_t max_headers = *num_headers;
-    int r;
-
-    *num_headers = 0;
-
-    /* if last_len != 0, check if the response is complete (a fast countermeasure
-       against slowloris */
-    if (last_len != 0 && is_complete(buf, buf_end, last_len, &r) == NULL) {
-        return r;
-    }
-
-    if ((buf = parse_headers(buf, buf_end, headers, num_headers, max_headers, &r)) == NULL) {
-        return r;
-    }
-
-    return (int)(buf - buf_start);
-}
-
-enum {
-    CHUNKED_IN_CHUNK_SIZE,
-    CHUNKED_IN_CHUNK_EXT,
-    CHUNKED_IN_CHUNK_DATA,
-    CHUNKED_IN_CHUNK_CRLF,
-    CHUNKED_IN_TRAILERS_LINE_HEAD,
-    CHUNKED_IN_TRAILERS_LINE_MIDDLE
-};
-
-static int decode_hex(int ch)
-{
-    if ('0' <= ch && ch <= '9') {
-        return ch - '0';
-    } else if ('A' <= ch && ch <= 'F') {
-        return ch - 'A' + 0xa;
-    } else if ('a' <= ch && ch <= 'f') {
-        return ch - 'a' + 0xa;
-    } else {
-        return -1;
-    }
-}
-
-ssize_t phr_decode_chunked(struct phr_chunked_decoder *decoder, char *buf, size_t *_bufsz)
-{
-    size_t dst = 0, src = 0, bufsz = *_bufsz;
-    ssize_t ret = -2; /* incomplete */
-
-    while (1) {
-        switch (decoder->_state) {
-        case CHUNKED_IN_CHUNK_SIZE:
-            for (;; ++src) {
-                int v;
-                if (src == bufsz)
-                    goto Exit;
-                if ((v = decode_hex(buf[src])) == -1) {
-                    if (decoder->_hex_count == 0) {
-                        ret = -1;
-                        goto Exit;
-                    }
-                    break;
-                }
-                if (decoder->_hex_count == sizeof(size_t) * 2) {
-                    ret = -1;
-                    goto Exit;
-                }
-                decoder->bytes_left_in_chunk = decoder->bytes_left_in_chunk * 16 + v;
-                ++decoder->_hex_count;
-            }
-            decoder->_hex_count = 0;
-            decoder->_state = CHUNKED_IN_CHUNK_EXT;
-        /* fallthru */
-        case CHUNKED_IN_CHUNK_EXT:
-            /* RFC 7230 A.2 "Line folding in chunk extensions is disallowed" */
-            for (;; ++src) {
-                if (src == bufsz)
-                    goto Exit;
-                if (buf[src] == '\012')
-                    break;
-            }
-            ++src;
-            if (decoder->bytes_left_in_chunk == 0) {
-                if (decoder->consume_trailer) {
-                    decoder->_state = CHUNKED_IN_TRAILERS_LINE_HEAD;
-                    break;
-                } else {
-                    goto Complete;
-                }
-            }
-            decoder->_state = CHUNKED_IN_CHUNK_DATA;
-        /* fallthru */
-        case CHUNKED_IN_CHUNK_DATA: {
-            size_t avail = bufsz - src;
-            if (avail < decoder->bytes_left_in_chunk) {
-                if (dst != src)
-                    memmove(buf + dst, buf + src, avail);
-                src += avail;
-                dst += avail;
-                decoder->bytes_left_in_chunk -= avail;
-                goto Exit;
-            }
-            if (dst != src)
-                memmove(buf + dst, buf + src, decoder->bytes_left_in_chunk);
-            src += decoder->bytes_left_in_chunk;
-            dst += decoder->bytes_left_in_chunk;
-            decoder->bytes_left_in_chunk = 0;
-            decoder->_state = CHUNKED_IN_CHUNK_CRLF;
-        }
-        /* fallthru */
-        case CHUNKED_IN_CHUNK_CRLF:
-            for (;; ++src) {
-                if (src == bufsz)
-                    goto Exit;
-                if (buf[src] != '\015')
-                    break;
-            }
-            if (buf[src] != '\012') {
-                ret = -1;
-                goto Exit;
-            }
-            ++src;
-            decoder->_state = CHUNKED_IN_CHUNK_SIZE;
-            break;
-        case CHUNKED_IN_TRAILERS_LINE_HEAD:
-            for (;; ++src) {
-                if (src == bufsz)
-                    goto Exit;
-                if (buf[src] != '\015')
-                    break;
-            }
-            if (buf[src++] == '\012')
-                goto Complete;
-            decoder->_state = CHUNKED_IN_TRAILERS_LINE_MIDDLE;
-        /* fallthru */
-        case CHUNKED_IN_TRAILERS_LINE_MIDDLE:
-            for (;; ++src) {
-                if (src == bufsz)
-                    goto Exit;
-                if (buf[src] == '\012')
-                    break;
-            }
-            ++src;
-            decoder->_state = CHUNKED_IN_TRAILERS_LINE_HEAD;
-            break;
-        default:
-            assert(!"decoder is corrupt");
-        }
-    }
-
-Complete:
-    ret = bufsz - src;
-Exit:
-    if (dst != src)
-        memmove(buf + dst, buf + src, bufsz - src);
-    *_bufsz = dst;
-    return ret;
-}
-
-int phr_decode_chunked_is_in_data(struct phr_chunked_decoder *decoder)
-{
-    return decoder->_state == CHUNKED_IN_CHUNK_DATA;
-}
-
-#undef CHECK_EOF
-#undef EXPECT_CHAR
-#undef ADVANCE_TOKEN
-/* End of src/picohttpparser.c */

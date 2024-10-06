@@ -316,6 +316,7 @@ th_request_parser_do_header(th_request_parser* parser, th_request* request, th_s
     if (n == 0) {
         *parsed = 2;
         if (parser->content_len == 0) {
+            th_request_set_body(request, th_string_make(&buffer.ptr[2], 0));
             parser->state = TH_REQUEST_PARSER_STATE_DONE;
         } else {
             if (request->method == TH_METHOD_GET || request->method == TH_METHOD_HEAD)

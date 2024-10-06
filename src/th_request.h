@@ -8,10 +8,22 @@
 #include "th_heap_string.h"
 #include "th_method.h"
 
+#define TH_HS_NULL ((th_heap_string){.impl.small.allocator = (void*)-1})
+#define TH_HS_IS_NULL(hs) ((hs).impl.small.allocator == (void*)-1)
+
+TH_INLINE(bool)
+th_hs_eq(th_heap_string* a, th_heap_string* b)
+{
+    if (TH_HS_IS_NULL(*a) || TH_HS_IS_NULL(*b)) {
+        return TH_HS_IS_NULL(*a) && TH_HS_IS_NULL(*b);
+    }
+    return th_heap_string_eq(a, th_heap_string_view(b));
+}
+
+#define TH_HS_EQ(a, b) th_hs_eq(&a, &b)
 #define TH_HS_HASH(hs) th_heap_string_hash(&hs)
-#define TH_HS_EQ(a, b) th_heap_string_eq(&a, th_heap_string_view(&b))
 #define TH_HS_DEINIT(hs) th_heap_string_deinit(&hs)
-TH_DEFINE_HASHMAP2(th_hs_map, th_heap_string, th_heap_string, TH_HS_HASH, TH_HS_EQ, (th_heap_string){.impl.small = 1}, TH_HS_DEINIT, TH_HS_DEINIT)
+TH_DEFINE_HASHMAP2(th_hs_map, th_heap_string, th_heap_string, TH_HS_HASH, TH_HS_EQ, TH_HS_NULL, TH_HS_DEINIT, TH_HS_DEINIT)
 
 #define TH_HS_CSTR_EQ(a, b) (strcmp(th_heap_string_data(&a), b) == 0)
 #define TH_HS_CSTR_HASH(s) th_cstr_hash(s)

@@ -246,6 +246,8 @@ th_exchange_init(th_exchange* exchange, th_socket* socket,
     th_request_parser_init(&exchange->parser);
     th_request_init(&exchange->request, allocator);
     th_response_init(&exchange->response, exchange->fcache, allocator);
+    exchange->read = 0;
+    exchange->parsed = 0;
     exchange->close = false;
 }
 

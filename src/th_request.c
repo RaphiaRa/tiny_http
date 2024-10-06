@@ -48,6 +48,7 @@ th_request_map_store_url_decoded(th_request* request, th_hs_map* map, th_string 
         goto cleanup_key;
     if ((err = th_hs_map_set(map, k, v)) != TH_ERR_OK)
         goto cleanup_value;
+    return TH_ERR_OK;
 cleanup_value:
     th_heap_string_deinit(&v);
 cleanup_key:

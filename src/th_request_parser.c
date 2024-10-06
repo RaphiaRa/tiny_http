@@ -301,7 +301,7 @@ th_request_parse_handle_header(th_request_parser* parser, th_request* request, t
     default:
         break;
     }
-    return th_request_add_header(request, name, value);
+    return th_request_add_header(request, th_heap_string_view(&normalized_name), value);
 }
 
 TH_PRIVATE(th_err)

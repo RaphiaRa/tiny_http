@@ -351,12 +351,13 @@ th_request_parser_do_body(th_request_parser* parser, th_request* request, th_str
         return TH_ERR_OK;
     }
     // Got the whole body
+    th_string body = th_string_substr(buffer, 0, parser->content_len);
     if (parser->parse_body_params) {
         th_err err = TH_ERR_OK;
-        if ((err = th_request_parser_do_body_params(request, buffer)) != TH_ERR_OK)
+        if ((err = th_request_parser_do_body_params(request, body)) != TH_ERR_OK)
             return err;
     }
-    th_request_set_body(request, buffer);
+    th_request_set_body(request, body);
     *parsed = parser->content_len;
     parser->state = TH_REQUEST_PARSER_STATE_DONE;
     return TH_ERR_OK;

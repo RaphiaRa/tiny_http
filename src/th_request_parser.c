@@ -117,6 +117,8 @@ th_request_parser_next_token(th_string buffer, th_string* token, char until, siz
     }
     if (i == buffer.len)
         return TH_ERR_OK;
+    if (i == 0)
+        return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
     *token = th_string_substr(buffer, 0, i);
     *parsed = i + 1;
     return TH_ERR_OK;

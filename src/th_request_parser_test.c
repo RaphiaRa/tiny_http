@@ -119,5 +119,17 @@ TH_TEST_BEGIN(request_parser)
         th_request_deinit(&request);
     }
     TH_TEST_CASE_END
+    TH_TEST_CASE_BEGIN(request_parser_empty_header)
+    {
+        th_request request;
+        th_request_init(&request, NULL);
+        th_request_parser parser;
+        th_request_parser_init(&parser);
+        th_string data = TH_STRING("POST / HTTP/1.1\r\n: 0080\r\nUser-Agent:81.0\r\nAccept: */*\r\nContent-Length: 0\r\nContent-Type: application/x-www-form-urlencoded\r\n\r\n");
+        size_t parsed = 0;
+        TH_EXPECT(th_request_parser_parse(&parser, &request, data, &parsed) == TH_ERR_HTTP(TH_CODE_BAD_REQUEST));
+        th_request_deinit(&request);
+    }
+    TH_TEST_CASE_END
 }
 TH_TEST_END

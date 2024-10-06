@@ -125,8 +125,10 @@ th_exchange_handle_request(th_exchange* handler)
     th_socket* socket = handler->socket;
     th_request* request = &handler->request;
     th_response* response = &handler->response;
-    // We only need to write headers if it's a HEAD request
-    response->only_headers = (request->method == TH_METHOD_HEAD);
+    if (request->method == TH_METHOD_HEAD) {
+        response->only_headers = true;   // only write headers
+        request->method = TH_METHOD_GET; // pretend it's a GET request
+    }
     th_err err = th_http_error(th_exchange_handle_route(handler, request, response));
     switch (th_http_code_get_type(TH_ERR_CODE(err))) {
     case TH_HTTP_CODE_TYPE_INFORMATIONAL:

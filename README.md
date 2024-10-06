@@ -57,7 +57,6 @@ I wrote this library because I wanted a simple drop-in solution for the legacy C
 
 ## Dependencies
 
-- [picohttpparser](https://github.com/h2o/picohttpparser) (included) A small, fast HTTP parser
 - The C standard library
 - OpenSSL (optional, for HTTPS support)
 - gperf (optinal, for binary builds and amalgamation)

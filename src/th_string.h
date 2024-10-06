@@ -82,6 +82,11 @@ TH_PRIVATE(size_t)
 th_string_find_last(th_string str, size_t start, char c);
 */
 
+/** th_string_substr
+ * @brief Returns a substring of a string.
+ * If len == th_string_npos, the substring will go to the end of the string.
+ * If start > len, an empty string is returned (ptr = str.ptr + str.len, len = 0).
+ */
 TH_PRIVATE(th_string)
 th_string_substr(th_string str, size_t start, size_t len);
 

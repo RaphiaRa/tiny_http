@@ -36,7 +36,8 @@ TH_LOCAL(void)
 th_detail_small_string_set(th_detail_small_string* self, th_string str)
 {
     TH_ASSERT(str.len <= TH_HEAP_STRING_SMALL_MAX_LEN);
-    memcpy(self->buf, str.ptr, str.len);
+    if (str.len > 0)
+        memcpy(self->buf, str.ptr, str.len);
     self->buf[str.len] = '\0';
     self->len = str.len;
 }
@@ -55,7 +56,8 @@ th_detail_large_string_set(th_detail_large_string* self, th_string str)
         self->capacity = new_capacity;
     }
     self->len = str.len;
-    memcpy(self->ptr, str.ptr, str.len);
+    if (str.len > 0)
+        memcpy(self->ptr, str.ptr, str.len);
     self->ptr[str.len] = '\0';
     return TH_ERR_OK;
 }
@@ -82,6 +84,7 @@ th_heap_string_small_to_large(th_heap_string* self, size_t capacity)
 TH_PRIVATE(th_err)
 th_heap_string_set(th_heap_string* self, th_string str)
 {
+    TH_ASSERT(str.ptr != NULL && "Invalid string");
     if (self->impl.small.small) {
         if (str.len <= TH_HEAP_STRING_SMALL_MAX_LEN) {
             th_detail_small_string_set(&self->impl.small, str);

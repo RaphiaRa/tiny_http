@@ -119,6 +119,10 @@ typedef enum th_method {
     TH_METHOD_PUT,
     TH_METHOD_DELETE,
     TH_METHOD_PATCH,
+    TH_METHOD_CONNECT,
+    TH_METHOD_OPTIONS,
+    TH_METHOD_TRACE,
+    TH_METHOD_HEAD,
     TH_METHOD_ANY,
     TH_METHOD_MAX,
 } th_method;
@@ -207,18 +211,16 @@ typedef struct th_cookie_attr {
     th_cookie_same_site same_site;
 } th_cookie_attr;
 
-typedef struct th_key_value {
-    const char* key;
-    const char* value;
-} th_key_value;
-
 typedef struct th_map th_map;
 typedef const th_map* th_map_ref;
 
 /** th_map_iter
  * @brief map iterator - Simply a pointer to a key-value pair.
  */
-typedef const th_key_value* th_map_iter;
+typedef const void* th_map_iter;
+
+const char* th_map_iter_key(th_map_iter iter);
+const char* th_map_iter_value(th_map_iter iter);
 
 /** th_map_find
  * @brief Find an entry in the map by key.

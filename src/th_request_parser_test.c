@@ -102,5 +102,22 @@ TH_TEST_BEGIN(request_parser)
         th_request_deinit(&request);
     }
     TH_TEST_CASE_END
+    TH_TEST_CASE_BEGIN(parse_bad_param)
+    {
+        th_request request;
+        th_request_init(&request, NULL);
+        th_request_parser parser;
+        th_request_parser_init(&parser);
+        th_string data = TH_STRING("GET /index.php?=qwertqwertqwertqwertqwertqwertqwertqwertqwertqwertqwetqwert HTTP/1.1\r\nHost: localhost\r\nConnection: Keep-Alive\r\n\r\n");
+        size_t parsed = 0;
+        TH_EXPECT(th_request_parser_parse(&parser, &request, data, &parsed) == TH_ERR_OK);
+        TH_EXPECT(request.method == TH_METHOD_GET);
+        TH_EXPECT(th_heap_string_eq(&request.uri_path, TH_STRING("/index.php")));
+        TH_EXPECT((th_try_get_query_param(&request, "")) == NULL);
+        TH_EXPECT(request.version == 1);
+        TH_EXPECT(TH_STRING_EQ(request.body, ""));
+        th_request_deinit(&request);
+    }
+    TH_TEST_CASE_END
 }
 TH_TEST_END

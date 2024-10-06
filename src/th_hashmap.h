@@ -149,7 +149,9 @@
                 return TH_ERR_OK;                                                                                                   \
             }                                                                                                                       \
             if (K_EQ(entry->key, key)) {                                                                                            \
+                K_DEINIT(entry->key);                                                                                               \
                 V_DEINIT(entry->value);                                                                                             \
+                entry->key = key;                                                                                                   \
                 entry->value = value;                                                                                               \
                 return TH_ERR_OK;                                                                                                   \
             }                                                                                                                       \
@@ -164,7 +166,9 @@
                 return TH_ERR_OK;                                                                                                   \
             }                                                                                                                       \
             if (K_EQ(entry->key, key)) {                                                                                            \
+                K_DEINIT(entry->key);                                                                                               \
                 V_DEINIT(entry->value);                                                                                             \
+                entry->key = key;                                                                                                   \
                 entry->value = value;                                                                                               \
                 return TH_ERR_OK;                                                                                                   \
             }                                                                                                                       \

@@ -265,7 +265,7 @@ th_heap_string_eq(const th_heap_string* self, th_string other)
         ptr = self->impl.large.ptr;
         n = self->impl.large.len;
     }
-    return n == other.len && memcmp(ptr, other.ptr, n) == 0;
+    return n == other.len && (n == 0 || memcmp(ptr, other.ptr, n) == 0);
 }
 
 TH_PRIVATE(uint32_t)

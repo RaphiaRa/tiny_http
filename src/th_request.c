@@ -43,15 +43,14 @@ th_request_map_store_url_decoded(th_request* request, th_hs_map* map, th_string 
     th_heap_string_init(&k, request->allocator);
     th_heap_string_init(&v, request->allocator);
     if ((err = th_url_decode_string(key, &k, type)) != TH_ERR_OK)
-        return err;
+        goto cleanup;
     if ((err = th_url_decode_string(value, &v, type)) != TH_ERR_OK)
-        goto cleanup_key;
+        goto cleanup;
     if ((err = th_hs_map_set(map, k, v)) != TH_ERR_OK)
-        goto cleanup_value;
+        goto cleanup;
     return TH_ERR_OK;
-cleanup_value:
+cleanup:
     th_heap_string_deinit(&v);
-cleanup_key:
     th_heap_string_deinit(&k);
     return err;
 }

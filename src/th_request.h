@@ -11,7 +11,7 @@
 #define TH_HS_HASH(hs) th_heap_string_hash(&hs)
 #define TH_HS_EQ(a, b) th_heap_string_eq(&a, th_heap_string_view(&b))
 #define TH_HS_DEINIT(hs) th_heap_string_deinit(&hs)
-TH_DEFINE_HASHMAP2(th_hs_map, th_heap_string, th_heap_string, TH_HS_HASH, TH_HS_EQ, (th_heap_string){0}, TH_HS_DEINIT, TH_HS_DEINIT)
+TH_DEFINE_HASHMAP2(th_hs_map, th_heap_string, th_heap_string, TH_HS_HASH, TH_HS_EQ, (th_heap_string){.impl.small = 1}, TH_HS_DEINIT, TH_HS_DEINIT)
 
 #define TH_HS_CSTR_EQ(a, b) (strcmp(th_heap_string_data(&a), b) == 0)
 #define TH_HS_CSTR_HASH(s) th_cstr_hash(s)

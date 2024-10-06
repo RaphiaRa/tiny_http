@@ -223,8 +223,8 @@
             hash &= (new_capacity - 1);                                                                                             \
             NAME##_entry e = *entry;                                                                                                \
             entry->key = K_NULL;                                                                                                    \
-            NAME##_fix_hole(map, entry);                                                                                            \
             --map->size;                                                                                                            \
+            NAME##_fix_hole(map, entry);                                                                                            \
             if ((err = NAME##_do_set(map, hash, e.key, e.value)) != TH_ERR_OK) {                                                    \
                 return err;                                                                                                         \
             }                                                                                                                       \

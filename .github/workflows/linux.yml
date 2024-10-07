@@ -18,17 +18,17 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential gperf
-      - name: Set up Python 3.8
+      - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.8'
+          python-version: '3.x'
       - name: Install Python dependencies
         run: |
           pip install -r requirements.txt
       - name: Build
         run: |
           mkdir build; cd build
-          cmake ..
+          cmake .. -DPython3_EXECUTABLE==$(which python)
           make -j$(nproc)
       - name: Test
         run: |

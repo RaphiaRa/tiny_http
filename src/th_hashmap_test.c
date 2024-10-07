@@ -101,6 +101,8 @@ TH_TEST_BEGIN(hashmap)
         for (size_t i = 0; i < 1000; i++) {
             int* value = th_test_map_try_get(&map, key_buf[i]);
             TH_EXPECT(value && *value == val_buf[i]);
+        }
+        for (size_t i = 0; i < 1000; i++) {
             th_allocator_free(th_default_allocator_get(), key_buf[i]);
         }
         th_test_map_deinit(&map);

@@ -169,12 +169,25 @@ endif()
 # Tests
 
 if (NOT TH_DISABLE_TESTS)
+    include(CMakePushCheckState)
+    include(CheckCCompilerFlag)
+    cmake_push_check_state(RESET)
+    set(CMAKE_REQUIRED_LINK_OPTIONS -fsanitize=address)
+    check_c_compiler_flag("-fsanitize=address" TH_HAVE_ASAN)
+    cmake_pop_check_state()
+
     add_library(tiny_http_test
         ${TH_CORE_SRC}
         ${TH_TEST_SRC}
     )
     if (OpenSSL_FOUND)
         target_link_libraries(tiny_http_test PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+    endif()
+    if (TH_HAVE_ASAN)
+        target_compile_options(tiny_http_test PUBLIC -fsanitize=address -fno-omit-frame-pointer)
+        target_link_options(tiny_http_test PUBLIC -fsanitize=address -fno-omit-frame-pointer)
+    else()
+        message(WARNING "Address sanitizer not found, tests will not be run with ASAN")
     endif()
     target_compile_definitions(tiny_http_test PRIVATE TH_CONFIG_OS_MOCK=1)
     target_compile_definitions(tiny_http_test PRIVATE TH_LOG_LEVEL=${TH_LOG_LEVEL})

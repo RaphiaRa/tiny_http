@@ -131,10 +131,6 @@ target_include_directories(tiny_http
     PRIVATE src
 )
 
-add_library(tiny_http::tiny_http ALIAS tiny_http)
-
-# Examples
-
 if (NOT TH_DISABLE_EXAMPLES)
     # Hello world example
     add_executable(hello_world

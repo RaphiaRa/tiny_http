@@ -131,5 +131,18 @@ TH_TEST_BEGIN(request_parser)
         th_request_deinit(&request);
     }
     TH_TEST_CASE_END
+    TH_TEST_CASE_BEGIN(parse_bad_encoding)
+    {
+        th_request request;
+        th_request_init(&request, NULL);
+        th_request_parser parser;
+        th_request_parser_init(&parser);
+        char buffer[] = "POST / HTTP/1.1\r\nContent-Length: 3\r\nContent-Type: application/x-www-form-urlencoded\r\n\r\n=n";
+        buffer[sizeof(buffer) - 1] = '%';
+        size_t parsed = 0;
+        TH_EXPECT(th_request_parser_parse(&parser, &request, th_string_make(buffer, sizeof(buffer)), &parsed) == TH_ERR_HTTP(TH_CODE_BAD_REQUEST));
+        th_request_deinit(&request);
+    }
+    TH_TEST_CASE_END
 }
 TH_TEST_END

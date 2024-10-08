@@ -24,7 +24,7 @@ TH_PRIVATE(th_err)
 th_listener_create(th_listener** out, th_context* context,
                    const char* host, const char* port,
                    th_router* router, th_fcache* fcache,
-                   th_listener_opt* opt, th_allocator* allocator);
+                   th_bind_opt* opt, th_allocator* allocator);
 
 TH_PRIVATE(th_err)
 th_listener_start(th_listener* listener);

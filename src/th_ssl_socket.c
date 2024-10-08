@@ -49,15 +49,18 @@ th_ssl_socket_async_sendfile_impl(void* self, th_iov* iov, size_t iovcnt, th_fil
 TH_PRIVATE(th_err)
 th_ssl_socket_init(th_ssl_socket* socket, th_context* context, th_ssl_context* ssl_context, th_allocator* allocator)
 {
-    socket->base.set_fd = th_ssl_socket_set_fd_impl;
-    socket->base.cancel = th_ssl_socket_cancel_impl;
-    socket->base.get_allocator = th_ssl_socket_get_allocator_impl;
-    socket->base.get_context = th_ssl_socket_get_context_impl;
-    socket->base.async_write = th_ssl_socket_async_write_impl;
-    socket->base.async_writev = th_ssl_socket_async_writev_impl;
-    socket->base.async_read = th_ssl_socket_async_read_impl;
-    socket->base.async_readv = th_ssl_socket_async_readv_impl;
-    socket->base.async_sendfile = th_ssl_socket_async_sendfile_impl;
+    static const th_socket_methods methods = {
+        .set_fd = th_ssl_socket_set_fd_impl,
+        .cancel = th_ssl_socket_cancel_impl,
+        .get_allocator = th_ssl_socket_get_allocator_impl,
+        .get_context = th_ssl_socket_get_context_impl,
+        .async_write = th_ssl_socket_async_write_impl,
+        .async_writev = th_ssl_socket_async_writev_impl,
+        .async_read = th_ssl_socket_async_read_impl,
+        .async_readv = th_ssl_socket_async_readv_impl,
+        .async_sendfile = th_ssl_socket_async_sendfile_impl,
+    };
+    socket->base.methods = &methods;
     th_tcp_socket_init(&socket->tcp_socket, context, allocator);
 
     th_err err = TH_ERR_OK;

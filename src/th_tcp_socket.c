@@ -155,19 +155,21 @@ th_tcp_socket_async_sendfile_impl(void* self, th_iov* iov, size_t iovcnt, th_fil
 TH_PRIVATE(void)
 th_tcp_socket_init(th_tcp_socket* sock, th_context* context, th_allocator* allocator)
 {
+    static const th_socket_methods methods = {
+        .set_fd = th_tcp_socket_set_fd_impl,
+        .cancel = th_tcp_socket_cancel_impl,
+        .get_allocator = th_tcp_socket_get_allocator_impl,
+        .get_context = th_tcp_socket_get_context_impl,
+        .async_write = th_tcp_socket_async_write_impl,
+        .async_writev = th_tcp_socket_async_writev_impl,
+        .async_read = th_tcp_socket_async_read_impl,
+        .async_readv = th_tcp_socket_async_readv_impl,
+        .async_sendfile = th_tcp_socket_async_sendfile_impl,
+    };
+    sock->base.methods = &methods;
     sock->handle = NULL;
     sock->context = context;
     sock->allocator = allocator ? allocator : th_default_allocator_get();
-    th_socket* base = &sock->base;
-    base->async_read = th_tcp_socket_async_read_impl;
-    base->async_readv = th_tcp_socket_async_readv_impl;
-    base->async_write = th_tcp_socket_async_write_impl;
-    base->async_writev = th_tcp_socket_async_writev_impl;
-    base->async_sendfile = th_tcp_socket_async_sendfile_impl;
-    base->set_fd = th_tcp_socket_set_fd_impl;
-    base->cancel = th_tcp_socket_cancel_impl;
-    base->get_allocator = th_tcp_socket_get_allocator_impl;
-    base->get_context = th_tcp_socket_get_context_impl;
 }
 
 TH_PRIVATE(void)

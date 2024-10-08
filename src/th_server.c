@@ -165,7 +165,7 @@ th_server_deinit(th_server* server)
 }
 
 TH_LOCAL(th_err)
-th_server_bind(th_server* server, const char* host, const char* port, th_listener_opt* opt)
+th_server_bind(th_server* server, const char* host, const char* port, th_bind_opt* opt)
 {
     th_listener* listener = NULL;
     th_err err = TH_ERR_OK;
@@ -230,7 +230,7 @@ th_server_destroy(th_server* server)
 }
 
 TH_PUBLIC(th_err)
-th_bind(th_server* server, const char* addr, const char* port, th_listener_opt* opt)
+th_bind(th_server* server, const char* addr, const char* port, th_bind_opt* opt)
 {
     return th_server_bind(server, addr, port, opt);
 }

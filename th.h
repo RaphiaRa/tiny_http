@@ -147,10 +147,10 @@ typedef enum th_code {
     TH_CODE_SERVICE_UNAVAILABLE = 503,
 } th_code;
 
-/** th_listener_opt
+/** th_bind_opt
  * @brief Listener options.
  */
-typedef struct th_listener_opt {
+typedef struct th_bind_opt {
     /** cert_file
      * @brief Path to the PEM encoded certificate file.
      * If this and key_file are set, the listener will use SSL.
@@ -162,7 +162,7 @@ typedef struct th_listener_opt {
      * If this and cert_file are set, the listener will use SSL.
      */
     const char* key_file;
-} th_listener_opt;
+} th_bind_opt;
 
 /* datetime related declarations begin */
 /** th_date
@@ -406,7 +406,7 @@ th_err th_server_create(th_server** server, th_allocator* allocator);
  * @param port Port to bind to
  * @param opt (optional) Listener options, such as SSL certificates.
  */
-th_err th_bind(th_server* server, const char* addr, const char* port, th_listener_opt* opt);
+th_err th_bind(th_server* server, const char* addr, const char* port, th_bind_opt* opt);
 
 th_err th_route(th_server* server, th_method method, const char* route, th_handler handler, void* userp);
 

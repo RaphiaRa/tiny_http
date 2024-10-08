@@ -80,7 +80,7 @@ int main(int argc, char** argv)
         return EXIT_FAILURE;
     }
 
-    th_listener_opt opt = {0};
+    th_bind_opt opt = {0};
     opt.cert_file = cert;
     opt.key_file = key;
     if ((err = th_bind(server, "0.0.0.0", port, &opt)) != TH_ERR_OK)

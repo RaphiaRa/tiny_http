@@ -2362,7 +2362,7 @@ typedef th_io_handler th_socket_handler;
 /* th_socket_task_handler end */
 /* th_socket begin */
 
-typedef struct th_socket {
+typedef struct th_socket_methods {
     void (*set_fd)(void* self, int fd);
     void (*cancel)(void* self);
     th_allocator* (*get_allocator)(void* self);
@@ -2373,61 +2373,65 @@ typedef struct th_socket {
     void (*async_readv)(void* self, th_iov* iov, size_t len, th_socket_handler* handler);
     void (*async_sendfile)(void* self, th_iov* header, size_t iovcnt,
                            th_file* stream, size_t offset, size_t len, th_socket_handler* handler);
+} th_socket_methods;
+
+typedef struct th_socket {
+    const th_socket_methods* methods;
 } th_socket;
 
 TH_INLINE(void)
 th_socket_set_fd(th_socket* socket, int fd)
 {
-    socket->set_fd(socket, fd);
+    socket->methods->set_fd(socket, fd);
 }
 
 TH_INLINE(void)
 th_socket_cancel(th_socket* socket)
 {
-    socket->cancel(socket);
+    socket->methods->cancel(socket);
 }
 
 TH_INLINE(th_allocator*)
 th_socket_get_allocator(th_socket* socket)
 {
-    return socket->get_allocator(socket);
+    return socket->methods->get_allocator(socket);
 }
 
 TH_INLINE(th_context*)
 th_socket_get_context(th_socket* socket)
 {
-    return socket->get_context(socket);
+    return socket->methods->get_context(socket);
 }
 
 TH_INLINE(void)
 th_socket_async_write(th_socket* sock, void* addr, size_t len, th_socket_handler* handler)
 {
-    sock->async_write(sock, addr, len, handler);
+    sock->methods->async_write(sock, addr, len, handler);
 }
 
 TH_INLINE(void)
 th_socket_async_writev(th_socket* sock, th_iov* iov, size_t len, th_socket_handler* handler)
 {
-    sock->async_writev(sock, iov, len, handler);
+    sock->methods->async_writev(sock, iov, len, handler);
 }
 
 TH_INLINE(void)
 th_socket_async_read(th_socket* sock, void* addr, size_t len, th_socket_handler* handler)
 {
-    sock->async_read(sock, addr, len, handler);
+    sock->methods->async_read(sock, addr, len, handler);
 }
 
 TH_INLINE(void)
 th_socket_async_readv(th_socket* sock, th_iov* iov, size_t len, th_socket_handler* handler)
 {
-    sock->async_readv(sock, iov, len, handler);
+    sock->methods->async_readv(sock, iov, len, handler);
 }
 
 TH_INLINE(void)
 th_socket_async_sendfile(th_socket* sock, th_iov* header, size_t iovcnt,
                          th_file* stream, size_t offset, size_t len, th_socket_handler* handler)
 {
-    sock->async_sendfile(sock, header, iovcnt, stream, offset, len, handler);
+    sock->methods->async_sendfile(sock, header, iovcnt, stream, offset, len, handler);
 }
 
 /* th_socket end */
@@ -2926,23 +2930,23 @@ th_tcp_socket_close(th_tcp_socket* socket);
 TH_PRIVATE(void)
 th_tcp_socket_deinit(th_tcp_socket* socket);
 
-#define th_tcp_socket_set_fd(socket, fd) ((socket)->base.set_fd((socket), (fd)))
+#define th_tcp_socket_set_fd(socket, fd) ((socket)->base.methods->set_fd((socket), (fd)))
 
-#define th_tcp_socket_cancel(socket) ((socket)->base.cancel((socket)))
+#define th_tcp_socket_cancel(socket) ((socket)->base.methods->cancel((socket)))
 
-#define th_tcp_socket_get_allocator(socket) ((socket)->base.get_allocator((socket)))
+#define th_tcp_socket_get_allocator(socket) ((socket)->base.methods->get_allocator((socket)))
 
-#define th_tcp_socket_get_context(socket) ((socket)->base.get_context((socket)))
+#define th_tcp_socket_get_context(socket) ((socket)->base.methods->get_context((socket)))
 
-#define th_tcp_socket_async_write(socket, addr, len, handler) ((socket)->base.async_write((socket), (addr), (len), (handler)))
+#define th_tcp_socket_async_write(socket, addr, len, handler) ((socket)->base.methods->async_write((socket), (addr), (len), (handler)))
 
-#define th_tcp_socket_async_writev(socket, iov, iovcnt, handler) ((socket)->base.async_writev((socket), (iov), (iovcnt), (handler)))
+#define th_tcp_socket_async_writev(socket, iov, iovcnt, handler) ((socket)->base.methods->async_writev((socket), (iov), (iovcnt), (handler)))
 
-#define th_tcp_socket_async_read(socket, addr, len, handler) ((socket)->base.async_read((socket), (addr), (len), (handler)))
+#define th_tcp_socket_async_read(socket, addr, len, handler) ((socket)->base.methods->async_read((socket), (addr), (len), (handler)))
 
-#define th_tcp_socket_async_readv(socket, iov, iovcnt, handler) ((socket)->base.async_readv((socket), (iov), (iovcnt), (handler)))
+#define th_tcp_socket_async_readv(socket, iov, iovcnt, handler) ((socket)->base.methods->async_readv((socket), (iov), (iovcnt), (handler)))
 
-#define th_tcp_socket_async_sendfile(socket, header, iovcnt, stream, offset, len, handler) ((socket)->base.async_sendfile((socket), (header), (iovcnt), (stream), (offset), (len), (handler)))
+#define th_tcp_socket_async_sendfile(socket, header, iovcnt, stream, offset, len, handler) ((socket)->base.methods->async_sendfile((socket), (header), (iovcnt), (stream), (offset), (len), (handler)))
 
 /* th_tcp_socket end */
 
@@ -3291,7 +3295,7 @@ TH_PRIVATE(th_err)
 th_listener_create(th_listener** out, th_context* context,
                    const char* host, const char* port,
                    th_router* router, th_fcache* fcache,
-                   th_listener_opt* opt, th_allocator* allocator);
+                   th_bind_opt* opt, th_allocator* allocator);
 
 TH_PRIVATE(th_err)
 th_listener_start(th_listener* listener);
@@ -3769,7 +3773,7 @@ th_server_deinit(th_server* server)
 }
 
 TH_LOCAL(th_err)
-th_server_bind(th_server* server, const char* host, const char* port, th_listener_opt* opt)
+th_server_bind(th_server* server, const char* host, const char* port, th_bind_opt* opt)
 {
     th_listener* listener = NULL;
     th_err err = TH_ERR_OK;
@@ -3834,7 +3838,7 @@ th_server_destroy(th_server* server)
 }
 
 TH_PUBLIC(th_err)
-th_bind(th_server* server, const char* addr, const char* port, th_listener_opt* opt)
+th_bind(th_server* server, const char* addr, const char* port, th_bind_opt* opt)
 {
     return th_server_bind(server, addr, port, opt);
 }
@@ -3871,7 +3875,7 @@ TH_LOCAL(th_err)
 th_listener_init(th_listener* listener, th_context* context,
                  const char* host, const char* port,
                  th_router* router, th_fcache* fcache,
-                 th_listener_opt* opt, th_allocator* allocator)
+                 th_bind_opt* opt, th_allocator* allocator)
 {
     listener->allocator = allocator;
     listener->router = router;
@@ -3903,7 +3907,7 @@ TH_PRIVATE(th_err)
 th_listener_create(th_listener** out, th_context* context,
                    const char* host, const char* port,
                    th_router* router, th_fcache* fcache,
-                   th_listener_opt* opt, th_allocator* allocator)
+                   th_bind_opt* opt, th_allocator* allocator)
 {
     th_listener* listener = th_allocator_alloc(allocator, sizeof(th_listener));
     if (!listener)
@@ -6639,19 +6643,21 @@ th_tcp_socket_async_sendfile_impl(void* self, th_iov* iov, size_t iovcnt, th_fil
 TH_PRIVATE(void)
 th_tcp_socket_init(th_tcp_socket* sock, th_context* context, th_allocator* allocator)
 {
+    static const th_socket_methods methods = {
+        .set_fd = th_tcp_socket_set_fd_impl,
+        .cancel = th_tcp_socket_cancel_impl,
+        .get_allocator = th_tcp_socket_get_allocator_impl,
+        .get_context = th_tcp_socket_get_context_impl,
+        .async_write = th_tcp_socket_async_write_impl,
+        .async_writev = th_tcp_socket_async_writev_impl,
+        .async_read = th_tcp_socket_async_read_impl,
+        .async_readv = th_tcp_socket_async_readv_impl,
+        .async_sendfile = th_tcp_socket_async_sendfile_impl,
+    };
+    sock->base.methods = &methods;
     sock->handle = NULL;
     sock->context = context;
     sock->allocator = allocator ? allocator : th_default_allocator_get();
-    th_socket* base = &sock->base;
-    base->async_read = th_tcp_socket_async_read_impl;
-    base->async_readv = th_tcp_socket_async_readv_impl;
-    base->async_write = th_tcp_socket_async_write_impl;
-    base->async_writev = th_tcp_socket_async_writev_impl;
-    base->async_sendfile = th_tcp_socket_async_sendfile_impl;
-    base->set_fd = th_tcp_socket_set_fd_impl;
-    base->cancel = th_tcp_socket_cancel_impl;
-    base->get_allocator = th_tcp_socket_get_allocator_impl;
-    base->get_context = th_tcp_socket_get_context_impl;
 }
 
 TH_PRIVATE(void)
@@ -10947,15 +10953,18 @@ th_ssl_socket_async_sendfile_impl(void* self, th_iov* iov, size_t iovcnt, th_fil
 TH_PRIVATE(th_err)
 th_ssl_socket_init(th_ssl_socket* socket, th_context* context, th_ssl_context* ssl_context, th_allocator* allocator)
 {
-    socket->base.set_fd = th_ssl_socket_set_fd_impl;
-    socket->base.cancel = th_ssl_socket_cancel_impl;
-    socket->base.get_allocator = th_ssl_socket_get_allocator_impl;
-    socket->base.get_context = th_ssl_socket_get_context_impl;
-    socket->base.async_write = th_ssl_socket_async_write_impl;
-    socket->base.async_writev = th_ssl_socket_async_writev_impl;
-    socket->base.async_read = th_ssl_socket_async_read_impl;
-    socket->base.async_readv = th_ssl_socket_async_readv_impl;
-    socket->base.async_sendfile = th_ssl_socket_async_sendfile_impl;
+    static const th_socket_methods methods = {
+        .set_fd = th_ssl_socket_set_fd_impl,
+        .cancel = th_ssl_socket_cancel_impl,
+        .get_allocator = th_ssl_socket_get_allocator_impl,
+        .get_context = th_ssl_socket_get_context_impl,
+        .async_write = th_ssl_socket_async_write_impl,
+        .async_writev = th_ssl_socket_async_writev_impl,
+        .async_read = th_ssl_socket_async_read_impl,
+        .async_readv = th_ssl_socket_async_readv_impl,
+        .async_sendfile = th_ssl_socket_async_sendfile_impl,
+    };
+    socket->base.methods = &methods;
     th_tcp_socket_init(&socket->tcp_socket, context, allocator);
 
     th_err err = TH_ERR_OK;

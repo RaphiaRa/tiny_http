@@ -70,7 +70,7 @@ $ gcc -o myserver myserver.c th.c -lssl -lcrypto -DTH_WITH_SSL=1
 ```
 Pass the certificate and private key file paths to `th_bind`:
 ```c
-th_listen_opt opt = {
+th_bind_opt opt = {
     .cert_file = "cert.pem", 
     .key_file = "key.pem",
 };

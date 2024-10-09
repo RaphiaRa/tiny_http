@@ -61,7 +61,6 @@ SET(TH_CORE_SRC
     src/th_fcache.c
     src/th_dir.c
     src/th_dir_mgr.c
-    src/th_client_acceptor.c
     src/th_string.c
     src/th_heap_string.c
     src/th_log.c

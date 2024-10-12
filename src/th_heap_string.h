@@ -41,6 +41,9 @@ TH_PRIVATE(th_err)
 th_heap_string_append(th_heap_string* self, th_string str);
 
 TH_PRIVATE(th_err)
+th_heap_string_append_cstr(th_heap_string* self, const char* str);
+
+TH_PRIVATE(th_err)
 th_heap_string_push_back(th_heap_string* self, char c);
 
 TH_PRIVATE(th_err)

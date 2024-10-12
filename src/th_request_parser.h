@@ -26,6 +26,9 @@ typedef struct th_request_parser {
 TH_PRIVATE(void)
 th_request_parser_init(th_request_parser* parser);
 
+TH_PRIVATE(void)
+th_request_parser_reset(th_request_parser* parser);
+
 TH_PRIVATE(size_t)
 th_request_parser_content_len(th_request_parser* parser);
 

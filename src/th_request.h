@@ -51,6 +51,9 @@ TH_PRIVATE(void)
 th_request_deinit(th_request* request);
 
 TH_PRIVATE(void)
+th_request_reset(th_request* request);
+
+TH_PRIVATE(void)
 th_request_set_version(th_request* request, int version);
 
 TH_PRIVATE(void)

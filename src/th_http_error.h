@@ -104,7 +104,8 @@ typedef enum th_http_code_type {
     TH_HTTP_CODE_TYPE_INFORMATIONAL,
     TH_HTTP_CODE_TYPE_SUCCESS,
     TH_HTTP_CODE_TYPE_REDIRECT,
-    TH_HTTP_CODE_TYPE_ERROR,
+    TH_HTTP_CODE_TYPE_CLIENT_ERROR,
+    TH_HTTP_CODE_TYPE_SERVER_ERROR,
 } th_http_code_type;
 
 TH_INLINE(th_http_code_type)
@@ -116,9 +117,11 @@ th_http_code_get_type(int code)
         return TH_HTTP_CODE_TYPE_SUCCESS;
     if (code >= 300 && code < 400)
         return TH_HTTP_CODE_TYPE_REDIRECT;
-    if (code >= 400)
-        return TH_HTTP_CODE_TYPE_ERROR;
-    return TH_HTTP_CODE_TYPE_ERROR;
+    if (code >= 400 && code < 500)
+        return TH_HTTP_CODE_TYPE_CLIENT_ERROR;
+    if (code >= 500 && code < 600)
+        return TH_HTTP_CODE_TYPE_SERVER_ERROR;
+    return TH_HTTP_CODE_TYPE_SERVER_ERROR;
 }
 
 #endif

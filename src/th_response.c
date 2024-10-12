@@ -62,6 +62,13 @@ th_response_deinit(th_response* response)
 }
 
 TH_PRIVATE(void)
+th_response_reset(th_response* response)
+{
+    th_response_deinit(response);
+    th_response_init(response, response->fcache, response->allocator);
+}
+
+TH_PRIVATE(void)
 th_response_set_code(th_response* response, th_code code)
 {
     response->code = code;

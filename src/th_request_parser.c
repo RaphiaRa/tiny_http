@@ -13,6 +13,14 @@ th_request_parser_init(th_request_parser* parser)
     parser->parse_body_params = false;
 }
 
+TH_PRIVATE(void)
+th_request_parser_reset(th_request_parser* parser)
+{
+    parser->state = TH_REQUEST_PARSER_STATE_METHOD;
+    parser->content_len = 0;
+    parser->parse_body_params = false;
+}
+
 TH_PRIVATE(size_t)
 th_request_parser_content_len(th_request_parser* parser)
 {

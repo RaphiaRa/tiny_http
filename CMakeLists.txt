@@ -55,7 +55,7 @@ SET(TH_CORE_SRC
     src/th_request.c
     src/th_response.c
     src/th_context.c
-    src/th_client.c
+    src/th_conn.c
     src/th_header_id.c
     src/th_file.c
     src/th_fcache.c
@@ -64,12 +64,12 @@ SET(TH_CORE_SRC
     src/th_string.c
     src/th_heap_string.c
     src/th_log.c
-    src/th_exchange.c
+    src/th_http.c
     src/th_fmt.c
     src/th_date.c
     src/th_io_op.c
     src/th_timer.c
-    src/th_client_tracker.c
+    src/th_conn_tracker.c
     src/th_url_decode.c
     src/th_path.c
 #   SSL

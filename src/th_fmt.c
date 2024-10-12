@@ -96,7 +96,7 @@ th_fmt_uint_to_str_ex(char* buf, size_t len, unsigned int val, size_t* out_len)
         buf[i--] = '0' + (v % 10);
         v /= 10;
     }
-    *out_len = len - i - 1;
+    *out_len = len - i - 2;
     return &buf[i + 1];
 }
 

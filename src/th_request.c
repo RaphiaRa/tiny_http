@@ -150,6 +150,21 @@ th_request_deinit(th_request* request)
     th_hs_map_deinit(&request->path_params);
 }
 
+TH_PRIVATE(void)
+th_request_reset(th_request* request)
+{
+    th_heap_string_clear(&request->uri_path);
+    th_heap_string_clear(&request->uri_query);
+    th_hs_map_reset(&request->cookies);
+    th_hs_map_reset(&request->headers);
+    th_hs_map_reset(&request->query_params);
+    th_hs_map_reset(&request->body_params);
+    th_hs_map_reset(&request->path_params);
+    request->body = (th_string){0};
+    request->version = 0;
+    request->close = false;
+}
+
 /* Public request API begin */
 
 TH_PUBLIC(th_buffer)

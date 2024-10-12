@@ -2,10 +2,11 @@
 #define TH_LISTENER_H
 
 #include "th_acceptor.h"
-#include "th_client.h"
-#include "th_client_tracker.h"
+#include "th_conn.h"
+#include "th_conn_tracker.h"
 #include "th_fcache.h"
 #include "th_heap_string.h"
+#include "th_http.h"
 #include "th_io_service.h"
 #include "th_router.h"
 #include "th_socket.h"
@@ -17,30 +18,26 @@ typedef struct th_listener_accept_handler {
     th_listener* listener;
 } th_listener_accept_handler;
 
-typedef struct th_listener_client_destroy_handler {
+typedef struct th_listener_conn_destroy_handler {
     th_task base;
     th_listener* listener;
-} th_listener_client_destroy_handler;
+} th_listener_conn_destroy_handler;
 
 struct th_listener {
     th_acceptor acceptor;
     th_listener* next;
     th_context* context;
 
-    /** The router that will be associated with the clients. */
-    th_router* router;
-
-    /** The file cache that will be used to cache the file objects. */
-    th_fcache* fcache;
-
-    /** The client that will be used to handle the incoming connections. */
-    th_client* client;
+    /** The conn that will be used to handle the incoming connections. */
+    th_conn* conn;
 
     /** Used to keep track of all the clients that are currently active. */
-    th_client_tracker client_tracker;
+    th_conn_tracker conn_tracker;
 
     /** Used to react to the destruction of a client. */
-    th_listener_client_destroy_handler client_destroy_handler;
+    th_listener_conn_destroy_handler client_destroy_handler;
+
+    th_http_upgrader upgrader;
 
 #if TH_WITH_SSL
     /** Ssl context that will be used to create the ssl socket. */

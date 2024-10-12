@@ -52,6 +52,9 @@ TH_PRIVATE(void)
 th_response_init(th_response* response, th_fcache* fcache, th_allocator* allocator);
 
 TH_PRIVATE(void)
+th_response_reset(th_response* response);
+
+TH_PRIVATE(void)
 th_response_set_code(th_response* response, th_code code);
 
 TH_PRIVATE(th_err)

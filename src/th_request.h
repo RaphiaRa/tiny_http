@@ -4,45 +4,44 @@
 #include <th.h>
 
 #include "th_config.h"
-#include "th_hashmap.h"
 #include "th_heap_string.h"
 #include "th_method.h"
+#include "th_vec.h"
 
-#define TH_HS_NULL ((th_heap_string){.impl.small.allocator = (void*)-1})
-#define TH_HS_IS_NULL(hs) ((hs).impl.small.allocator == (void*)-1)
+typedef struct th_hstr_pair {
+    th_heap_string key;
+    th_heap_string value;
+} th_hstr_pair;
 
-TH_INLINE(bool)
-th_hs_eq(th_heap_string* a, th_heap_string* b)
+TH_INLINE(void)
+th_hstr_pair_deinit(th_hstr_pair* pair)
 {
-    if (TH_HS_IS_NULL(*a) || TH_HS_IS_NULL(*b)) {
-        return TH_HS_IS_NULL(*a) && TH_HS_IS_NULL(*b);
-    }
-    return th_heap_string_eq(a, th_heap_string_view(b));
+    th_heap_string_deinit(&pair->key);
+    th_heap_string_deinit(&pair->value);
 }
 
-#define TH_HS_EQ(a, b) th_hs_eq(&a, &b)
-#define TH_HS_HASH(hs) th_heap_string_hash(&hs)
-#define TH_HS_DEINIT(hs) th_heap_string_deinit(&hs)
-TH_DEFINE_HASHMAP2(th_hs_map, th_heap_string, th_heap_string, TH_HS_HASH, TH_HS_EQ, TH_HS_NULL, TH_HS_DEINIT, TH_HS_DEINIT)
+TH_DEFINE_VEC(th_hstr_vec, th_hstr_pair, th_hstr_pair_deinit)
 
-#define TH_HS_CSTR_EQ(a, b) (strcmp(th_heap_string_data(&a), b) == 0)
-#define TH_HS_CSTR_HASH(s) th_cstr_hash(s)
-TH_DEFINE_HASHMAP_FIND(th_hs_map, find_by_cstr, const char*, TH_HS_CSTR_HASH, TH_HS_CSTR_EQ, "")
+TH_DEFINE_VEC(th_keyval_vec, th_keyval, (void))
 
-struct th_request {
+TH_DEFINE_VEC(th_upload_vec, th_upload, (void))
+
+typedef struct th_request {
     th_allocator* allocator;
     th_heap_string uri_path;
     th_heap_string uri_query;
-    th_hs_map cookies;
-    th_hs_map headers;
-    th_hs_map query_params;
-    th_hs_map body_params;
-    th_hs_map path_params;
+    th_upload_vec uploads;
+    th_hstr_vec cookies;
+    th_hstr_vec headers;
+    th_hstr_vec queryvars;
+    th_hstr_vec formvars;
+    th_hstr_vec pathvars;
+    th_keyval_vec keyvals;
     th_string body;
     th_method method;
     int version;
     bool close;
-};
+} th_request;
 
 TH_PRIVATE(void)
 th_request_init(th_request* request, th_allocator* allocator);
@@ -66,13 +65,13 @@ TH_PRIVATE(th_err)
 th_request_set_uri_query(th_request* request, th_string query);
 
 TH_PRIVATE(th_err)
-th_request_add_query_param(th_request* request, th_string key, th_string value);
+th_request_add_queryvar(th_request* request, th_string key, th_string value);
 
 TH_PRIVATE(th_err)
-th_request_add_body_param(th_request* request, th_string key, th_string value);
+th_request_add_formvar(th_request* request, th_string key, th_string value);
 
 TH_PRIVATE(th_err)
-th_request_add_path_param(th_request* request, th_string key, th_string value);
+th_request_add_pathvar(th_request* request, th_string key, th_string value);
 
 TH_PRIVATE(th_err)
 th_request_add_cookie(th_request* request, th_string key, th_string value);
@@ -80,10 +79,25 @@ th_request_add_cookie(th_request* request, th_string key, th_string value);
 TH_PRIVATE(th_err)
 th_request_add_header(th_request* request, th_string key, th_string value);
 
+TH_PRIVATE(th_err)
+th_request_add_upload(th_request* request, th_upload upload) TH_MAYBE_UNUSED;
+
 TH_PRIVATE(void)
-th_request_clear_query_params(th_request* request);
+th_request_clear_queryvars(th_request* request);
 
 TH_PRIVATE(void)
 th_request_set_body(th_request* request, th_string body);
+
+TH_PRIVATE(th_string)
+th_request_get_header(th_request* request, th_string key) TH_MAYBE_UNUSED;
+
+TH_PRIVATE(th_string)
+th_request_get_pathvar(th_request* request, th_string key) TH_MAYBE_UNUSED;
+
+TH_PRIVATE(th_string)
+th_request_get_queryvar(th_request* request, th_string key) TH_MAYBE_UNUSED;
+
+TH_PRIVATE(th_err)
+th_request_setup_public(th_request* request, th_req* public_request);
 
 #endif

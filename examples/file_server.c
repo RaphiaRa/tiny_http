@@ -14,15 +14,15 @@ sigint_handler(int signum)
 }
 
 static th_err
-handle_path(void* userp, const th_request* req, th_response* resp)
+handle_path(void* userp, const th_req* req, th_resp* resp)
 {
     (void)userp;
-    const char* path = th_try_get_path_param(req, "path");
+    const char* path = th_find_pathvar(req, "path");
     return th_set_body_from_file(resp, "root", path);
 }
 
 static th_err
-handle_index(void* userp, const th_request* req, th_response* resp)
+handle_index(void* userp, const th_req* req, th_resp* resp)
 {
     (void)userp;
     (void)req;

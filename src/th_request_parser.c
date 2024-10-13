@@ -10,7 +10,7 @@ th_request_parser_init(th_request_parser* parser)
 {
     parser->state = TH_REQUEST_PARSER_STATE_METHOD;
     parser->content_len = 0;
-    parser->parse_body_params = false;
+    parser->body_encoding = TH_REQUEST_BODY_ENCODING_NONE;
 }
 
 TH_PRIVATE(void)
@@ -18,7 +18,7 @@ th_request_parser_reset(th_request_parser* parser)
 {
     parser->state = TH_REQUEST_PARSER_STATE_METHOD;
     parser->content_len = 0;
-    parser->parse_body_params = false;
+    parser->body_encoding = TH_REQUEST_BODY_ENCODING_NONE;
 }
 
 TH_PRIVATE(size_t)
@@ -61,7 +61,7 @@ th_request_parser_do_cookie_list(th_request* request, th_string cookie_list)
 }
 
 TH_LOCAL(th_err)
-th_request_parser_do_next_query_param(th_string string, size_t* pos, th_string* key, th_string* value)
+th_request_parser_do_next_queryvar(th_string string, size_t* pos, th_string* key, th_string* value)
 {
     size_t eq = th_string_find_first(string, *pos, '=');
     if (eq == th_string_npos) {
@@ -81,18 +81,18 @@ th_request_parser_do_next_query_param(th_string string, size_t* pos, th_string* 
 }
 
 TH_LOCAL(th_err)
-th_request_parser_do_body_params(th_request* request, th_string body)
+th_request_parser_do_bodyvars(th_request* request, th_string body)
 {
     th_err err = TH_ERR_OK;
     size_t pos = 0;
     while (pos != th_string_npos) {
         th_string key;
         th_string value;
-        err = th_request_parser_do_next_query_param(body, &pos, &key, &value);
+        err = th_request_parser_do_next_queryvar(body, &pos, &key, &value);
         if (err != TH_ERR_OK) {
             return err;
         }
-        if ((err = th_request_add_body_param(request, key, value)) != TH_ERR_OK) {
+        if ((err = th_request_add_formvar(request, key, value)) != TH_ERR_OK) {
             return err;
         }
     }
@@ -169,11 +169,11 @@ th_request_parser_do_uri_query(th_request* request, th_string path)
     while (pos != th_string_npos) {
         th_string key;
         th_string value;
-        th_err err = th_request_parser_do_next_query_param(path, &pos, &key, &value);
+        th_err err = th_request_parser_do_next_queryvar(path, &pos, &key, &value);
         if (err != TH_ERR_OK) {
             return err;
         }
-        if (th_request_add_query_param(request, key, value) != TH_ERR_OK) {
+        if (th_request_add_queryvar(request, key, value) != TH_ERR_OK) {
             return TH_ERR_BAD_ALLOC;
         }
     }
@@ -230,7 +230,7 @@ th_request_parser_do_path(th_request_parser* parser, th_request* request, th_str
         if ((err = th_request_parser_do_uri_query(request, segment)) != TH_ERR_OK) {
             // If we can't parse the query, that's ok, we just ignore it
             // restore the original state and continue
-            th_request_clear_query_params(request);
+            th_request_clear_queryvars(request);
         }
         uri_parsed += query_parsed;
     } else {
@@ -303,10 +303,9 @@ th_request_parse_handle_header(th_request_parser* parser, th_request* request, t
         return TH_ERR_OK;
     case TH_HEADER_ID_CONTENT_TYPE:
         if (th_string_eq(value, TH_STRING("application/x-www-form-urlencoded"))) {
-            parser->parse_body_params = true;
-        } else if (th_string_eq(value, TH_STRING("multipart/form-data"))) {
-            // not supported right now
-            return TH_ERR_HTTP(TH_CODE_UNSUPPORTED_MEDIA_TYPE);
+            parser->body_encoding = TH_REQUEST_BODY_ENCODING_FORM_URL_ENCODED;
+        } else if (th_string_eq(th_string_substr(value, 0, 19), TH_STRING("multipart/form-data"))) {
+            parser->body_encoding = TH_REQUEST_BODY_ENCODING_MULTIPART_FORM_DATA;
         }
         break;
     default:
@@ -351,6 +350,14 @@ th_request_parser_do_header(th_request_parser* parser, th_request* request, th_s
     return TH_ERR_OK;
 }
 
+TH_LOCAL(th_err)
+th_request_parser_do_multipart_form_data(th_request* request, th_string body)
+{
+    (void)request;
+    (void)body;
+    return TH_ERR_HTTP(TH_CODE_NOT_IMPLEMENTED);
+}
+
 TH_PRIVATE(th_err)
 th_request_parser_do_body(th_request_parser* parser, th_request* request, th_string buffer, size_t* parsed)
 {
@@ -360,9 +367,13 @@ th_request_parser_do_body(th_request_parser* parser, th_request* request, th_str
     }
     // Got the whole body
     th_string body = th_string_substr(buffer, 0, parser->content_len);
-    if (parser->parse_body_params) {
+    if (parser->body_encoding == TH_REQUEST_BODY_ENCODING_FORM_URL_ENCODED) {
         th_err err = TH_ERR_OK;
-        if ((err = th_request_parser_do_body_params(request, body)) != TH_ERR_OK)
+        if ((err = th_request_parser_do_bodyvars(request, body)) != TH_ERR_OK)
+            return err;
+    } else if (parser->body_encoding == TH_REQUEST_BODY_ENCODING_MULTIPART_FORM_DATA) {
+        th_err err = TH_ERR_OK;
+        if ((err = th_request_parser_do_multipart_form_data(request, body)) != TH_ERR_OK)
             return err;
     }
     th_request_set_body(request, body);

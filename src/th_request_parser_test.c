@@ -36,9 +36,8 @@ TH_TEST_BEGIN(request_parser)
         TH_EXPECT(request.method == TH_METHOD_GET);
         TH_EXPECT(th_heap_string_eq(&request.uri_path, TH_STRING("/test")));
         TH_EXPECT(request.version == 1);
-        const char* qv = NULL;
-        TH_EXPECT((qv = th_try_get_query_param(&request, "key1")) != NULL && strcmp(qv, "value1") == 0);
-        TH_EXPECT((qv = th_try_get_query_param(&request, "key2")) != NULL && strcmp(qv, "value2") == 0);
+        TH_EXPECT(TH_STRING_EQ(th_request_get_queryvar(&request, TH_STRING("key1")), "value1"));
+        TH_EXPECT(TH_STRING_EQ(th_request_get_queryvar(&request, TH_STRING("key2")), "value2"));
         th_request_deinit(&request);
     }
     TH_TEST_CASE_END
@@ -75,15 +74,14 @@ TH_TEST_BEGIN(request_parser)
         TH_EXPECT(th_request_parser_parse(&parser, &request, data, &parsed) == TH_ERR_OK);
         TH_EXPECT(request.method == TH_METHOD_GET);
         TH_EXPECT(th_heap_string_eq(&request.uri_path, TH_STRING("/index.php")));
-        const char* qv = NULL;
-        TH_EXPECT((qv = th_try_get_query_param(&request, "variable")) != NULL && strcmp(qv, "../../../../../../..//etc") == 0);
+        TH_EXPECT(TH_STRING_EQ(th_request_get_queryvar(&request, TH_STRING("variable")), "../../../../../../..//etc"));
         TH_EXPECT(request.version == 1);
         TH_EXPECT(TH_STRING_EQ(request.body, ""));
         TH_EXPECT(parsed == 248);
         th_request_deinit(&request);
     }
     TH_TEST_CASE_END
-    TH_TEST_CASE_BEGIN(parse_bad_encoding)
+    TH_TEST_CASE_BEGIN(parse_bad_query_encoding)
     {
         th_request request;
         th_request_init(&request, NULL);
@@ -96,13 +94,13 @@ TH_TEST_BEGIN(request_parser)
         TH_EXPECT(th_request_parser_parse(&parser, &request, data, &parsed) == TH_ERR_OK);
         TH_EXPECT(request.method == TH_METHOD_GET);
         TH_EXPECT(th_heap_string_eq(&request.uri_path, TH_STRING("/index.php")));
-        TH_EXPECT((th_try_get_query_param(&request, "variable")) == NULL);
+        TH_EXPECT(TH_STRING_EQ(th_request_get_queryvar(&request, TH_STRING("variable")), ""));
         TH_EXPECT(request.version == 1);
         TH_EXPECT(TH_STRING_EQ(request.body, ""));
         th_request_deinit(&request);
     }
     TH_TEST_CASE_END
-    TH_TEST_CASE_BEGIN(parse_bad_param)
+    TH_TEST_CASE_BEGIN(parse_empty_query_key)
     {
         th_request request;
         th_request_init(&request, NULL);
@@ -113,7 +111,7 @@ TH_TEST_BEGIN(request_parser)
         TH_EXPECT(th_request_parser_parse(&parser, &request, data, &parsed) == TH_ERR_OK);
         TH_EXPECT(request.method == TH_METHOD_GET);
         TH_EXPECT(th_heap_string_eq(&request.uri_path, TH_STRING("/index.php")));
-        TH_EXPECT((th_try_get_query_param(&request, "")) == NULL);
+        TH_EXPECT(TH_STRING_EQ(th_request_get_queryvar(&request, TH_STRING("")), "qwertqwertqwertqwertqwertqwertqwertqwertqwertqwertqwetqwert"));
         TH_EXPECT(request.version == 1);
         TH_EXPECT(TH_STRING_EQ(request.body, ""));
         th_request_deinit(&request);
@@ -131,7 +129,7 @@ TH_TEST_BEGIN(request_parser)
         th_request_deinit(&request);
     }
     TH_TEST_CASE_END
-    TH_TEST_CASE_BEGIN(parse_bad_encoding)
+    TH_TEST_CASE_BEGIN(parse_bad_form_encoding)
     {
         th_request request;
         th_request_init(&request, NULL);

@@ -17,10 +17,16 @@ typedef enum th_request_parser_state {
     TH_REQUEST_PARSER_STATE_DONE
 } th_request_parser_state;
 
+typedef enum th_request_body_encoding {
+    TH_REQUEST_BODY_ENCODING_NONE,
+    TH_REQUEST_BODY_ENCODING_FORM_URL_ENCODED,
+    TH_REQUEST_BODY_ENCODING_MULTIPART_FORM_DATA
+} th_request_body_encoding;
+
 typedef struct th_request_parser {
     size_t content_len;
     th_request_parser_state state;
-    bool parse_body_params;
+    th_request_body_encoding body_encoding;
 } th_request_parser;
 
 TH_PRIVATE(void)

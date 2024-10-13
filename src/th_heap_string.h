@@ -73,8 +73,8 @@ th_heap_string_to_lower(th_heap_string* self);
 TH_PRIVATE(bool)
 th_heap_string_eq(const th_heap_string* self, th_string other);
 
-TH_PRIVATE(uint32_t)
-th_heap_string_hash(const th_heap_string* self);
+//TH_PRIVATE(uint32_t)
+//th_heap_string_hash(const th_heap_string* self);
 
 TH_DEFINE_VEC(th_heap_string_vec, th_heap_string, th_heap_string_deinit)
 

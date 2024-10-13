@@ -277,20 +277,20 @@ th_heap_string_eq(const th_heap_string* self, th_string other)
     return n == other.len && (n == 0 || memcmp(ptr, other.ptr, n) == 0);
 }
 
-TH_PRIVATE(uint32_t)
-th_heap_string_hash(const th_heap_string* self)
-{
-    const char* ptr = NULL;
-    size_t n = 0;
-    if (self->impl.small.small) {
-        ptr = self->impl.small.buf;
-        n = self->impl.small.len;
-    } else {
-        ptr = self->impl.large.ptr;
-        n = self->impl.large.len;
-    }
-    return th_hash_bytes(ptr, n);
-}
+//TH_PRIVATE(uint32_t)
+//th_heap_string_hash(const th_heap_string* self)
+//{
+//    const char* ptr = NULL;
+//    size_t n = 0;
+//    if (self->impl.small.small) {
+//        ptr = self->impl.small.buf;
+//        n = self->impl.small.len;
+//    } else {
+//        ptr = self->impl.large.ptr;
+//        n = self->impl.large.len;
+//    }
+//    return th_hash_bytes(ptr, n);
+//}
 
 TH_PRIVATE(void)
 th_heap_string_deinit(th_heap_string* self)

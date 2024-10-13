@@ -12,10 +12,10 @@ tiny_http is my attempt at creating a lightweight, easy-to-use, and embeddable H
 #include "th.h"
 
 static th_err
-handler(void* userp, const th_request* req, th_response* res)
+handler(void* userp, const th_req* req, th_resp* resp)
 {
-    th_set_body(res, "Hello, World!");
-    th_add_header(res, "Content-Type", "text/plain");
+    th_set_body(resp, "Hello, World!");
+    th_add_header(resp, "Content-Type", "text/plain");
     return TH_ERR_OK;
 }
 
@@ -111,11 +111,11 @@ Example - Path capturing:
 #include "th.h"
 
 static th_err
-handler(void* userp, const th_request* req, th_response* res)
+handler(void* userp, const th_req* req, th_resp* resp)
 {
     const char* msg = th_find_pathvar(req, "msg");
-    th_printf_body(res, "Hello, %s!", msg);
-    th_add_header(res, "Content-Type", "text/plain");
+    th_printf_body(resp, "Hello, %s!", msg);
+    th_add_header(resp, "Content-Type", "text/plain");
     return TH_ERR_OK;
 }
 
@@ -138,17 +138,17 @@ Example - File serving:
 #include "th.h"
 
 static th_err
-handle_path(void* userp, const th_request* req, th_response* res)
+handle_path(void* userp, const th_req* req, th_resp* resp)
 {
     const char* path = th_find_pathvar(req, "path");
-    th_set_body_from_file(res, "root", path);
+    th_set_body_from_file(resp, "root", path);
     return TH_ERR_OK;
 }
 
 static th_err
-handle_index(void* userp, const th_request* req, th_response* res)
+handle_index(void* userp, const th_req* req, th_resp* resp)
 {
-    th_set_body_from_file(res, "root", "index.html");
+    th_set_body_from_file(resp, "root", "index.html");
     return TH_ERR_OK;
 }
 

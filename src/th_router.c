@@ -109,20 +109,20 @@ th_route_consume_trail(th_route_segment* route, th_request* request, th_string* 
     case TH_CAPTURE_TYPE_INT:
         if (th_string_is_uint(segment)) {
             if (!dry)
-                (void)th_request_add_path_param(request, route_name, segment);
+                (void)th_request_add_pathvar(request, route_name, segment);
             *trail = th_string_substr(*trail, segment.len + 1, th_string_npos);
             *result = true;
         }
         break;
     case TH_CAPTURE_TYPE_STRING:
         if (!dry)
-            (void)th_request_add_path_param(request, route_name, segment);
+            (void)th_request_add_pathvar(request, route_name, segment);
         *trail = th_string_substr(*trail, segment.len + 1, th_string_npos);
         *result = true;
         break;
     case TH_CAPTURE_TYPE_PATH:
         if (!dry)
-            (void)th_request_add_path_param(request, route_name, *trail);
+            (void)th_request_add_pathvar(request, route_name, *trail);
         *trail = th_string_make(NULL, 0);
         *result = true;
         break;
@@ -167,7 +167,12 @@ th_router_do_handle(th_router* router, th_method method, th_request* request, th
     }
     if (dry)
         return TH_ERR_OK;
-    return handler.handler(handler.user_data, request, response);
+    th_resp* resp = (th_resp*)response;
+    th_req req = {0};
+    th_err err = TH_ERR_OK;
+    if ((err = th_request_setup_public(request, &req)) != TH_ERR_OK)
+        return err;
+    return handler.handler(handler.user_data, &req, resp);
 }
 
 TH_PRIVATE(th_err)

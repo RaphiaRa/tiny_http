@@ -22,36 +22,29 @@ const char* method_strings[] = {
 };
 
 static th_err
-handler(void* userp, const th_request* req, th_response* resp)
+handler(void* userp, const th_req* req, th_resp* resp)
 {
     (void)userp;
     size_t buf_len = 16 * 1024;
     char* buf = malloc(buf_len);
     size_t len = 0;
     len += (size_t)snprintf(buf, buf_len, "Method: %s\nPath: %s\nQuery: %s\nHeaders:\n",
-                            method_strings[th_get_method(req)], th_get_path(req), th_get_query(req));
-    th_map_iter iter = th_map_begin(th_get_headers(req));
-    for (; iter; iter = th_map_next(th_get_headers(req), iter)) {
+                            method_strings[req->method], req->path, req->query);
+    for (size_t i = 0; i < req->num_headers; i++) {
         len += (size_t)snprintf(buf + len, buf_len - len, "  %s: %s\n",
-                                th_map_iter_key(iter), th_map_iter_value(iter));
+                                req->headers[i].key, req->headers[i].value);
     }
-    len += (size_t)snprintf(buf + len, buf_len - len, "Cookies:\n");
-    iter = th_map_begin(th_get_cookies(req));
-    for (; iter; iter = th_map_next(th_get_cookies(req), iter)) {
-        len += (size_t)snprintf(buf + len, buf_len - len, "  %s: %s\n",
-                                th_map_iter_key(iter), th_map_iter_value(iter));
+    for (size_t i = 0; i < req->num_cookies; i++) {
+        len += (size_t)snprintf(buf + len, buf_len - len, "  Cookie %zu: %s=%s\n",
+                                i, req->cookies[i].key, req->cookies[i].value);
     }
-    len += (size_t)snprintf(buf + len, buf_len - len, "Query params:\n");
-    iter = th_map_begin(th_get_query_params(req));
-    for (; iter; iter = th_map_next(th_get_query_params(req), iter)) {
-        len += (size_t)snprintf(buf + len, buf_len - len, "  %s: %s\n",
-                                th_map_iter_key(iter), th_map_iter_value(iter));
+    for (size_t i = 0; i < req->num_queryvars; i++) {
+        len += (size_t)snprintf(buf + len, buf_len - len, "  Query var %zu: %s=%s\n",
+                                i, req->queryvars[i].key, req->queryvars[i].value);
     }
-    len += (size_t)snprintf(buf + len, buf_len - len, "Body params:\n");
-    iter = th_map_begin(th_get_body_params(req));
-    for (; iter; iter = th_map_next(th_get_body_params(req), iter)) {
-        len += (size_t)snprintf(buf + len, buf_len - len, "  %s: %s\n",
-                                th_map_iter_key(iter), th_map_iter_value(iter));
+    for (size_t i = 0; i < req->num_formvars; i++) {
+        len += (size_t)snprintf(buf + len, buf_len - len, "  Form var %zu: %s=%s\n",
+                                i, req->formvars[i].key, req->formvars[i].value);
     }
     th_set_body(resp, buf);
     th_add_header(resp, "Content-Type", "text/plain; charset=utf-8");

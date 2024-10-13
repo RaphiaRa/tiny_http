@@ -20,6 +20,9 @@
     NAME##_init(NAME* vec, th_allocator* allocator) TH_MAYBE_UNUSED;                                       \
                                                                                                            \
     TH_INLINE(void)                                                                                        \
+    NAME##_clear(NAME* vec) TH_MAYBE_UNUSED;                                                               \
+                                                                                                           \
+    TH_INLINE(void)                                                                                        \
     NAME##_deinit(NAME* vec) TH_MAYBE_UNUSED;                                                              \
                                                                                                            \
     TH_INLINE(size_t)                                                                                      \
@@ -29,10 +32,7 @@
     NAME##_capacity(NAME* vec) TH_MAYBE_UNUSED;                                                            \
                                                                                                            \
     TH_INLINE(th_err)                                                                                      \
-    NAME##_resize(NAME* vec, size_t capacity) TH_MAYBE_UNUSED;                                             \
-                                                                                                           \
-    TH_INLINE(void)                                                                                        \
-    NAME##_shrink_to_fit(NAME* vec) TH_MAYBE_UNUSED;                                                       \
+    NAME##_resize(NAME* vec, size_t size) TH_MAYBE_UNUSED;                                                 \
                                                                                                            \
     TH_INLINE(th_err)                                                                                      \
     NAME##_push_back(NAME* vec, TYPE value) TH_MAYBE_UNUSED;                                               \
@@ -66,6 +66,17 @@
         }                                                                                                  \
     }                                                                                                      \
                                                                                                            \
+    TH_INLINE(void)                                                                                        \
+    NAME##_clear(NAME* vec)                                                                                \
+    {                                                                                                      \
+        if (vec->data) {                                                                                   \
+            for (size_t i = 0; i < vec->size; i++) {                                                       \
+                DEINIT(&vec->data[i]);                                                                     \
+            }                                                                                              \
+        }                                                                                                  \
+        vec->size = 0;                                                                                     \
+    }                                                                                                      \
+                                                                                                           \
     TH_INLINE(size_t)                                                                                      \
     NAME##_size(NAME* vec)                                                                                 \
     {                                                                                                      \
@@ -96,22 +107,6 @@
         }                                                                                                  \
         vec->size = size;                                                                                  \
         return TH_ERR_OK;                                                                                  \
-    }                                                                                                      \
-                                                                                                           \
-    TH_INLINE(void)                                                                                        \
-    NAME##_shrink_to_fit(NAME* vec)                                                                        \
-    {                                                                                                      \
-        if (vec->size == 0) {                                                                              \
-            th_allocator_free(vec->allocator, vec->data);                                                  \
-            vec->data = NULL;                                                                              \
-            vec->capacity = 0;                                                                             \
-        } else if (vec->size < vec->capacity) {                                                            \
-            TYPE* new_data = th_allocator_realloc(vec->allocator, vec->data, vec->size * sizeof(TYPE));    \
-            if (new_data != NULL) {                                                                        \
-                vec->data = new_data;                                                                      \
-                vec->capacity = vec->size;                                                                 \
-            }                                                                                              \
-        }                                                                                                  \
     }                                                                                                      \
                                                                                                            \
     TH_INLINE(th_err)                                                                                      \

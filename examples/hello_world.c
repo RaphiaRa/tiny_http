@@ -14,7 +14,7 @@ sigint_handler(int signum)
 }
 
 static th_err
-handler(void* userp, const th_request* req, th_response* resp)
+handler(void* userp, const th_req* req, th_resp* resp)
 {
     (void)userp;
     (void)req;

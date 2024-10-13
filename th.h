@@ -7,10 +7,9 @@
 /* th_allocator declarations begin */
 
 /** th_allocator
- * @brief Allocator interface.
- * Library user can implement this interface and pass it to th_default_allocator_set
- * to override the default allocator behavior of the library globally,
- * or pass it to th_server_create to override the default allocator behavior of a specific server instance.
+ * @brief Library user can implement this interface to override the default
+ * memory allocation behavior. Can be passed to th_server_create, or
+ * set as the global default allocator with th_default_allocator_set.
  */
 typedef struct th_allocator {
     void* (*alloc)(void* self, size_t size);
@@ -19,24 +18,22 @@ typedef struct th_allocator {
 } th_allocator;
 
 /** th_default_allocator_set
- * @brief Override the default allocator globally.
- * Set to NULL to revert to the internal default allocator.
+ * @brief Set the global default allocator.
  */
 void th_default_allocator_set(th_allocator* allocator);
 
 /* th_allocator declarations end */
-/* th_string declarations begin */
 
 /** th_buffer
- * @brief Represents a buffer of data.
+ * @brief Non-owning view of a buffer.
  */
 typedef struct th_buffer {
     const char* ptr;
     size_t len;
 } th_buffer;
 
-/* th_string declarations end */
 /* error related declarations begin */
+
 /* error categories */
 #define TH_ERR_CATEGORY_OTHER 0  // other error, our default category
 #define TH_ERR_CATEGORY_SYSTEM 1 // system error, corresponds to errno or GetLastError
@@ -51,7 +48,7 @@ typedef struct th_buffer {
 #define TH_ERRC_NOSUPPORT 4
 #define TH_ERRC_UNKNOWN 5
 
-/* pack error category and code into a single integer */
+/* error pack/unpack macros */
 #define TH_ERR_CODE_BITS (sizeof(unsigned) * 8 - 4)
 #define TH_ERR_CODE_MASK ((1 << TH_ERR_CODE_BITS) - 1)
 #define TH_ERR_CATEGORY_SHIFT TH_ERR_CODE_BITS
@@ -93,8 +90,8 @@ const char* th_strerror(th_err err);
 #define TH_LOG_LEVEL_NONE 6
 
 /** th_log
- * @brief Log interface. Library user can implement this interface and pass it to th_log_set
- * to override the logging behavior.
+ * @brief Library user can implement this interface to override the default
+ * logging behavior.
  */
 typedef struct th_log {
     /** print
@@ -147,6 +144,11 @@ typedef enum th_code {
     TH_CODE_SERVICE_UNAVAILABLE = 503,
 } th_code;
 
+typedef enum th_prot_version {
+    TH_HTTP_1_0 = 0,
+    TH_HTTP_1_1 = 1,
+} th_prot_version;
+
 /** th_bind_opt
  * @brief Listener options.
  */
@@ -165,9 +167,9 @@ typedef struct th_bind_opt {
 } th_bind_opt;
 
 /* datetime related declarations begin */
+
 /** th_date
- * @brief Date struct corresponding to the Date header in HTTP.
- * Always in GMT.
+ * @brief Date struct corresponding to the Date header in HTTP. Always in GMT.
  */
 typedef struct th_date {
     unsigned year : 16;
@@ -211,181 +213,91 @@ typedef struct th_cookie_attr {
     th_cookie_same_site same_site;
 } th_cookie_attr;
 
-typedef struct th_map th_map;
-typedef const th_map* th_map_ref;
+/* cookie related declarations end */
+/* request related declarations begin */
 
-/** th_map_iter
- * @brief map iterator - Simply a pointer to a key-value pair.
- */
-typedef const void* th_map_iter;
+typedef struct th_upload {
+    const char* name;
+    const char* filename;
+    const char* content_type;
+    th_buffer buffer;
+} th_upload;
 
-const char* th_map_iter_key(th_map_iter iter);
-const char* th_map_iter_value(th_map_iter iter);
+typedef struct th_keyval {
+    const char* key;
+    const char* value;
+} th_keyval;
 
-/** th_map_find
- * @brief Find an entry in the map by key.
- * @return Pointer to the key-value pair if found, otherwise NULL.
- */
-th_map_iter th_map_find(th_map* map, const char* key);
+typedef struct th_req {
+    const char* path;
+    const char* query;
+    const th_keyval* cookies;
+    const th_keyval* headers;
+    const th_keyval* queryvars;
+    const th_keyval* formvars;
+    const th_keyval* pathvars;
+    const th_upload* uploads;
+    size_t num_cookies;
+    size_t num_headers;
+    size_t num_queryvars;
+    size_t num_formvars;
+    size_t num_pathvars;
+    size_t num_uploads;
+    th_buffer body;
+    th_method method;
+    th_prot_version version;
+} th_req;
 
-/** th_map_begin
- * @brief Get the first entry in the map.
- * @return Pointer to the first key-value pair.
- */
-th_map_iter th_map_begin(th_map* map);
+th_upload* th_find_upload(const th_req* req, const char* name);
+const char* th_find_header(const th_req* req, const char* name);
+const char* th_find_cookie(const th_req* req, const char* name);
+const char* th_find_queryvar(const th_req* req, const char* name);
+const char* th_find_formvar(const th_req* req, const char* name);
+const char* th_find_pathvar(const th_req* req, const char* name);
 
-/** th_map_end
- * @brief Get the end of the map.
- * @return Pointer to the end of the map.
- */
-th_map_iter th_map_end(th_map* map);
+/* request related declarations end */
+/* response related declarations begin */
 
-/** th_map_next
- * @brief Get the next entry in the map.
- * @param map Map instance.
- * @param iter Current iterator.
- * @return Pointer to the next key-value pair in the map or NULL if the end of the map is reached.
- */
-th_map_iter th_map_next(th_map* map, th_map_iter iter);
-
-typedef struct th_request th_request;
-
-/** th_get_method
- * @brief Get the method of the request.
- */
-th_method th_get_method(const th_request* req);
-
-/** th_get_headers
- * @brief Get the headers of the request.
- * @return Map of headers.
- */
-th_map* th_get_headers(const th_request* req);
-
-/** th_try_get_header
- * @brief Get a header value its name.
- * @return Header value if found, otherwise NULL.
- */
-const char* th_try_get_header(const th_request* req, const char* name);
-
-/** th_get_cookies
- * @brief Get the cookies of the request.
- * @return Map of cookies.
- */
-th_map* th_get_cookies(const th_request* req);
-
-/** th_try_get_cookie
- * @brief Get a cookie value by its name.
- * @return Cookie value if found, otherwise NULL.
- */
-const char* th_try_get_cookie(const th_request* req, const char* name);
-
-/** th_get_query_params
- * @brief Get the query parameters of the request.
- * These are key-value pairs in the query string of the URL,
- * e.g. (name, value) in /path?name=value.
- * @return Map of query parameters.
- */
-th_map* th_get_query_params(const th_request* req);
-
-/** th_try_get_query_param
- * @brief Get a query parameter value by its key.
- * @return Query parameter value if found, otherwise NULL.
- */
-const char* th_try_get_query_param(const th_request* req, const char* key);
-
-/** th_get_body_params
- * @brief Get the body parameters of the request.
- * These are key-value pairs in the body of the request. Typicaly used in POST requests.
- * @return Map of body parameters.
- */
-th_map* th_get_body_params(const th_request* req);
-
-/** th_try_get_body_param
- * @brief Get a body parameter value by its key.
- * @return Body parameter value if found, otherwise NULL.
- */
-const char* th_try_get_body_param(const th_request* req, const char* key);
-
-/** th_get_path_params
- * @brief Get the path parameters of the request.
- * These are the key-value pairs associated with a captured path segment.
- * @return Map of path parameters.
- */
-th_map* th_get_path_params(const th_request* req);
-
-/** th_try_get_path_param
- * @brief Get a path parameter value by its key.
- * @return Path parameter value if found, otherwise NULL.
- */
-const char* th_try_get_path_param(const th_request* req, const char* key);
-
-/** th_get_path
- * @brief Get the path of the request.
- */
-const char* th_get_path(const th_request* req);
-
-/** th_get_query
- * @brief Get the query string of the request.
- * e.g. the part after the ? in /path?query.
- */
-const char* th_get_query(const th_request* req);
-
-/** th_get_body
- * @brief Get the body of the request.
- * @return Buffer containing the body, this is simply a pointer and length pair.
- */
-th_buffer th_get_body(const th_request* req);
-
-typedef struct th_response th_response;
+typedef struct th_resp th_resp;
 
 /** th_printf_body
- * @brief Set the body of the response using a printf-like format string.
- * @return TH_ERR_OK on success, otherwise an error code.
+ * @brief Set the body of the response from a printf-style format string.
  */
-th_err th_printf_body(th_response* resp, const char* fmt, ...);
+th_err th_printf_body(th_resp* resp, const char* fmt, ...);
 
 /** th_set_body_from_file
- * @brief Set the body of the response from a file
- * @param root Label of the root directory that was added to the server via th_add_root.
- * @return TH_ERR_OK on success, otherwise an error code.
+ * @brief Set the body of the response from a file.
+ * @param dir_label Label of the root directory to use.
+ * @param filepath Path to the file (relative to the root directory).
  */
-th_err th_set_body_from_file(th_response* resp, const char* root, const char* filepath);
+th_err th_set_body_from_file(th_resp* resp, const char* dir_label, const char* filepath);
 
 /** th_set_body_from_buffer
  * @brief Set the body of the response from a buffer.
- * @param buffer A pointer and length pair representing the buffer.
- * @return TH_ERR_OK on success, otherwise an error code.
  */
-th_err th_set_body_from_buffer(th_response* resp, th_buffer buffer);
+th_err th_set_body_from_buffer(th_resp* resp, th_buffer buffer);
 
 /** th_set_body
  * @brief Set the body of the response from a null-terminated string.
- * @return TH_ERR_OK on success, otherwise an error code.
  */
-th_err th_set_body(th_response* resp, const char* body);
+th_err th_set_body(th_resp* resp, const char* body);
 
 /** th_add_header
  * @brief Add a header to the response, where key and value are null-terminated strings.
- * This will not overwrite existing headers with the same key.
- * @return TH_ERR_OK on success, otherwise an error code.
+ * If the header was already added it will be added again and NOT replaced.
  */
-th_err th_add_header(th_response* resp, const char* key, const char* value);
+th_err th_add_header(th_resp* resp, const char* key, const char* value);
 
 /** th_add_cookie
- * @brief Add a cookie to the response.
- * This essentially sets a Set-Cookie header. If the cookie was already added it will be added again and NOT replaced.
- * @return TH_ERR_OK on success, otherwise an error code.
+ * @brief Add a cookie to the response, where key and value are null-terminated strings.
+ * If the cookie was already added it will be added again and NOT replaced.
  */
-th_err th_add_cookie(th_response* resp, const char* key, const char* value, th_cookie_attr* attr);
+th_err th_add_cookie(th_resp* resp, const char* key, const char* value, th_cookie_attr* attr);
 
 /** th_handler
- * @brief Request handler function type.
- *
- * This function is called by the server when a request is received.
- * The handler should fill the response object with the appropriate data.
- * And return TH_ERR_OK on success, otherwise an error code.
+ * @brief Request handler function, called when a request is received.
  */
-typedef th_err (*th_handler)(void* userp, const th_request* req, th_response* resp);
+typedef th_err (*th_handler)(void* userp, const th_req* req, th_resp* resp);
 
 typedef struct th_server th_server;
 

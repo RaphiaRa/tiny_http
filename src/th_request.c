@@ -67,9 +67,23 @@ th_request_add_header(th_request* request, th_string key, th_string value)
 }
 
 TH_PRIVATE(th_err)
-th_request_add_upload(th_request* request, th_upload upload)
+th_request_add_upload(th_request* request, th_string data, th_string name, th_string filename, th_string content_type)
 {
-    return th_upload_vec_push_back(&request->uploads, upload);
+    th_upload upload;
+    th_upload_init(&upload, data, request->fcache, request->allocator);
+    th_err err = TH_ERR_OK;
+    if ((err = th_upload_set_name(&upload, name)) != TH_ERR_OK)
+        goto cleanup_upload;
+    if ((err = th_upload_set_filename(&upload, filename)) != TH_ERR_OK)
+        goto cleanup_upload;
+    if ((err = th_upload_set_content_type(&upload, content_type)) != TH_ERR_OK)
+        goto cleanup_upload;
+    if ((err = th_upload_vec_push_back(&request->uploads, upload)) != TH_ERR_OK)
+        goto cleanup_upload;
+    return TH_ERR_OK;
+cleanup_upload:
+    th_upload_deinit(&upload);
+    return err;
 }
 
 TH_PRIVATE(th_err)
@@ -128,17 +142,20 @@ th_request_set_body(th_request* request, th_string body)
 }
 
 TH_PRIVATE(void)
-th_request_init(th_request* request, th_allocator* allocator)
+th_request_init(th_request* request, th_fcache* fcache, th_allocator* allocator)
 {
     request->allocator = allocator ? allocator : th_default_allocator_get();
+    request->fcache = fcache;
     th_heap_string_init(&request->uri_path, request->allocator);
     th_heap_string_init(&request->uri_query, request->allocator);
+    th_upload_vec_init(&request->uploads, request->allocator);
     th_hstr_vec_init(&request->cookies, request->allocator);
     th_hstr_vec_init(&request->headers, request->allocator);
     th_hstr_vec_init(&request->queryvars, request->allocator);
     th_hstr_vec_init(&request->formvars, request->allocator);
     th_hstr_vec_init(&request->pathvars, request->allocator);
     th_keyval_vec_init(&request->keyvals, request->allocator);
+    th_upload_ptr_vec_init(&request->upload_ptrs, request->allocator);
     request->body = (th_string){0};
     request->version = 0;
     request->close = false;
@@ -149,12 +166,14 @@ th_request_deinit(th_request* request)
 {
     th_heap_string_deinit(&request->uri_path);
     th_heap_string_deinit(&request->uri_query);
+    th_upload_vec_deinit(&request->uploads);
     th_hstr_vec_deinit(&request->cookies);
     th_hstr_vec_deinit(&request->headers);
     th_hstr_vec_deinit(&request->queryvars);
     th_hstr_vec_deinit(&request->formvars);
     th_hstr_vec_deinit(&request->pathvars);
     th_keyval_vec_deinit(&request->keyvals);
+    th_upload_ptr_vec_deinit(&request->upload_ptrs);
 }
 
 TH_PRIVATE(void)
@@ -202,6 +221,23 @@ th_request_get_queryvar(th_request* request, th_string key)
     return th_request_vec_get(&request->queryvars, key);
 }
 
+TH_PRIVATE(th_string)
+th_request_get_formvar(th_request* request, th_string key)
+{
+    return th_request_vec_get(&request->formvars, key);
+}
+
+TH_PRIVATE(th_upload*)
+th_request_get_upload(th_request* request, th_string key)
+{
+    size_t num = th_upload_vec_size(&request->uploads);
+    for (size_t i = 0; i < num; i++) {
+        if (th_heap_string_eq(&request->uploads.data[i].name, key))
+            return th_upload_vec_at(&request->uploads, i);
+    }
+    return NULL;
+}
+
 TH_LOCAL(size_t)
 th_request_setup_vec(th_request* request, const th_keyval** keyval, size_t* num_keyval, th_hstr_vec* hstr_vec, size_t pos)
 {
@@ -219,9 +255,13 @@ th_request_setup_vec(th_request* request, const th_keyval** keyval, size_t* num_
 TH_PRIVATE(th_err)
 th_request_setup_public(th_request* request, th_req* pub)
 {
+    size_t num_uploads = th_upload_vec_size(&request->uploads);
+    for (size_t i = 0; i < num_uploads; i++) {
+        th_upload_ptr_vec_push_back(&request->upload_ptrs, th_upload_vec_at(&request->uploads, i));
+    }
+    pub->uploads = th_upload_ptr_vec_at(&request->upload_ptrs, 0);
     pub->path = th_heap_string_data(&request->uri_path);
     pub->query = th_heap_string_data(&request->uri_query);
-    pub->uploads = th_upload_vec_at(&request->uploads, 0);
     pub->num_uploads = th_upload_vec_size(&request->uploads);
     size_t num_keyvals = th_hstr_vec_size(&request->cookies)
                          + th_hstr_vec_size(&request->headers)
@@ -300,6 +340,19 @@ th_find_pathvar(const th_req* req, const char* key)
     for (size_t i = 0; i < num; i++) {
         if (*key == *req->pathvars[i].key && strcmp(req->pathvars[i].key, key) == 0) {
             return req->pathvars[i].value;
+        }
+    }
+    return NULL;
+}
+
+TH_PUBLIC(th_upload*)
+th_find_upload(const th_req* req, const char* name)
+{
+    size_t num = req->num_uploads;
+    for (size_t i = 0; i < num; i++) {
+        const char* upload_name = th_upload_get_info(req->uploads[i]).name;
+        if (*name == *upload_name && strcmp(upload_name, name) == 0) {
+            return (th_upload*)&req->uploads[i];
         }
     }
     return NULL;

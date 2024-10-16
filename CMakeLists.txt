@@ -72,6 +72,7 @@ SET(TH_CORE_SRC
     src/th_conn_tracker.c
     src/th_url_decode.c
     src/th_path.c
+    src/th_upload.c
 #   SSL
     src/th_ssl_smem_bio.c
     src/th_ssl_context.c
@@ -130,35 +131,18 @@ target_include_directories(tiny_http
     PRIVATE src
 )
 
+
+
 if (NOT TH_DISABLE_EXAMPLES)
-    # Hello world example
-    add_executable(hello_world
-        examples/hello_world.c
-    )
-    target_link_libraries(hello_world PUBLIC 
-        tiny_http::tiny_http
-    )
-    # Echo server example
-    add_executable(echo
-        examples/echo.c
-    )
-    target_link_libraries(echo PUBLIC 
-        tiny_http::tiny_http
-    )
-    # File server example
-    add_executable(file_server
-        examples/file_server.c
-    )
-    target_link_libraries(file_server PUBLIC 
-        tiny_http::tiny_http
-    )
-    # Custom Logger example
-    add_executable(custom_logger
-        examples/custom_logger.c
-    )
-    target_link_libraries(custom_logger PUBLIC 
-        tiny_http::tiny_http
-    )
+    function(add_tiny_http_example EXAMPLE_NAME)
+        add_executable(${EXAMPLE_NAME} examples/${EXAMPLE_NAME}.c)
+        target_link_libraries(${EXAMPLE_NAME} PUBLIC tiny_http::tiny_http)
+    endfunction(add_tiny_http_example)
+    add_tiny_http_example(custom_logger)
+    add_tiny_http_example(echo)
+    add_tiny_http_example(file_server)
+    add_tiny_http_example(file_upload)
+    add_tiny_http_example(hello_world)
 endif()
 
 # Tests

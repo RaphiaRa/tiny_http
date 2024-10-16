@@ -9592,7 +9592,7 @@ th_http_handle_read_request(th_http* http, size_t len, th_err err)
             }
         }
         th_socket_async_read(th_conn_get_socket(http->conn), th_buf_vec_at(&http->buf, http->read_bytes),
-                             th_buf_vec_size(&http->buf) - http->read_bytes, (th_io_handler*)http);
+                             th_buf_vec_size(&http->buf) - http->read_bytes, &http->io_handler.base);
     } else {
         if (th_conn_tracker_count(http->tracker) > TH_CONFIG_MAX_CONNECTIONS) {
             TH_LOG_WARN("Too many connections, rejecting new connection");
@@ -9601,16 +9601,22 @@ th_http_handle_read_request(th_http* http, size_t len, th_err err)
         }
         size_t content_received = http->read_bytes - http->parsed_bytes;
         size_t content_len = th_request_parser_content_len(&http->parser);
+        if (content_len > TH_MAX_BODY_LEN) {
+            TH_LOG_WARN("Request body too large, rejecting request");
+            th_http_write_error_response(http, TH_ERR_HTTP(TH_CODE_PAYLOAD_TOO_LARGE));
+            return;
+        }
         size_t remaining = content_len - content_received;
         if (http->read_bytes + remaining > th_buf_vec_size(&http->buf)) {
             memcpy(th_buf_vec_at(&http->buf, 0), th_buf_vec_at(&http->buf, http->parsed_bytes), content_received);
             http->read_bytes = content_received;
+            http->parsed_bytes = 0;
             if (content_len > th_buf_vec_size(&http->buf)) {
                 th_buf_vec_resize(&http->buf, content_len);
             }
         }
         th_socket_async_read_exact(th_conn_get_socket(http->conn), th_buf_vec_at(&http->buf, http->read_bytes),
-                                   remaining, (th_io_handler*)http);
+                                   remaining, &http->io_handler.base);
     }
 }
 

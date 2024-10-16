@@ -57,6 +57,17 @@ th_string_find_first(th_string str, size_t start, char c)
 }
 
 TH_PRIVATE(size_t)
+th_string_find_first_not(th_string str, size_t start, char c)
+{
+    for (size_t i = start; i < str.len; i++) {
+        if (str.ptr[i] != c) {
+            return i;
+        }
+    }
+    return th_string_npos;
+}
+
+TH_PRIVATE(size_t)
 th_string_find_first_of(th_string str, size_t start, const char* chars)
 {
     for (size_t i = start; i < str.len; i++) {
@@ -69,18 +80,16 @@ th_string_find_first_of(th_string str, size_t start, const char* chars)
     return th_string_npos;
 }
 
-/*
 TH_PRIVATE(size_t)
 th_string_find_last(th_string str, size_t start, char c)
 {
-    for (size_t i = str.len - 1; i >= start; i--) {
-        if (str.ptr[i] == c) {
+    for (size_t i = start; i < str.len; i++) {
+        if (str.ptr[str.len - i - 1] == c) {
             return i;
         }
     }
     return th_string_npos;
 }
-*/
 
 TH_PRIVATE(th_string)
 th_string_substr(th_string str, size_t start, size_t len)

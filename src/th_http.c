@@ -299,7 +299,7 @@ th_http_init(th_http* http, const th_conn_tracker* tracker, th_conn* conn,
     allocator = allocator ? allocator : th_default_allocator_get();
     th_http_io_handler_init(&http->io_handler, http);
     th_request_parser_init(&http->parser);
-    th_request_init(&http->request, allocator);
+    th_request_init(&http->request, fcache, allocator);
     th_response_init(&http->response, fcache, allocator);
     th_buf_vec_init(&http->buf, allocator);
     http->tracker = tracker;

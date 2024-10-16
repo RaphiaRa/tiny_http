@@ -24,6 +24,15 @@ th_string_make(const char* ptr, size_t len)
     return (th_string){ptr, len};
 }
 
+/** th_string_make_empty
+ * @brief Helper function to create an empty th_string.
+ */
+TH_INLINE(th_string)
+th_string_make_empty(void)
+{
+    return (th_string){"", 0};
+}
+
 /** th_string_from_cstr
  * @brief Helper function to create a th_string from a null-terminated string.
  */
@@ -75,12 +84,13 @@ TH_PRIVATE(size_t)
 th_string_find_first(th_string str, size_t start, char c);
 
 TH_PRIVATE(size_t)
+th_string_find_first_not(th_string str, size_t start, char c);
+
+TH_PRIVATE(size_t)
 th_string_find_first_of(th_string str, size_t start, const char* chars);
 
-/*
 TH_PRIVATE(size_t)
 th_string_find_last(th_string str, size_t start, char c);
-*/
 
 /** th_string_substr
  * @brief Returns a substring of a string.

@@ -6,6 +6,7 @@
 #include "th_heap_string.h"
 #include "th_log.h"
 #include "th_path.h"
+#include "th_system_error.h"
 
 #if defined(TH_CONFIG_OS_POSIX)
 #include <errno.h>
@@ -135,8 +136,19 @@ TH_PRIVATE(th_err)
 th_file_openat(th_file* stream, th_dir* dir, th_string path, th_open_opt opt)
 {
     th_err err = TH_ERR_OK;
-    if ((err = th_file_validate_path(dir, path, dir->allocator)) != TH_ERR_OK)
-        return err;
+    if ((err = th_file_validate_path(dir, path, dir->allocator)) != TH_ERR_OK) {
+        if (err == TH_ERR_SYSTEM(TH_ENOENT) && opt.create) {
+            // resolve only the directory part
+            size_t last_slash = th_string_find_last(path, 0, '/');
+            if (last_slash == th_string_npos)
+                last_slash = 0;
+            th_string dirpath = th_string_substr(path, 0, last_slash);
+            if ((err = th_file_validate_path(dir, dirpath, dir->allocator)) != TH_ERR_OK)
+                return err;
+        } else {
+            return err;
+        }
+    }
 #if defined(TH_CONFIG_OS_POSIX)
     char path_buf[TH_CONFIG_MAX_PATH_LEN + 1] = {0};
     memcpy(path_buf, path.ptr, path.len);
@@ -148,7 +160,11 @@ th_file_openat(th_file* stream, th_dir* dir, th_string path, th_open_opt opt)
         flags = O_RDONLY;
     else if (opt.write)
         flags = O_WRONLY;
-    int fd = openat(dir->fd, path_buf, flags);
+    if (opt.create)
+        flags |= O_CREAT;
+    if (opt.truncate)
+        flags |= O_TRUNC;
+    int fd = openat(dir->fd, path_buf, flags, 0644);
     if (fd == -1)
         return TH_ERR_SYSTEM(errno);
     off_t pos = lseek(fd, 0, SEEK_END);
@@ -192,6 +208,29 @@ th_file_read(th_file* stream, void* addr, size_t len, size_t offset, size_t* rea
     if (ret < 0)
         return TH_ERR_SYSTEM(-ret);
     *read = (size_t)ret;
+    return TH_ERR_OK;
+#endif
+}
+
+TH_PRIVATE(th_err)
+th_file_write(th_file* stream, const void* addr, size_t len, size_t offset, size_t* written)
+{
+#if defined(TH_CONFIG_OS_POSIX)
+    off_t ret = pwrite(stream->fd, addr, len, offset);
+    if (ret == -1) {
+        *written = 0;
+        return TH_ERR_SYSTEM(errno);
+    }
+    *written = (size_t)ret;
+    return TH_ERR_OK;
+#elif defined(TH_CONFIG_OS_MOCK)
+    (void)stream;
+    (void)addr;
+    (void)offset;
+    int ret = th_mock_write(len);
+    if (ret < 0)
+        return TH_ERR_SYSTEM(-ret);
+    *written = (size_t)ret;
     return TH_ERR_OK;
 #endif
 }

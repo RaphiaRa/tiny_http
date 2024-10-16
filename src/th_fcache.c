@@ -122,6 +122,12 @@ th_fcache_add_root(th_fcache* cache, th_string label, th_string path)
     return th_dir_mgr_add(&cache->dir_mgr, label, path);
 }
 
+TH_PRIVATE(th_dir*)
+th_fcache_find_dir(th_fcache* cache, th_string label)
+{
+    return th_dir_mgr_get(&cache->dir_mgr, label);
+}
+
 TH_LOCAL(th_err)
 th_fcache_insert(th_fcache* cache, th_fcache_entry* entry)
 {

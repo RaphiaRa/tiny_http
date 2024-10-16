@@ -314,6 +314,22 @@ th_request_parse_handle_header(th_request_parser* parser, th_request* request, t
     return th_request_add_header(request, th_heap_string_view(&normalized_name), value);
 }
 
+TH_LOCAL(th_err)
+th_request_parser_parse_header_line(th_string line, th_string* out_name, th_string* out_value)
+{
+    th_err err = TH_ERR_OK;
+    size_t parsed = 0;
+    if ((err = th_request_parser_next_token(line, out_name, ':', &parsed)) != TH_ERR_OK)
+        return err;
+    if (parsed == 0)
+        return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
+    th_string header_value = th_string_substr(line, parsed, th_string_npos);
+    if (!th_request_parser_is_printable_string(header_value))
+        return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
+    *out_value = th_string_trim(header_value);
+    return TH_ERR_OK;
+}
+
 TH_PRIVATE(th_err)
 th_request_parser_do_header(th_request_parser* parser, th_request* request, th_string buffer, size_t* parsed)
 {
@@ -350,12 +366,209 @@ th_request_parser_do_header(th_request_parser* parser, th_request* request, th_s
     return TH_ERR_OK;
 }
 
+TH_LOCAL(size_t)
+th_request_parser_multipart_find_eol(th_string buffer, size_t start)
+{
+    size_t pos = start;
+    while (pos + 1 < buffer.len) {
+        if (buffer.ptr[pos] == '\r' && buffer.ptr[pos + 1] == '\n')
+            return pos;
+        pos++;
+    }
+    return th_string_npos;
+}
+
+TH_LOCAL(bool)
+th_request_parser_multipart_is_boundary_line(th_string line, th_string boundary, bool* last)
+{
+    *last = false;
+    if (line.len < boundary.len + 2)
+        return false;
+    if (line.ptr[0] != '-' || line.ptr[1] != '-')
+        return false;
+    if (th_string_eq(th_string_substr(line, 2, boundary.len), boundary)) {
+        if (line.len == boundary.len + 2)
+            return true;
+        if (line.ptr[boundary.len + 2] == '-' && line.ptr[boundary.len + 3] == '-') {
+            *last = true;
+            return true;
+        }
+    }
+    return false;
+}
+
+typedef struct th_request_parser_header_param {
+    th_string name;
+    th_string value;
+} th_request_parser_header_param;
+
+TH_LOCAL(size_t)
+th_request_parser_parse_header_params(th_string header_value, th_request_parser_header_param* out_param, size_t out_param_num)
+{
+    size_t num = 0;
+    // skip heading
+    header_value = th_string_substr(header_value, th_string_find_first(header_value, 0, ';') + 1, th_string_npos);
+    // parse the parameters
+    while (num < out_param_num) {
+        size_t end = th_string_find_first(header_value, 0, ';');
+        th_string param = th_string_substr(header_value, 0, end);
+        size_t eq = th_string_find_first(param, 0, '=');
+        if (eq > end) {
+            out_param[num].name = th_string_trim(param);
+            out_param[num].value = th_string_make_empty();
+        } else {
+            out_param[num].name = th_string_trim(th_string_substr(param, 0, eq));
+            out_param[num].value = th_string_trim(th_string_substr(param, eq + 1, th_string_npos));
+        }
+        num++;
+        if (end == th_string_npos)
+            break;
+        header_value = th_string_substr(header_value, end + 1, th_string_npos);
+    }
+    return num;
+}
+
+TH_LOCAL(size_t)
+th_request_parser_multipart_find_boundary(th_string buffer, th_string boundary, bool* last, size_t* length)
+{
+    TH_ASSERT(length && "lenght pointer must not be NULL");
+    size_t pos = 0;
+    while (1) {
+        size_t eol = th_request_parser_multipart_find_eol(buffer, pos);
+        if (eol == th_string_npos)
+            return th_string_npos;
+        th_string line = th_string_substr(buffer, pos, eol - pos);
+        if (th_request_parser_multipart_is_boundary_line(line, boundary, last)) {
+            *length = line.len;
+            break;
+        }
+        pos = eol + 2;
+    }
+    return pos;
+}
+
+TH_LOCAL(th_err)
+th_request_parser_multipart_do_next(th_request* request, th_string buffer, th_string boundary, size_t* out_parsed)
+{
+    th_string content_disposition = th_string_make_empty();
+    size_t content_len = th_string_npos;
+    size_t original_len = buffer.len;
+    // parse the headers
+    while (1) {
+        if (th_string_empty(buffer))
+            return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
+        size_t line_length = th_request_parser_multipart_find_eol(buffer, 0);
+        if (line_length == th_string_npos)
+            return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
+        th_string line = th_string_substr(buffer, 0, line_length);
+        if (th_string_empty(line)) {
+            buffer = th_string_substr(buffer, line_length + 2, th_string_npos);
+            break; // end of headers
+        }
+        th_string header_name;
+        th_string header_value;
+        th_err err = TH_ERR_OK;
+        if ((err = th_request_parser_parse_header_line(line, &header_name, &header_value)) != TH_ERR_OK)
+            return err;
+        if (th_string_eq(header_name, TH_STRING("Content-Disposition"))) {
+            content_disposition = header_value;
+        } else if (th_string_eq(header_name, TH_STRING("Content-Length"))) {
+            if (th_string_to_uint(header_value, (unsigned*)&content_len) != TH_ERR_OK)
+                return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
+        }
+        buffer = th_string_substr(buffer, line_length + 2, th_string_npos);
+    }
+    if (th_string_empty(content_disposition))
+        return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
+    th_string name = th_string_make_empty();
+    th_string filename = th_string_make_empty();
+    th_string content_type = th_string_make_empty();
+    th_request_parser_header_param params[4];
+    size_t num_params = th_request_parser_parse_header_params(content_disposition, params, TH_ARRAY_SIZE(params));
+    for (size_t i = 0; i < num_params; ++i) {
+        if (th_string_eq(params[i].name, TH_STRING("name"))) {
+            name = params[i].value;
+        } else if (th_string_eq(params[i].name, TH_STRING("filename"))) {
+            filename = params[i].value;
+        } else if (th_string_eq(params[i].name, TH_STRING("content-type"))) {
+            content_type = params[i].value;
+        }
+    }
+    if (th_string_empty(name))
+        return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
+    bool last = false;
+    th_string content = th_string_make_empty();
+    if (content_len != th_string_npos) {
+        content = th_string_substr(buffer, 0, content_len);
+        buffer = th_string_substr(buffer, content_len, th_string_npos);
+        // check the boundary
+        if (buffer.ptr[0] != '\r' || buffer.ptr[1] != '\n')
+            return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
+        th_string boundary = th_string_substr(buffer, 2, th_request_parser_multipart_find_eol(buffer, 0));
+        if (!th_request_parser_multipart_is_boundary_line(boundary, boundary, &last))
+            return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
+        buffer = th_string_substr(buffer, content_len + boundary.len + 2, th_string_npos);
+    } else {
+        // we don't have the content length, so we need to find the boundary
+        size_t boundary_length = 0;
+        size_t pos = th_request_parser_multipart_find_boundary(buffer, boundary, &last, &boundary_length);
+        if (pos == th_string_npos)
+            return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
+        content = th_string_substr(buffer, 0, pos - 2); // -2 to remove the \r\n
+        buffer = th_string_substr(buffer, pos + boundary_length + 2, th_string_npos);
+    }
+    if (last && !th_string_empty(buffer)) {
+        return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
+    }
+    if (th_string_empty(filename)) {
+        if (th_request_add_formvar(request, name, content) != TH_ERR_OK)
+            return TH_ERR_BAD_ALLOC;
+    } else {
+        if (th_request_add_upload(request, name, filename, content, content_type) != TH_ERR_OK)
+            return TH_ERR_BAD_ALLOC;
+    }
+    *out_parsed = original_len - buffer.len;
+    return TH_ERR_OK;
+}
+
 TH_LOCAL(th_err)
 th_request_parser_do_multipart_form_data(th_request* request, th_string body)
 {
-    (void)request;
-    (void)body;
-    return TH_ERR_HTTP(TH_CODE_NOT_IMPLEMENTED);
+    // first, read the boundary
+    th_string content_type = th_request_get_header(request, TH_STRING("content-type"));
+    if (th_string_empty(content_type)) {
+        return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
+    }
+    th_string boundary = th_string_make_empty();
+    th_request_parser_header_param params[4];
+    size_t num_params = th_request_parser_parse_header_params(content_type, params, TH_ARRAY_SIZE(params));
+    for (size_t i = 0; i < num_params; ++i) {
+        if (th_string_eq(params[i].name, TH_STRING("boundary"))) {
+            boundary = params[i].value;
+            break;
+        }
+    }
+    if (th_string_empty(boundary)) {
+        return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
+    }
+    // parse the body
+    // first, find the first boundary
+    bool last = false;
+    size_t pos = th_request_parser_multipart_find_eol(body, 0);
+    if (!th_request_parser_multipart_is_boundary_line(th_string_substr(body, 0, pos), boundary, &last)
+        || last) {
+        return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
+    }
+    body = th_string_substr(body, pos + 2, th_string_npos);
+    do {
+        size_t parsed = 0;
+        th_err err = th_request_parser_multipart_do_next(request, body, boundary, &parsed);
+        if (err != TH_ERR_OK) {
+            return err;
+        }
+        body = th_string_substr(body, parsed, th_string_npos);
+    } while (!th_string_empty(body));
+    return TH_ERR_OK;
 }
 
 TH_PRIVATE(th_err)

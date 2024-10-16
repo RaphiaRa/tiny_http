@@ -142,5 +142,29 @@ TH_TEST_BEGIN(request_parser)
         th_request_deinit(&request);
     }
     TH_TEST_CASE_END
+    TH_TEST_CASE_BEGIN(parse_multipart_form_data)
+    {
+        th_request request;
+        th_request_init(&request, NULL);
+        th_request_parser parser;
+        th_request_parser_init(&parser);
+        th_string data = TH_STRING("POST / HTTP/1.1\r\nContent-Length: 299\r\nContent-Type: multipart/form-data; boundary=---------------------------9051914041544843365972754266\r\n\r\n"
+                                   "-----------------------------9051914041544843365972754266\r\n"
+                                   "Content-Disposition: form-data; name=\"variable1\"\r\n\r\n"
+                                   "value1\r\n"
+                                   "-----------------------------9051914041544843365972754266\r\n"
+                                   "Content-Disposition: form-data; name=\"variable2\"\r\n\r\n"
+                                   "value2\r\n"
+                                   "-----------------------------9051914041544843365972754266--\r\n");
+        size_t parsed = 0;
+        TH_EXPECT(th_request_parser_parse(&parser, &request, data, &parsed) == TH_ERR_OK);
+        TH_EXPECT(request.method == TH_METHOD_POST);
+        TH_EXPECT(th_heap_string_eq(&request.uri_path, TH_STRING("/")));
+        TH_EXPECT(request.version == 1);
+        TH_EXPECT(TH_STRING_EQ(th_request_get_formvar(&request, TH_STRING("variable1")), "value1"));
+        TH_EXPECT(TH_STRING_EQ(th_request_get_formvar(&request, TH_STRING("variable2")), "value2"));
+        th_request_deinit(&request);
+    }
+    TH_TEST_CASE_END
 }
 TH_TEST_END

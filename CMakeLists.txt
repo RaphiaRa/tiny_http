@@ -72,6 +72,7 @@ SET(TH_CORE_SRC
     src/th_conn_tracker.c
     src/th_url_decode.c
     src/th_path.c
+    src/th_upload.c
 #   SSL
     src/th_ssl_smem_bio.c
     src/th_ssl_context.c

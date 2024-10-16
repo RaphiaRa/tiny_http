@@ -216,12 +216,14 @@ typedef struct th_cookie_attr {
 /* cookie related declarations end */
 /* request related declarations begin */
 
-typedef struct th_upload {
+typedef struct th_upload th_upload;
+
+typedef struct th_upload_info {
     const char* name;
     const char* filename;
     const char* content_type;
-    th_buffer buffer;
-} th_upload;
+    size_t size;
+} th_upload_info;
 
 typedef struct th_keyval {
     const char* key;
@@ -236,7 +238,7 @@ typedef struct th_req {
     const th_keyval* queryvars;
     const th_keyval* formvars;
     const th_keyval* pathvars;
-    const th_upload* uploads;
+    const th_upload** uploads;
     size_t num_cookies;
     size_t num_headers;
     size_t num_queryvars;
@@ -249,6 +251,10 @@ typedef struct th_req {
 } th_req;
 
 th_upload* th_find_upload(const th_req* req, const char* name);
+th_upload_info th_upload_get_info(const th_upload* upload);
+th_buffer th_upload_get_data(const th_upload* upload);
+th_err th_upload_save(const th_upload* upload, const char* dir_label, const char* filepath);
+
 const char* th_find_header(const th_req* req, const char* name);
 const char* th_find_cookie(const th_req* req, const char* name);
 const char* th_find_queryvar(const th_req* req, const char* name);

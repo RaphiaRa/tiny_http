@@ -67,9 +67,23 @@ th_request_add_header(th_request* request, th_string key, th_string value)
 }
 
 TH_PRIVATE(th_err)
-th_request_add_upload(th_request* request, th_upload upload)
+th_request_add_upload(th_request* request, th_string data, th_string name, th_string filename, th_string content_type)
 {
-    return th_upload_vec_push_back(&request->uploads, upload);
+    th_upload upload;
+    th_upload_init(&upload, data, NULL, request->allocator);
+    th_err err = TH_ERR_OK;
+    if ((err = th_upload_set_name(&upload, name)) != TH_ERR_OK)
+        goto cleanup_upload;
+    if ((err = th_upload_set_filename(&upload, filename)) != TH_ERR_OK)
+        goto cleanup_upload;
+    if ((err = th_upload_set_content_type(&upload, content_type)) != TH_ERR_OK)
+        goto cleanup_upload;
+    if ((err = th_upload_vec_push_back(&request->uploads, upload)) != TH_ERR_OK)
+        goto cleanup_upload;
+    return TH_ERR_OK;
+cleanup_upload:
+    th_upload_deinit(&upload);
+    return err;
 }
 
 TH_PRIVATE(th_err)
@@ -202,6 +216,12 @@ th_request_get_queryvar(th_request* request, th_string key)
     return th_request_vec_get(&request->queryvars, key);
 }
 
+TH_PRIVATE(th_string)
+th_request_get_formvar(th_request* request, th_string key)
+{
+    return th_request_vec_get(&request->formvars, key);
+}
+
 TH_LOCAL(size_t)
 th_request_setup_vec(th_request* request, const th_keyval** keyval, size_t* num_keyval, th_hstr_vec* hstr_vec, size_t pos)
 {
@@ -219,9 +239,13 @@ th_request_setup_vec(th_request* request, const th_keyval** keyval, size_t* num_
 TH_PRIVATE(th_err)
 th_request_setup_public(th_request* request, th_req* pub)
 {
+    size_t num_uploads = th_upload_vec_size(&request->uploads);
+    for (size_t i = 0; i < num_uploads; i++) {
+        th_upload_ptr_vec_push_back(&request->upload_ptrs, th_upload_vec_at(&request->uploads, i));
+    }
+    pub->uploads = th_upload_ptr_vec_at(&request->upload_ptrs, 0);
     pub->path = th_heap_string_data(&request->uri_path);
     pub->query = th_heap_string_data(&request->uri_query);
-    pub->uploads = th_upload_vec_at(&request->uploads, 0);
     pub->num_uploads = th_upload_vec_size(&request->uploads);
     size_t num_keyvals = th_hstr_vec_size(&request->cookies)
                          + th_hstr_vec_size(&request->headers)

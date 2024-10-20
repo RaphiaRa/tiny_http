@@ -49,10 +49,10 @@ I wrote this library because I wanted a simple drop-in solution for the legacy C
 - Path capturing (e.g. `/user/{id}`)
 - Supports Linux and MacOS (Windows support is planned)
 - Fully customizable memory allocation and logging
+- File Uploads (Multipart form data)
 
 ## Planned features
 
-- File Uploads
 - Websockets
 
 ## Dependencies

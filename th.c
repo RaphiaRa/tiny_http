@@ -1339,6 +1339,15 @@ th_string_make(const char* ptr, size_t len)
     return (th_string){ptr, len};
 }
 
+/** th_string_make_empty
+ * @brief Helper function to create an empty th_string.
+ */
+TH_INLINE(th_string)
+th_string_make_empty(void)
+{
+    return (th_string){"", 0};
+}
+
 /** th_string_from_cstr
  * @brief Helper function to create a th_string from a null-terminated string.
  */
@@ -1390,12 +1399,13 @@ TH_PRIVATE(size_t)
 th_string_find_first(th_string str, size_t start, char c);
 
 TH_PRIVATE(size_t)
+th_string_find_first_not(th_string str, size_t start, char c);
+
+TH_PRIVATE(size_t)
 th_string_find_first_of(th_string str, size_t start, const char* chars);
 
-/*
 TH_PRIVATE(size_t)
 th_string_find_last(th_string str, size_t start, char c);
-*/
 
 /** th_string_substr
  * @brief Returns a substring of a string.
@@ -1687,6 +1697,7 @@ typedef struct th_open_opt {
     bool read;
     bool write;
     bool create;
+    bool truncate;
 } th_open_opt;
 
 TH_PRIVATE(th_err)
@@ -1694,6 +1705,9 @@ th_file_openat(th_file* stream, th_dir* dir, th_string path, th_open_opt opt);
 
 TH_PRIVATE(th_err)
 th_file_read(th_file* stream, void* addr, size_t len, size_t offset, size_t* read) TH_MAYBE_UNUSED;
+
+TH_PRIVATE(th_err)
+th_file_write(th_file* stream, const void* addr, size_t len, size_t offset, size_t* written) TH_MAYBE_UNUSED;
 
 typedef struct th_fileview {
     void* ptr;
@@ -2508,103 +2522,6 @@ struct th_method_mapping {
 struct th_method_mapping* th_method_mapping_find(const char* str, size_t len);
 
 /* End of th_method.h */
-/* Start of th_request.h */
-
-
-
-typedef struct th_hstr_pair {
-    th_heap_string key;
-    th_heap_string value;
-} th_hstr_pair;
-
-TH_INLINE(void)
-th_hstr_pair_deinit(th_hstr_pair* pair)
-{
-    th_heap_string_deinit(&pair->key);
-    th_heap_string_deinit(&pair->value);
-}
-
-TH_DEFINE_VEC(th_hstr_vec, th_hstr_pair, th_hstr_pair_deinit)
-
-TH_DEFINE_VEC(th_keyval_vec, th_keyval, (void))
-
-TH_DEFINE_VEC(th_upload_vec, th_upload, (void))
-
-typedef struct th_request {
-    th_allocator* allocator;
-    th_heap_string uri_path;
-    th_heap_string uri_query;
-    th_upload_vec uploads;
-    th_hstr_vec cookies;
-    th_hstr_vec headers;
-    th_hstr_vec queryvars;
-    th_hstr_vec formvars;
-    th_hstr_vec pathvars;
-    th_keyval_vec keyvals;
-    th_string body;
-    th_method method;
-    int version;
-    bool close;
-} th_request;
-
-TH_PRIVATE(void)
-th_request_init(th_request* request, th_allocator* allocator);
-
-TH_PRIVATE(void)
-th_request_deinit(th_request* request);
-
-TH_PRIVATE(void)
-th_request_reset(th_request* request);
-
-TH_PRIVATE(void)
-th_request_set_version(th_request* request, int version);
-
-TH_PRIVATE(void)
-th_request_set_method(th_request* request, th_method method);
-
-TH_PRIVATE(th_err)
-th_request_set_uri_path(th_request* request, th_string path);
-
-TH_PRIVATE(th_err)
-th_request_set_uri_query(th_request* request, th_string query);
-
-TH_PRIVATE(th_err)
-th_request_add_queryvar(th_request* request, th_string key, th_string value);
-
-TH_PRIVATE(th_err)
-th_request_add_formvar(th_request* request, th_string key, th_string value);
-
-TH_PRIVATE(th_err)
-th_request_add_pathvar(th_request* request, th_string key, th_string value);
-
-TH_PRIVATE(th_err)
-th_request_add_cookie(th_request* request, th_string key, th_string value);
-
-TH_PRIVATE(th_err)
-th_request_add_header(th_request* request, th_string key, th_string value);
-
-TH_PRIVATE(th_err)
-th_request_add_upload(th_request* request, th_upload upload) TH_MAYBE_UNUSED;
-
-TH_PRIVATE(void)
-th_request_clear_queryvars(th_request* request);
-
-TH_PRIVATE(void)
-th_request_set_body(th_request* request, th_string body);
-
-TH_PRIVATE(th_string)
-th_request_get_header(th_request* request, th_string key) TH_MAYBE_UNUSED;
-
-TH_PRIVATE(th_string)
-th_request_get_pathvar(th_request* request, th_string key) TH_MAYBE_UNUSED;
-
-TH_PRIVATE(th_string)
-th_request_get_queryvar(th_request* request, th_string key) TH_MAYBE_UNUSED;
-
-TH_PRIVATE(th_err)
-th_request_setup_public(th_request* request, th_req* public_request);
-
-/* End of th_request.h */
 /* Start of th_dir_mgr.h */
 
 
@@ -2726,10 +2643,148 @@ th_fcache_get(th_fcache* cache, th_string root, th_string path, th_fcache_entry*
 TH_PRIVATE(th_err)
 th_fcache_add_root(th_fcache* cache, th_string label, th_string path);
 
+TH_PRIVATE(th_dir*)
+th_fcache_find_dir(th_fcache* cache, th_string label);
+
 TH_PRIVATE(void)
 th_fcache_deinit(th_fcache* cache);
 
 /* End of th_fcache.h */
+/* Start of th_upload.h */
+
+
+
+struct th_upload {
+    th_heap_string name;
+    th_heap_string filename;
+    th_heap_string content_type;
+    th_string data;
+    th_fcache* fcache;
+};
+
+TH_PRIVATE(void)
+th_upload_init(th_upload* upload, th_string buffer, th_fcache* fcache, th_allocator* allocator);
+
+TH_PRIVATE(void)
+th_upload_deinit(th_upload* upload);
+
+TH_PRIVATE(th_err)
+th_upload_set_name(th_upload* upload, th_string name);
+
+TH_PRIVATE(th_err)
+th_upload_set_filename(th_upload* upload, th_string filename);
+
+TH_PRIVATE(th_err)
+th_upload_set_content_type(th_upload* upload, th_string content_type);
+
+/* End of th_upload.h */
+/* Start of th_request.h */
+
+
+
+typedef struct th_hstr_pair {
+    th_heap_string key;
+    th_heap_string value;
+} th_hstr_pair;
+
+TH_INLINE(void)
+th_hstr_pair_deinit(th_hstr_pair* pair)
+{
+    th_heap_string_deinit(&pair->key);
+    th_heap_string_deinit(&pair->value);
+}
+
+TH_DEFINE_VEC(th_hstr_vec, th_hstr_pair, th_hstr_pair_deinit)
+
+TH_DEFINE_VEC(th_keyval_vec, th_keyval, (void))
+
+TH_DEFINE_VEC(th_upload_vec, th_upload, th_upload_deinit)
+
+TH_DEFINE_VEC(th_upload_ptr_vec, const th_upload*, (void))
+
+typedef struct th_request {
+    th_allocator* allocator;
+    th_fcache* fcache;
+    th_heap_string uri_path;
+    th_heap_string uri_query;
+    th_upload_vec uploads;
+    th_hstr_vec cookies;
+    th_hstr_vec headers;
+    th_hstr_vec queryvars;
+    th_hstr_vec formvars;
+    th_hstr_vec pathvars;
+    th_keyval_vec keyvals;
+    th_upload_ptr_vec upload_ptrs;
+    th_string body;
+    th_method method;
+    int version;
+    bool close;
+} th_request;
+
+TH_PRIVATE(void)
+th_request_init(th_request* request, th_fcache* fcache, th_allocator* allocator);
+
+TH_PRIVATE(void)
+th_request_deinit(th_request* request);
+
+TH_PRIVATE(void)
+th_request_reset(th_request* request);
+
+TH_PRIVATE(void)
+th_request_set_version(th_request* request, int version);
+
+TH_PRIVATE(void)
+th_request_set_method(th_request* request, th_method method);
+
+TH_PRIVATE(th_err)
+th_request_set_uri_path(th_request* request, th_string path);
+
+TH_PRIVATE(th_err)
+th_request_set_uri_query(th_request* request, th_string query);
+
+TH_PRIVATE(th_err)
+th_request_add_queryvar(th_request* request, th_string key, th_string value);
+
+TH_PRIVATE(th_err)
+th_request_add_formvar(th_request* request, th_string key, th_string value);
+
+TH_PRIVATE(th_err)
+th_request_add_pathvar(th_request* request, th_string key, th_string value);
+
+TH_PRIVATE(th_err)
+th_request_add_cookie(th_request* request, th_string key, th_string value);
+
+TH_PRIVATE(th_err)
+th_request_add_header(th_request* request, th_string key, th_string value);
+
+TH_PRIVATE(th_err)
+th_request_add_upload(th_request* request, th_string data, th_string name, th_string filename, th_string content_type);
+
+TH_PRIVATE(void)
+th_request_clear_queryvars(th_request* request);
+
+TH_PRIVATE(void)
+th_request_set_body(th_request* request, th_string body);
+
+TH_PRIVATE(th_string)
+th_request_get_header(th_request* request, th_string key) TH_MAYBE_UNUSED;
+
+TH_PRIVATE(th_string)
+th_request_get_pathvar(th_request* request, th_string key) TH_MAYBE_UNUSED;
+
+TH_PRIVATE(th_string)
+th_request_get_queryvar(th_request* request, th_string key) TH_MAYBE_UNUSED;
+
+TH_PRIVATE(th_string)
+th_request_get_formvar(th_request* request, th_string key) TH_MAYBE_UNUSED;
+
+TH_PRIVATE(th_upload*)
+th_request_get_upload(th_request* request, th_string key) TH_MAYBE_UNUSED;
+
+TH_PRIVATE(th_err)
+th_request_setup_public(th_request* request, th_req* public_request);
+
+/* End of th_request.h */
 /* Start of th_header_id.h */
 
 
@@ -7091,6 +7146,22 @@ th_request_parse_handle_header(th_request_parser* parser, th_request* request, t
     return th_request_add_header(request, th_heap_string_view(&normalized_name), value);
 }
 
+TH_LOCAL(th_err)
+th_request_parser_parse_header_line(th_string line, th_string* out_name, th_string* out_value)
+{
+    th_err err = TH_ERR_OK;
+    size_t parsed = 0;
+    if ((err = th_request_parser_next_token(line, out_name, ':', &parsed)) != TH_ERR_OK)
+        return err;
+    if (parsed == 0)
+        return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
+    th_string header_value = th_string_substr(line, parsed, th_string_npos);
+    if (!th_request_parser_is_printable_string(header_value))
+        return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
+    *out_value = th_string_trim(header_value);
+    return TH_ERR_OK;
+}
+
 TH_PRIVATE(th_err)
 th_request_parser_do_header(th_request_parser* parser, th_request* request, th_string buffer, size_t* parsed)
 {
@@ -7127,12 +7198,244 @@ th_request_parser_do_header(th_request_parser* parser, th_request* request, th_s
     return TH_ERR_OK;
 }
 
+TH_LOCAL(size_t)
+th_request_parser_multipart_find_eol(th_string buffer, size_t start)
+{
+    size_t pos = start;
+    while (pos + 1 < buffer.len) {
+        if (buffer.ptr[pos] == '\r' && buffer.ptr[pos + 1] == '\n')
+            return pos;
+        pos++;
+    }
+    return th_string_npos;
+}
+
+TH_LOCAL(bool)
+th_request_parser_multipart_is_boundary_line(th_string line, th_string boundary, bool* last)
+{
+    *last = false;
+    if (line.len < boundary.len + 2)
+        return false;
+    if (line.ptr[0] != '-' || line.ptr[1] != '-')
+        return false;
+    if (th_string_eq(th_string_substr(line, 2, boundary.len), boundary)) {
+        if (line.len == boundary.len + 2)
+            return true;
+        if (line.ptr[boundary.len + 2] == '-' && line.ptr[boundary.len + 3] == '-') {
+            *last = true;
+            return true;
+        }
+    }
+    return false;
+}
+
+TH_LOCAL(th_err)
+th_request_parser_multipart_next_header_param(th_string buffer, th_string* out_name, th_string* out_value, size_t* out_parsed)
+{
+    // skip leading spaces
+    buffer = th_string_substr(buffer, th_string_find_first_not(buffer, 0, ' '), th_string_npos);
+    size_t eq = th_string_find_first_of(buffer, 0, "=; ");
+    if (eq == th_string_npos || buffer.ptr[eq] == ';') {
+        *out_name = th_string_substr(buffer, 0, eq);
+        *out_value = th_string_make_empty();
+        *out_parsed = eq == th_string_npos ? buffer.len : eq + 1;
+        return TH_ERR_OK;
+    }
+    if (buffer.ptr[eq] == ' ') // spaces are not allowed
+        return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
+    *out_name = th_string_substr(buffer, 0, eq);
+    size_t parsed = eq + 1;
+    buffer = th_string_substr(buffer, eq + 1, th_string_npos);
+    if (th_string_empty(buffer)) // equals sign must be followed by a value
+        return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
+    if (buffer.ptr[0] == '"') {
+        size_t end = th_string_find_first(buffer, 1, '"');
+        if (end == th_string_npos) // no closing quote
+            return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
+        *out_value = th_string_substr(buffer, 1, end - 1);
+        parsed += (end == th_string_npos ? buffer.len : end + 1);
+    } else {
+        size_t end = th_string_find_first_of(buffer, 0, "; ");
+        if (end != th_string_npos && buffer.ptr[end] == ' ')
+            return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
+        *out_value = th_string_substr(buffer, 0, end);
+        parsed += (end == th_string_npos ? buffer.len : end + 1);
+    }
+    *out_parsed = parsed;
+    return TH_ERR_OK;
+}
+
+TH_LOCAL(th_err)
+th_request_parser_multipart_content_disposition(th_string header_value, th_string* out_name, th_string* out_filename)
+{
+    // skip heading
+    header_value = th_string_substr(header_value, th_string_find_first(header_value, 0, ';') + 1, th_string_npos);
+    // parse the parameters
+    while (!th_string_empty(header_value)) {
+        th_err err = TH_ERR_OK;
+        th_string name, value = th_string_make_empty();
+        size_t parsed = 0;
+        if ((err = th_request_parser_multipart_next_header_param(header_value, &name, &value, &parsed)) != TH_ERR_OK)
+            return err;
+        header_value = th_string_substr(header_value, parsed, th_string_npos);
+        if (th_string_eq(name, TH_STRING("name"))) {
+            *out_name = value;
+        } else if (th_string_eq(name, TH_STRING("filename"))) {
+            *out_filename = value;
+        }
+    }
+    return TH_ERR_OK;
+}
+
+TH_LOCAL(size_t)
+th_request_parser_multipart_find_boundary(th_string buffer, th_string boundary, bool* last, size_t* length)
+{
+    TH_ASSERT(length && "lenght pointer must not be NULL");
+    size_t pos = 0;
+    while (1) {
+        size_t eol = th_request_parser_multipart_find_eol(buffer, pos);
+        if (eol == th_string_npos)
+            return th_string_npos;
+        th_string line = th_string_substr(buffer, pos, eol - pos);
+        if (th_request_parser_multipart_is_boundary_line(line, boundary, last)) {
+            *length = line.len;
+            break;
+        }
+        pos = eol + 2;
+    }
+    return pos;
+}
+
+TH_LOCAL(th_err)
+th_request_parser_multipart_do_next(th_request* request, th_string buffer, th_string boundary, size_t* out_parsed)
+{
+    th_string content_disposition, content_type;
+    content_disposition = content_type = th_string_make_empty();
+    size_t content_len = th_string_npos;
+    size_t original_len = buffer.len;
+    // parse the headers
+    while (1) {
+        if (th_string_empty(buffer))
+            return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
+        size_t line_length = th_request_parser_multipart_find_eol(buffer, 0);
+        if (line_length == th_string_npos)
+            return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
+        th_string line = th_string_substr(buffer, 0, line_length);
+        if (th_string_empty(line)) {
+            buffer = th_string_substr(buffer, line_length + 2, th_string_npos);
+            break; // end of headers
+        }
+        th_string header_name;
+        th_string header_value;
+        th_err err = TH_ERR_OK;
+        if ((err = th_request_parser_parse_header_line(line, &header_name, &header_value)) != TH_ERR_OK)
+            return err;
+        if (th_string_eq(header_name, TH_STRING("Content-Disposition"))) {
+            content_disposition = header_value;
+        } else if (th_string_eq(header_name, TH_STRING("Content-Length"))) {
+            if (th_string_to_uint(header_value, (unsigned*)&content_len) != TH_ERR_OK)
+                return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
+        } else if (th_string_eq(header_name, TH_STRING("Content-Type"))) {
+            content_type = header_value;
+        }
+        buffer = th_string_substr(buffer, line_length + 2, th_string_npos);
+    }
+    if (th_string_empty(content_disposition))
+        return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
+    th_string name, filename;
+    name = filename = th_string_make_empty();
+    th_err err = TH_ERR_OK;
+    if ((err = th_request_parser_multipart_content_disposition(content_disposition, &name, &filename)) != TH_ERR_OK)
+        return err;
+    if (th_string_empty(name))
+        return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
+    bool last = false;
+    th_string content = th_string_make_empty();
+    if (content_len != th_string_npos) {
+        content = th_string_substr(buffer, 0, content_len);
+        buffer = th_string_substr(buffer, content_len, th_string_npos);
+        // check the boundary
+        if (buffer.ptr[0] != '\r' || buffer.ptr[1] != '\n')
+            return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
+        th_string boundary = th_string_substr(buffer, 2, th_request_parser_multipart_find_eol(buffer, 0));
+        if (!th_request_parser_multipart_is_boundary_line(boundary, boundary, &last))
+            return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
+        buffer = th_string_substr(buffer, content_len + boundary.len + 2, th_string_npos);
+    } else {
+        // we don't have the content length, so we need to find the boundary
+        size_t boundary_length = 0;
+        size_t pos = th_request_parser_multipart_find_boundary(buffer, boundary, &last, &boundary_length);
+        if (pos == th_string_npos)
+            return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
+        content = th_string_substr(buffer, 0, pos - 2); // -2 to remove the \r\n
+        buffer = th_string_substr(buffer, pos + boundary_length + 2, th_string_npos);
+    }
+    if (last && !th_string_empty(buffer)) {
+        return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
+    }
+    if (th_string_empty(filename)) {
+        if (th_request_add_formvar(request, name, content) != TH_ERR_OK)
+            return TH_ERR_BAD_ALLOC;
+    } else {
+        if (th_request_add_upload(request, content, name, filename, content_type) != TH_ERR_OK)
+            return TH_ERR_BAD_ALLOC;
+    }
+    *out_parsed = original_len - buffer.len;
+    return TH_ERR_OK;
+}
+
+TH_LOCAL(th_err)
+th_request_parsed_multipart_parse_content_type(th_string content_type, th_string* boundary)
+{
+    // skip heading
+    content_type = th_string_substr(content_type, th_string_find_first(content_type, 0, ';') + 1, th_string_npos);
+    while (!th_string_empty(content_type)) {
+        th_string name, value = th_string_make_empty();
+        size_t parsed = 0;
+        th_err err = TH_ERR_OK;
+        if ((err = th_request_parser_multipart_next_header_param(content_type, &name, &value, &parsed)) != TH_ERR_OK)
+            return err;
+        content_type = th_string_substr(content_type, parsed, th_string_npos);
+        if (th_string_eq(name, TH_STRING("boundary"))) {
+            *boundary = value;
+            return TH_ERR_OK;
+        }
+    }
+    return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
+}
+
 TH_LOCAL(th_err)
 th_request_parser_do_multipart_form_data(th_request* request, th_string body)
 {
-    (void)request;
-    (void)body;
-    return TH_ERR_HTTP(TH_CODE_NOT_IMPLEMENTED);
+    // first, read the boundary
+    th_string content_type = th_request_get_header(request, TH_STRING("content-type"));
+    if (th_string_empty(content_type)) {
+        return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
+    }
+    th_err err = TH_ERR_OK;
+    th_string boundary = th_string_make_empty();
+    if ((err = th_request_parsed_multipart_parse_content_type(content_type, &boundary)) != TH_ERR_OK)
+        return err;
+    if (th_string_empty(boundary))
+        return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
+    // parse the body
+    // first, find the first boundary
+    bool last = false;
+    size_t pos = th_request_parser_multipart_find_eol(body, 0);
+    if (!th_request_parser_multipart_is_boundary_line(th_string_substr(body, 0, pos), boundary, &last)
+        || last) {
+        return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
+    }
+    body = th_string_substr(body, pos + 2, th_string_npos);
+    do {
+        size_t parsed = 0;
+        th_err err = th_request_parser_multipart_do_next(request, body, boundary, &parsed);
+        if (err != TH_ERR_OK) {
+            return err;
+        }
+        body = th_string_substr(body, parsed, th_string_npos);
+    } while (!th_string_empty(body));
+    return TH_ERR_OK;
 }
 
 TH_PRIVATE(th_err)
@@ -7277,9 +7580,23 @@ th_request_add_header(th_request* request, th_string key, th_string value)
 }
 
 TH_PRIVATE(th_err)
-th_request_add_upload(th_request* request, th_upload upload)
+th_request_add_upload(th_request* request, th_string data, th_string name, th_string filename, th_string content_type)
 {
-    return th_upload_vec_push_back(&request->uploads, upload);
+    th_upload upload;
+    th_upload_init(&upload, data, request->fcache, request->allocator);
+    th_err err = TH_ERR_OK;
+    if ((err = th_upload_set_name(&upload, name)) != TH_ERR_OK)
+        goto cleanup_upload;
+    if ((err = th_upload_set_filename(&upload, filename)) != TH_ERR_OK)
+        goto cleanup_upload;
+    if ((err = th_upload_set_content_type(&upload, content_type)) != TH_ERR_OK)
+        goto cleanup_upload;
+    if ((err = th_upload_vec_push_back(&request->uploads, upload)) != TH_ERR_OK)
+        goto cleanup_upload;
+    return TH_ERR_OK;
+cleanup_upload:
+    th_upload_deinit(&upload);
+    return err;
 }
 
 TH_PRIVATE(th_err)
@@ -7338,17 +7655,20 @@ th_request_set_body(th_request* request, th_string body)
 }
 
 TH_PRIVATE(void)
-th_request_init(th_request* request, th_allocator* allocator)
+th_request_init(th_request* request, th_fcache* fcache, th_allocator* allocator)
 {
     request->allocator = allocator ? allocator : th_default_allocator_get();
+    request->fcache = fcache;
     th_heap_string_init(&request->uri_path, request->allocator);
     th_heap_string_init(&request->uri_query, request->allocator);
+    th_upload_vec_init(&request->uploads, request->allocator);
     th_hstr_vec_init(&request->cookies, request->allocator);
     th_hstr_vec_init(&request->headers, request->allocator);
     th_hstr_vec_init(&request->queryvars, request->allocator);
     th_hstr_vec_init(&request->formvars, request->allocator);
     th_hstr_vec_init(&request->pathvars, request->allocator);
     th_keyval_vec_init(&request->keyvals, request->allocator);
+    th_upload_ptr_vec_init(&request->upload_ptrs, request->allocator);
     request->body = (th_string){0};
     request->version = 0;
     request->close = false;
@@ -7359,12 +7679,14 @@ th_request_deinit(th_request* request)
 {
     th_heap_string_deinit(&request->uri_path);
     th_heap_string_deinit(&request->uri_query);
+    th_upload_vec_deinit(&request->uploads);
     th_hstr_vec_deinit(&request->cookies);
     th_hstr_vec_deinit(&request->headers);
     th_hstr_vec_deinit(&request->queryvars);
     th_hstr_vec_deinit(&request->formvars);
     th_hstr_vec_deinit(&request->pathvars);
     th_keyval_vec_deinit(&request->keyvals);
+    th_upload_ptr_vec_deinit(&request->upload_ptrs);
 }
 
 TH_PRIVATE(void)
@@ -7412,6 +7734,23 @@ th_request_get_queryvar(th_request* request, th_string key)
     return th_request_vec_get(&request->queryvars, key);
 }
 
+TH_PRIVATE(th_string)
+th_request_get_formvar(th_request* request, th_string key)
+{
+    return th_request_vec_get(&request->formvars, key);
+}
+
+TH_PRIVATE(th_upload*)
+th_request_get_upload(th_request* request, th_string key)
+{
+    size_t num = th_upload_vec_size(&request->uploads);
+    for (size_t i = 0; i < num; i++) {
+        if (th_heap_string_eq(&request->uploads.data[i].name, key))
+            return th_upload_vec_at(&request->uploads, i);
+    }
+    return NULL;
+}
+
 TH_LOCAL(size_t)
 th_request_setup_vec(th_request* request, const th_keyval** keyval, size_t* num_keyval, th_hstr_vec* hstr_vec, size_t pos)
 {
@@ -7429,9 +7768,13 @@ th_request_setup_vec(th_request* request, const th_keyval** keyval, size_t* num_
 TH_PRIVATE(th_err)
 th_request_setup_public(th_request* request, th_req* pub)
 {
+    size_t num_uploads = th_upload_vec_size(&request->uploads);
+    for (size_t i = 0; i < num_uploads; i++) {
+        th_upload_ptr_vec_push_back(&request->upload_ptrs, th_upload_vec_at(&request->uploads, i));
+    }
+    pub->uploads = th_upload_ptr_vec_at(&request->upload_ptrs, 0);
     pub->path = th_heap_string_data(&request->uri_path);
     pub->query = th_heap_string_data(&request->uri_query);
-    pub->uploads = th_upload_vec_at(&request->uploads, 0);
     pub->num_uploads = th_upload_vec_size(&request->uploads);
     size_t num_keyvals = th_hstr_vec_size(&request->cookies)
                          + th_hstr_vec_size(&request->headers)
@@ -7510,6 +7853,19 @@ th_find_pathvar(const th_req* req, const char* key)
     for (size_t i = 0; i < num; i++) {
         if (*key == *req->pathvars[i].key && strcmp(req->pathvars[i].key, key) == 0) {
             return req->pathvars[i].value;
+        }
+    }
+    return NULL;
+}
+
+TH_PUBLIC(th_upload*)
+th_find_upload(const th_req* req, const char* name)
+{
+    size_t num = req->num_uploads;
+    for (size_t i = 0; i < num; i++) {
+        const char* upload_name = th_upload_get_info(req->uploads[i]).name;
+        if (*name == *upload_name && strcmp(upload_name, name) == 0) {
+            return (th_upload*)&req->uploads[i];
         }
     }
     return NULL;
@@ -8398,8 +8754,19 @@ TH_PRIVATE(th_err)
 th_file_openat(th_file* stream, th_dir* dir, th_string path, th_open_opt opt)
 {
     th_err err = TH_ERR_OK;
-    if ((err = th_file_validate_path(dir, path, dir->allocator)) != TH_ERR_OK)
-        return err;
+    if ((err = th_file_validate_path(dir, path, dir->allocator)) != TH_ERR_OK) {
+        if (err == TH_ERR_SYSTEM(TH_ENOENT) && opt.create) {
+            // resolve only the directory part
+            size_t last_slash = th_string_find_last(path, 0, '/');
+            if (last_slash == th_string_npos)
+                last_slash = 0;
+            th_string dirpath = th_string_substr(path, 0, last_slash);
+            if ((err = th_file_validate_path(dir, dirpath, dir->allocator)) != TH_ERR_OK)
+                return err;
+        } else {
+            return err;
+        }
+    }
 #if defined(TH_CONFIG_OS_POSIX)
     char path_buf[TH_CONFIG_MAX_PATH_LEN + 1] = {0};
     memcpy(path_buf, path.ptr, path.len);
@@ -8411,7 +8778,11 @@ th_file_openat(th_file* stream, th_dir* dir, th_string path, th_open_opt opt)
         flags = O_RDONLY;
     else if (opt.write)
         flags = O_WRONLY;
-    int fd = openat(dir->fd, path_buf, flags);
+    if (opt.create)
+        flags |= O_CREAT;
+    if (opt.truncate)
+        flags |= O_TRUNC;
+    int fd = openat(dir->fd, path_buf, flags, 0644);
     if (fd == -1)
         return TH_ERR_SYSTEM(errno);
     off_t pos = lseek(fd, 0, SEEK_END);
@@ -8455,6 +8826,29 @@ th_file_read(th_file* stream, void* addr, size_t len, size_t offset, size_t* rea
     if (ret < 0)
         return TH_ERR_SYSTEM(-ret);
     *read = (size_t)ret;
+    return TH_ERR_OK;
+#endif
+}
+
+TH_PRIVATE(th_err)
+th_file_write(th_file* stream, const void* addr, size_t len, size_t offset, size_t* written)
+{
+#if defined(TH_CONFIG_OS_POSIX)
+    off_t ret = pwrite(stream->fd, addr, len, offset);
+    if (ret == -1) {
+        *written = 0;
+        return TH_ERR_SYSTEM(errno);
+    }
+    *written = (size_t)ret;
+    return TH_ERR_OK;
+#elif defined(TH_CONFIG_OS_MOCK)
+    (void)stream;
+    (void)addr;
+    (void)offset;
+    int ret = th_mock_write(len);
+    if (ret < 0)
+        return TH_ERR_SYSTEM(-ret);
+    *written = (size_t)ret;
     return TH_ERR_OK;
 #endif
 }
@@ -8680,6 +9074,12 @@ TH_PRIVATE(th_err)
 th_fcache_add_root(th_fcache* cache, th_string label, th_string path)
 {
     return th_dir_mgr_add(&cache->dir_mgr, label, path);
+}
+
+TH_PRIVATE(th_dir*)
+th_fcache_find_dir(th_fcache* cache, th_string label)
+{
+    return th_dir_mgr_get(&cache->dir_mgr, label);
 }
 
 TH_LOCAL(th_err)
@@ -8951,6 +9351,17 @@ th_string_find_first(th_string str, size_t start, char c)
 }
 
 TH_PRIVATE(size_t)
+th_string_find_first_not(th_string str, size_t start, char c)
+{
+    for (size_t i = start; i < str.len; i++) {
+        if (str.ptr[i] != c) {
+            return i;
+        }
+    }
+    return th_string_npos;
+}
+
+TH_PRIVATE(size_t)
 th_string_find_first_of(th_string str, size_t start, const char* chars)
 {
     for (size_t i = start; i < str.len; i++) {
@@ -8963,18 +9374,16 @@ th_string_find_first_of(th_string str, size_t start, const char* chars)
     return th_string_npos;
 }
 
-/*
 TH_PRIVATE(size_t)
 th_string_find_last(th_string str, size_t start, char c)
 {
-    for (size_t i = str.len - 1; i >= start; i--) {
-        if (str.ptr[i] == c) {
+    for (size_t i = start; i < str.len; i++) {
+        if (str.ptr[str.len - i - 1] == c) {
             return i;
         }
     }
     return th_string_npos;
 }
-*/
 
 TH_PRIVATE(th_string)
 th_string_substr(th_string str, size_t start, size_t len)
@@ -9676,7 +10085,7 @@ th_http_init(th_http* http, const th_conn_tracker* tracker, th_conn* conn,
     allocator = allocator ? allocator : th_default_allocator_get();
     th_http_io_handler_init(&http->io_handler, http);
     th_request_parser_init(&http->parser);
-    th_request_init(&http->request, allocator);
+    th_request_init(&http->request, fcache, allocator);
     th_response_init(&http->response, fcache, allocator);
     th_buf_vec_init(&http->buf, allocator);
     http->tracker = tracker;
@@ -10379,6 +10788,87 @@ th_path_is_hidden(th_string path)
     return false;
 }
 /* End of src/th_path.c */
+/* Start of src/th_upload.c */
+
+TH_PRIVATE(void)
+th_upload_init(th_upload* upload, th_string buffer, th_fcache* fcache, th_allocator* allocator)
+{
+    th_heap_string_init(&upload->name, allocator);
+    th_heap_string_init(&upload->filename, allocator);
+    th_heap_string_init(&upload->content_type, allocator);
+    upload->data = buffer;
+    upload->fcache = fcache;
+}
+
+TH_PRIVATE(void)
+th_upload_deinit(th_upload* upload)
+{
+    th_heap_string_deinit(&upload->name);
+    th_heap_string_deinit(&upload->filename);
+    th_heap_string_deinit(&upload->content_type);
+}
+
+TH_PRIVATE(th_err)
+th_upload_set_name(th_upload* upload, th_string name)
+{
+    return th_heap_string_set(&upload->name, name);
+}
+
+TH_PRIVATE(th_err)
+th_upload_set_filename(th_upload* upload, th_string filename)
+{
+    return th_heap_string_set(&upload->filename, filename);
+}
+
+TH_PRIVATE(th_err)
+th_upload_set_content_type(th_upload* upload, th_string content_type)
+{
+    return th_heap_string_set(&upload->content_type, content_type);
+}
+
+// Public API
+
+TH_PUBLIC(th_upload_info)
+th_upload_get_info(const th_upload* upload)
+{
+    return (th_upload_info){
+        .name = th_heap_string_data(&upload->name),
+        .filename = th_heap_string_data(&upload->filename),
+        .content_type = th_heap_string_data(&upload->content_type),
+        .size = upload->data.len,
+    };
+}
+
+TH_PUBLIC(th_buffer)
+th_upload_get_data(const th_upload* upload)
+{
+    return (th_buffer){upload->data.ptr, upload->data.len};
+}
+
+TH_PUBLIC(th_err)
+th_upload_save(const th_upload* upload, const char* dir_label, const char* filepath)
+{
+    th_dir* dir = th_fcache_find_dir(upload->fcache, th_string_from_cstr(dir_label));
+    if (!dir)
+        return TH_ERR_HTTP(TH_CODE_NOT_FOUND);
+    th_err err = TH_ERR_OK;
+    th_open_opt opt = {.create = true, .write = true, .truncate = true};
+    th_file file;
+    if ((err = th_file_openat(&file, dir, th_string_from_cstr(filepath), opt)) != TH_ERR_OK)
+        return err;
+    size_t total_written = 0;
+    while (total_written < upload->data.len) {
+        size_t written = 0;
+        if ((err = th_file_write(&file, upload->data.ptr + total_written, upload->data.len - total_written, total_written, &written)) != TH_ERR_OK) {
+            th_file_close(&file);
+            return err;
+        }
+        total_written += written;
+    }
+    th_file_close(&file);
+    return TH_ERR_OK;
+}
+/* End of src/th_upload.c */
 /* Start of src/th_ssl_smem_bio.c */
 #if TH_WITH_SSL
 

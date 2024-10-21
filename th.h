@@ -329,12 +329,12 @@ th_err th_bind(th_server* server, const char* addr, const char* port, th_bind_op
 th_err th_route(th_server* server, th_method method, const char* route, th_handler handler, void* userp);
 
 /** th_err
- * @brief Add a root directory to the server.
- * @param name Label for the root directory.
+ * @brief Add a directory to the server (for serving or storing files).
+ * @param name Label for the directory.
  * @param path File system path.
  * @return TH_ERR_OK on success, otherwise an error code.
  */
-th_err th_add_root(th_server* server, const char* name, const char* path);
+th_err th_add_dir(th_server* server, const char* name, const char* path);
 
 /** th_poll
  * @brief Poll the server for any events and pending tasks.

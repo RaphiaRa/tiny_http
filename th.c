@@ -2641,7 +2641,7 @@ TH_PRIVATE(th_err)
 th_fcache_get(th_fcache* cache, th_string root, th_string path, th_fcache_entry** out);
 
 TH_PRIVATE(th_err)
-th_fcache_add_root(th_fcache* cache, th_string label, th_string path);
+th_fcache_add_dir(th_fcache* cache, th_string label, th_string path);
 
 TH_PRIVATE(th_dir*)
 th_fcache_find_dir(th_fcache* cache, th_string label);
@@ -3851,9 +3851,9 @@ th_server_route(th_server* server, th_method method, const char* path, th_handle
 }
 
 TH_LOCAL(th_err)
-th_server_add_root(th_server* server, const char* name, const char* path)
+th_server_add_dir(th_server* server, const char* name, const char* path)
 {
-    return th_fcache_add_root(&server->fcache, th_string_from_cstr(name), th_string_from_cstr(path));
+    return th_fcache_add_dir(&server->fcache, th_string_from_cstr(name), th_string_from_cstr(path));
 }
 
 TH_LOCAL(th_err)
@@ -3901,9 +3901,9 @@ th_route(th_server* server, th_method method, const char* route, th_handler hand
 }
 
 TH_PUBLIC(th_err)
-th_add_root(th_server* server, const char* name, const char* path)
+th_add_dir(th_server* server, const char* name, const char* path)
 {
-    return th_server_add_root(server, name, path);
+    return th_server_add_dir(server, name, path);
 }
 
 TH_PUBLIC(th_err)
@@ -9071,7 +9071,7 @@ th_fcache_try_get(th_fcache* cache, th_string root, th_string path)
 }
 
 TH_PRIVATE(th_err)
-th_fcache_add_root(th_fcache* cache, th_string label, th_string path)
+th_fcache_add_dir(th_fcache* cache, th_string label, th_string path)
 {
     return th_dir_mgr_add(&cache->dir_mgr, label, path);
 }

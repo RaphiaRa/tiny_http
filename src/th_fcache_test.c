@@ -25,7 +25,7 @@ TH_TEST_BEGIN(fcache)
         th_fcache_entry* entry1 = NULL;
         th_fcache_entry* entry2 = NULL;
         th_fcache_entry* entry3 = NULL;
-        TH_EXPECT(th_fcache_add_root(&cache, TH_STRING("/"), TH_STRING("/")) == TH_ERR_OK);
+        TH_EXPECT(th_fcache_add_dir(&cache, TH_STRING("/"), TH_STRING("/")) == TH_ERR_OK);
         TH_EXPECT(th_fcache_get(&cache, TH_STRING("/"), TH_STRING("test"), &entry1) == TH_ERR_OK);
         TH_EXPECT(th_fcache_get(&cache, TH_STRING("/"), TH_STRING("test"), &entry2) == TH_ERR_OK);
         TH_EXPECT(th_fcache_get(&cache, TH_STRING("/"), TH_STRING("test"), &entry3) == TH_ERR_OK);
@@ -41,7 +41,7 @@ TH_TEST_BEGIN(fcache)
     {
         th_fcache cache = {0};
         th_fcache_init(&cache, NULL);
-        TH_EXPECT(th_fcache_add_root(&cache, TH_STRING("/"), TH_STRING("/")) == TH_ERR_OK);
+        TH_EXPECT(th_fcache_add_dir(&cache, TH_STRING("/"), TH_STRING("/")) == TH_ERR_OK);
         th_mock_syscall_get()->open = th_mock_open_bad;
         th_fcache_entry* entry = NULL;
         TH_EXPECT(th_fcache_get(&cache, TH_STRING("/"), TH_STRING("test"), &entry) != TH_ERR_OK);

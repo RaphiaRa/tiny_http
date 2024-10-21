@@ -192,9 +192,9 @@ th_server_route(th_server* server, th_method method, const char* path, th_handle
 }
 
 TH_LOCAL(th_err)
-th_server_add_root(th_server* server, const char* name, const char* path)
+th_server_add_dir(th_server* server, const char* name, const char* path)
 {
-    return th_fcache_add_root(&server->fcache, th_string_from_cstr(name), th_string_from_cstr(path));
+    return th_fcache_add_dir(&server->fcache, th_string_from_cstr(name), th_string_from_cstr(path));
 }
 
 TH_LOCAL(th_err)
@@ -242,9 +242,9 @@ th_route(th_server* server, th_method method, const char* route, th_handler hand
 }
 
 TH_PUBLIC(th_err)
-th_add_root(th_server* server, const char* name, const char* path)
+th_add_dir(th_server* server, const char* name, const char* path)
 {
-    return th_server_add_root(server, name, path);
+    return th_server_add_dir(server, name, path);
 }
 
 TH_PUBLIC(th_err)

@@ -43,7 +43,7 @@ int main(void)
     }
     if ((err = th_bind(server, "0.0.0.0", "8080", NULL)) != TH_ERR_OK)
         goto cleanup;
-    if ((err = th_add_root(server, "upload_dir", "./uploads")) != TH_ERR_OK)
+    if ((err = th_add_dir(server, "upload_dir", "./uploads")) != TH_ERR_OK)
         goto cleanup;
     if ((err = th_route(server, TH_METHOD_POST, "/", handler, NULL)) != TH_ERR_OK)
         goto cleanup;

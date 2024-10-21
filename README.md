@@ -157,7 +157,7 @@ int main(void)
     th_server* server;
     th_server_create(&server, NULL);
     th_bind(server, "0.0.0.0", "8080", NULL);
-    th_add_root(server, "root", "/path/to/your/files");
+    th_add_dir(server, "root", "/path/to/your/files");
     th_route(server, TH_METHOD_GET, "/{path:path}", handle_path, NULL);
     th_route(server, TH_METHOD_GET, "/", handle_index, NULL);
     while (1) {

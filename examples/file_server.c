@@ -85,7 +85,7 @@ int main(int argc, char** argv)
     opt.key_file = key;
     if ((err = th_bind(server, "0.0.0.0", port, &opt)) != TH_ERR_OK)
         goto cleanup;
-    if ((err = th_add_root(server, "root", root)) != TH_ERR_OK)
+    if ((err = th_add_dir(server, "root", root)) != TH_ERR_OK)
         goto cleanup;
     if ((err = th_route(server, TH_METHOD_GET, "/{path:path}", handle_path, NULL)) != TH_ERR_OK)
         goto cleanup;

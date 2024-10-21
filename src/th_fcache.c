@@ -117,7 +117,7 @@ th_fcache_try_get(th_fcache* cache, th_string root, th_string path)
 }
 
 TH_PRIVATE(th_err)
-th_fcache_add_root(th_fcache* cache, th_string label, th_string path)
+th_fcache_add_dir(th_fcache* cache, th_string label, th_string path)
 {
     return th_dir_mgr_add(&cache->dir_mgr, label, path);
 }

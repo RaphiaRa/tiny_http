@@ -3,13 +3,23 @@
 
 #include <string.h>
 
-static const th_req* last_req = NULL;
+static const th_keyval* required = NULL;
+static size_t num_required = 0;
+static bool success = true;
+
 static th_err
 mock_handler(void* user_data, const th_req* req, th_resp* resp)
 {
     (void)user_data;
     (void)resp;
-    last_req = req;
+    for (size_t i = 0; i < num_required; i++) {
+        const char* value = th_find_pathvar(req, required[i].key);
+        if (!value || strcmp(value, required[i].value) != 0) {
+            success = false;
+            return TH_ERR_OK;
+        }
+    }
+    success = true;
     return TH_ERR_OK;
 }
 
@@ -91,8 +101,10 @@ TH_TEST_BEGIN(router)
             th_heap_string_set(&request.uri_path, TH_STRING("/test/abc"));
             th_response response = {0};
             TH_EXPECT(th_router_handle(&router, &request, &response) == TH_ERR_OK);
-            const char* param = th_find_pathvar(last_req, "path");
-            TH_EXPECT(param && strcmp(param, "abc") == 0);
+            required = (const th_keyval[]){
+                {.key = "path", .value = "abc"},
+            };
+            TH_EXPECT(success);
             th_request_deinit(&request);
         }
         {
@@ -102,8 +114,10 @@ TH_TEST_BEGIN(router)
             th_heap_string_set(&request.uri_path, TH_STRING("/test/abc/def"));
             th_response response = {0};
             TH_EXPECT(th_router_handle(&router, &request, &response) == TH_ERR_OK);
-            const char* param = th_find_pathvar(last_req, "path");
-            TH_EXPECT(param && strcmp(param, "abc/def") == 0);
+            required = (const th_keyval[]){
+                {.key = "path", .value = "abc/def"},
+            };
+            TH_EXPECT(success);
             th_request_deinit(&request);
         }
         th_router_deinit(&router);
@@ -122,10 +136,11 @@ TH_TEST_BEGIN(router)
             th_heap_string_set(&request.uri_path, TH_STRING("/test/abc/test2/def"));
             th_response response = {0};
             TH_EXPECT(th_router_handle(&router, &request, &response) == TH_ERR_OK);
-            const char* param = th_find_pathvar(last_req, "first");
-            TH_EXPECT(param && strcmp(param, "abc") == 0);
-            param = th_find_pathvar(last_req, "second");
-            TH_EXPECT(param && strcmp(param, "def") == 0);
+            required = (const th_keyval[]){
+                {.key = "first", .value = "abc"},
+                {.key = "second", .value = "def"},
+            };
+            TH_EXPECT(success);
             th_request_deinit(&request);
         }
         th_router_deinit(&router);
@@ -144,8 +159,10 @@ TH_TEST_BEGIN(router)
             th_heap_string_set(&request.uri_path, TH_STRING("/test/123"));
             th_response response = {0};
             TH_EXPECT(th_router_handle(&router, &request, &response) == TH_ERR_OK);
-            const char* id = th_find_pathvar(last_req, "id");
-            TH_EXPECT(strncmp(id, "123", 3) == 0);
+            required = (const th_keyval[]){
+                {.key = "id", .value = "123"},
+            };
+            TH_EXPECT(success);
             th_request_deinit(&request);
         }
         {

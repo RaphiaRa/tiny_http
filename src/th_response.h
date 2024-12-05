@@ -16,7 +16,7 @@
 // 3 = start line + headers + body
 #define TH_RESPONSE_MAX_CHUNK_NUM 3
 
-typedef struct th_resp {
+struct th_response {
     th_heap_string headers;
     th_heap_string body;
     th_iov iov[TH_RESPONSE_MAX_CHUNK_NUM];
@@ -29,7 +29,7 @@ typedef struct th_resp {
     bool is_file;
     // Set this to true if we have a HEAD request, so that we only write headers.
     bool only_headers;
-} th_response;
+};
 
 TH_PRIVATE(void)
 th_response_init(th_response* response, th_fcache* fcache, th_allocator* allocator);

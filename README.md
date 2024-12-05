@@ -12,7 +12,7 @@ tiny_http is my attempt at creating a lightweight, easy-to-use, and embeddable H
 #include "th.h"
 
 static th_err
-handler(void* userp, const th_req* req, th_resp* resp)
+handler(void* userp, const th_request* req, th_response* resp)
 {
     th_set_body(resp, "Hello, World!");
     th_add_header(resp, "Content-Type", "text/plain");
@@ -111,7 +111,7 @@ Example - Path capturing:
 #include "th.h"
 
 static th_err
-handler(void* userp, const th_req* req, th_resp* resp)
+handler(void* userp, const th_request* req, th_response* resp)
 {
     const char* msg = th_find_pathvar(req, "msg");
     th_printf_body(resp, "Hello, %s!", msg);
@@ -138,7 +138,7 @@ Example - File serving:
 #include "th.h"
 
 static th_err
-handle_path(void* userp, const th_req* req, th_resp* resp)
+handle_path(void* userp, const th_request* req, th_response* resp)
 {
     const char* path = th_find_pathvar(req, "path");
     th_set_body_from_file(resp, "root", path);
@@ -146,7 +146,7 @@ handle_path(void* userp, const th_req* req, th_resp* resp)
 }
 
 static th_err
-handle_index(void* userp, const th_req* req, th_resp* resp)
+handle_index(void* userp, const th_request* req, th_response* resp)
 {
     th_set_body_from_file(resp, "root", "index.html");
     return TH_ERR_OK;

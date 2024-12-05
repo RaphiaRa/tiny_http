@@ -1,5 +1,6 @@
 #include <th.h>
 
+#include <assert.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -14,15 +15,14 @@ sigint_handler(int signum)
 }
 
 static th_err
-handle_path(void* userp, const th_req* req, th_resp* resp)
+handle_path(void* userp, const th_request* req, th_response* resp)
 {
     (void)userp;
-    const char* path = th_find_pathvar(req, "path");
-    return th_set_body_from_file(resp, "root", path);
+    return th_set_body_from_file(resp, "root", th_find_pathvar(req, "path"));
 }
 
 static th_err
-handle_index(void* userp, const th_req* req, th_resp* resp)
+handle_index(void* userp, const th_request* req, th_response* resp)
 {
     (void)userp;
     (void)req;

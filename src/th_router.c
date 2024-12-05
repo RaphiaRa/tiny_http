@@ -167,12 +167,7 @@ th_router_do_handle(th_router* router, th_method method, th_request* request, th
     }
     if (dry)
         return TH_ERR_OK;
-    th_resp* resp = (th_resp*)response;
-    th_req req = {0};
-    th_err err = TH_ERR_OK;
-    if ((err = th_request_setup_public(request, &req)) != TH_ERR_OK)
-        return err;
-    return handler.handler(handler.user_data, &req, resp);
+    return handler.handler(handler.user_data, request, response);
 }
 
 TH_PRIVATE(th_err)

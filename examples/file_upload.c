@@ -14,11 +14,11 @@ sigint_handler(int signum)
 }
 
 static th_err
-handler(void* userp, const th_req* req, th_resp* resp)
+handler(void* userp, const th_request* req, th_response* resp)
 {
     (void)userp;
-    for (size_t i = 0; i < req->num_uploads; i++) {
-        const th_upload* upload = req->uploads[i];
+    for (th_iter it = th_upload_iter(req); th_next(&it);) {
+        const th_upload* upload = th_val(&it);
         th_upload_info info = th_upload_get_info(upload);
         th_err err = TH_ERR_OK;
         if ((err = th_upload_save(upload, "upload_dir", info.filename)) != TH_ERR_OK) {

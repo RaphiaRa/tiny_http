@@ -225,85 +225,91 @@ typedef struct th_upload_info {
     size_t size;
 } th_upload_info;
 
-typedef struct th_keyval {
-    const char* key;
-    const char* value;
-} th_keyval;
+typedef struct th_iter_methods th_iter_methods;
 
-typedef struct th_req {
-    const char* path;
-    const char* query;
-    const th_keyval* cookies;
-    const th_keyval* headers;
-    const th_keyval* queryvars;
-    const th_keyval* formvars;
-    const th_keyval* pathvars;
-    const th_upload** uploads;
-    size_t num_cookies;
-    size_t num_headers;
-    size_t num_queryvars;
-    size_t num_formvars;
-    size_t num_pathvars;
-    size_t num_uploads;
-    th_buffer body;
-    th_method method;
-    th_prot_version version;
-} th_req;
+typedef struct th_iter {
+    th_iter_methods* methods;
+    const void* ptr;
+    const void* end;
+} th_iter;
 
-th_upload* th_find_upload(const th_req* req, const char* name);
+bool th_next(th_iter* it);
+const char* th_key(const th_iter* it);
+const void* th_val(const th_iter* it);
+const char* th_cval(const th_iter* it);
+
+typedef struct th_request th_request;
+
+const th_upload* th_find_upload(const th_request* req, const char* name);
 th_upload_info th_upload_get_info(const th_upload* upload);
 th_buffer th_upload_get_data(const th_upload* upload);
 th_err th_upload_save(const th_upload* upload, const char* dir_label, const char* filepath);
+th_iter th_upload_iter(const th_request* req);
 
-const char* th_find_header(const th_req* req, const char* name);
-const char* th_find_cookie(const th_req* req, const char* name);
-const char* th_find_queryvar(const th_req* req, const char* name);
-const char* th_find_formvar(const th_req* req, const char* name);
-const char* th_find_pathvar(const th_req* req, const char* name);
+const char* th_find_header(const th_request* req, const char* name);
+th_iter th_header_iter(const th_request* req);
+
+const char* th_find_cookie(const th_request* req, const char* name);
+th_iter th_cookie_iter(const th_request* req);
+
+const char* th_find_queryvar(const th_request* req, const char* name);
+th_iter th_queryvar_iter(const th_request* req);
+
+const char* th_find_formvar(const th_request* req, const char* name);
+th_iter th_formvar_iter(const th_request* req);
+
+const char* th_find_pathvar(const th_request* req, const char* name);
+th_iter th_pathvar_iter(const th_request* req);
+
+const char* th_get_path(const th_request* req);
+const char* th_get_query(const th_request* req);
+th_buffer th_get_body(const th_request* req);
+th_method th_get_method(const th_request* req);
+th_prot_version th_get_version(const th_request* req);
 
 /* request related declarations end */
 /* response related declarations begin */
 
-typedef struct th_resp th_resp;
+typedef struct th_response th_response;
 
 /** th_printf_body
  * @brief Set the body of the response from a printf-style format string.
  */
-th_err th_printf_body(th_resp* resp, const char* fmt, ...);
+th_err th_printf_body(th_response* resp, const char* fmt, ...);
 
 /** th_set_body_from_file
  * @brief Set the body of the response from a file.
  * @param dir_label Label of the root directory to use.
  * @param filepath Path to the file (relative to the root directory).
  */
-th_err th_set_body_from_file(th_resp* resp, const char* dir_label, const char* filepath);
+th_err th_set_body_from_file(th_response* resp, const char* dir_label, const char* filepath);
 
 /** th_set_body_from_buffer
  * @brief Set the body of the response from a buffer.
  */
-th_err th_set_body_from_buffer(th_resp* resp, th_buffer buffer);
+th_err th_set_body_from_buffer(th_response* resp, th_buffer buffer);
 
 /** th_set_body
  * @brief Set the body of the response from a null-terminated string.
  */
-th_err th_set_body(th_resp* resp, const char* body);
+th_err th_set_body(th_response* resp, const char* body);
 
 /** th_add_header
  * @brief Add a header to the response, where key and value are null-terminated strings.
  * If the header was already added it will be added again and NOT replaced.
  */
-th_err th_add_header(th_resp* resp, const char* key, const char* value);
+th_err th_add_header(th_response* resp, const char* key, const char* value);
 
 /** th_add_cookie
  * @brief Add a cookie to the response, where key and value are null-terminated strings.
  * If the cookie was already added it will be added again and NOT replaced.
  */
-th_err th_add_cookie(th_resp* resp, const char* key, const char* value, th_cookie_attr* attr);
+th_err th_add_cookie(th_response* resp, const char* key, const char* value, th_cookie_attr* attr);
 
 /** th_handler
  * @brief Request handler function, called when a request is received.
  */
-typedef th_err (*th_handler)(void* userp, const th_req* req, th_resp* resp);
+typedef th_err (*th_handler)(void* userp, const th_request* req, th_response* resp);
 
 typedef struct th_server th_server;
 

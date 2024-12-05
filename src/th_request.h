@@ -10,6 +10,12 @@
 #include "th_upload.h"
 #include "th_vec.h"
 
+struct th_iter_methods {
+    bool (*next)(th_iter* it);
+    const char* (*key)(const th_iter* it);
+    const void* (*val)(const th_iter* it);
+};
+
 typedef struct th_hstr_pair {
     th_heap_string key;
     th_heap_string value;
@@ -24,13 +30,9 @@ th_hstr_pair_deinit(th_hstr_pair* pair)
 
 TH_DEFINE_VEC(th_hstr_vec, th_hstr_pair, th_hstr_pair_deinit)
 
-TH_DEFINE_VEC(th_keyval_vec, th_keyval, (void))
-
 TH_DEFINE_VEC(th_upload_vec, th_upload, th_upload_deinit)
 
-TH_DEFINE_VEC(th_upload_ptr_vec, const th_upload*, (void))
-
-typedef struct th_request {
+struct th_request {
     th_allocator* allocator;
     th_fcache* fcache;
     th_heap_string uri_path;
@@ -41,13 +43,11 @@ typedef struct th_request {
     th_hstr_vec queryvars;
     th_hstr_vec formvars;
     th_hstr_vec pathvars;
-    th_keyval_vec keyvals;
-    th_upload_ptr_vec upload_ptrs;
     th_string body;
     th_method method;
     int version;
     bool close;
-} th_request;
+};
 
 TH_PRIVATE(void)
 th_request_init(th_request* request, th_fcache* fcache, th_allocator* allocator);
@@ -108,8 +108,5 @@ th_request_get_formvar(th_request* request, th_string key) TH_MAYBE_UNUSED;
 
 TH_PRIVATE(th_upload*)
 th_request_get_upload(th_request* request, th_string key) TH_MAYBE_UNUSED;
-
-TH_PRIVATE(th_err)
-th_request_setup_public(th_request* request, th_req* public_request);
 
 #endif

@@ -3,12 +3,15 @@
 
 #include <string.h>
 
-static const th_keyval* required = NULL;
+static const struct keyval {
+    const char* key;
+    const char* value;
+}* required = NULL;
 static size_t num_required = 0;
 static bool success = true;
 
 static th_err
-mock_handler(void* user_data, const th_req* req, th_resp* resp)
+mock_handler(void* user_data, const th_request* req, th_response* resp)
 {
     (void)user_data;
     (void)resp;
@@ -101,7 +104,7 @@ TH_TEST_BEGIN(router)
             th_heap_string_set(&request.uri_path, TH_STRING("/test/abc"));
             th_response response = {0};
             TH_EXPECT(th_router_handle(&router, &request, &response) == TH_ERR_OK);
-            required = (const th_keyval[]){
+            required = (const struct keyval[]){
                 {.key = "path", .value = "abc"},
             };
             TH_EXPECT(success);
@@ -114,7 +117,7 @@ TH_TEST_BEGIN(router)
             th_heap_string_set(&request.uri_path, TH_STRING("/test/abc/def"));
             th_response response = {0};
             TH_EXPECT(th_router_handle(&router, &request, &response) == TH_ERR_OK);
-            required = (const th_keyval[]){
+            required = (const struct keyval[]){
                 {.key = "path", .value = "abc/def"},
             };
             TH_EXPECT(success);
@@ -136,7 +139,7 @@ TH_TEST_BEGIN(router)
             th_heap_string_set(&request.uri_path, TH_STRING("/test/abc/test2/def"));
             th_response response = {0};
             TH_EXPECT(th_router_handle(&router, &request, &response) == TH_ERR_OK);
-            required = (const th_keyval[]){
+            required = (const struct keyval[]){
                 {.key = "first", .value = "abc"},
                 {.key = "second", .value = "def"},
             };
@@ -159,7 +162,7 @@ TH_TEST_BEGIN(router)
             th_heap_string_set(&request.uri_path, TH_STRING("/test/123"));
             th_response response = {0};
             TH_EXPECT(th_router_handle(&router, &request, &response) == TH_ERR_OK);
-            required = (const th_keyval[]){
+            required = (const struct keyval[]){
                 {.key = "id", .value = "123"},
             };
             TH_EXPECT(success);

@@ -14,7 +14,7 @@ sigint_handler(int signum)
 }
 
 static th_err
-handler(void* userp, const th_req* req, th_resp* resp)
+handler(void* userp, const th_request* req, th_response* resp)
 {
     (void)userp;
     (void)req;
@@ -22,6 +22,7 @@ handler(void* userp, const th_req* req, th_resp* resp)
     th_add_header(resp, "Content-Type", "text/plain");
     return TH_ERR_OK;
 }
+
 
 int main(void)
 {

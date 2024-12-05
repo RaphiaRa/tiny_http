@@ -26,10 +26,10 @@
     NAME##_deinit(NAME* vec) TH_MAYBE_UNUSED;                                                              \
                                                                                                            \
     TH_INLINE(size_t)                                                                                      \
-    NAME##_size(NAME* vec) TH_MAYBE_UNUSED;                                                                \
+    NAME##_size(const NAME* vec) TH_MAYBE_UNUSED;                                                          \
                                                                                                            \
     TH_INLINE(size_t)                                                                                      \
-    NAME##_capacity(NAME* vec) TH_MAYBE_UNUSED;                                                            \
+    NAME##_capacity(const NAME* vec) TH_MAYBE_UNUSED;                                                      \
                                                                                                            \
     TH_INLINE(th_err)                                                                                      \
     NAME##_resize(NAME* vec, size_t size) TH_MAYBE_UNUSED;                                                 \
@@ -39,6 +39,9 @@
                                                                                                            \
     TH_INLINE(TYPE*)                                                                                       \
     NAME##_at(NAME* vec, size_t index) TH_MAYBE_UNUSED;                                                    \
+                                                                                                           \
+    TH_INLINE(const TYPE*)                                                                                 \
+    NAME##_cat(const NAME* vec, size_t index) TH_MAYBE_UNUSED;                                             \
                                                                                                            \
     TH_INLINE(TYPE*)                                                                                       \
     NAME##_begin(NAME* vec) TH_MAYBE_UNUSED;                                                               \
@@ -78,13 +81,13 @@
     }                                                                                                      \
                                                                                                            \
     TH_INLINE(size_t)                                                                                      \
-    NAME##_size(NAME* vec)                                                                                 \
+    NAME##_size(const NAME* vec)                                                                           \
     {                                                                                                      \
         return vec->size;                                                                                  \
     }                                                                                                      \
                                                                                                            \
     TH_INLINE(size_t)                                                                                      \
-    NAME##_capacity(NAME* vec)                                                                             \
+    NAME##_capacity(const NAME* vec)                                                                       \
     {                                                                                                      \
         return vec->capacity;                                                                              \
     }                                                                                                      \
@@ -127,6 +130,13 @@
                                                                                                            \
     TH_INLINE(TYPE*)                                                                                       \
     NAME##_at(NAME* vec, size_t index)                                                                     \
+    {                                                                                                      \
+        TH_ASSERT(index <= vec->size);                                                                     \
+        return vec->data + index;                                                                          \
+    }                                                                                                      \
+                                                                                                           \
+    TH_INLINE(const TYPE*)                                                                                 \
+    NAME##_cat(const NAME* vec, size_t index)                                                              \
     {                                                                                                      \
         TH_ASSERT(index <= vec->size);                                                                     \
         return vec->data + index;                                                                          \

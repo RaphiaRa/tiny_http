@@ -22,29 +22,25 @@ const char* method_strings[] = {
 };
 
 static th_err
-handler(void* userp, const th_req* req, th_resp* resp)
+handler(void* userp, const th_request* req, th_response* resp)
 {
     (void)userp;
     size_t buf_len = 16 * 1024;
     char* buf = malloc(buf_len);
     size_t len = 0;
     len += (size_t)snprintf(buf, buf_len, "Method: %s\nPath: %s\nQuery: %s\nHeaders:\n",
-                            method_strings[req->method], req->path, req->query);
-    for (size_t i = 0; i < req->num_headers; i++) {
-        len += (size_t)snprintf(buf + len, buf_len - len, "  %s: %s\n",
-                                req->headers[i].key, req->headers[i].value);
+                            method_strings[th_get_method(req)], th_get_path(req), th_get_query(req));
+    for (th_iter it = th_header_iter(req); th_next(&it);) {
+        len += (size_t)snprintf(buf + len, buf_len - len, "  %s: %s\n", th_key(&it), th_cval(&it));
     }
-    for (size_t i = 0; i < req->num_cookies; i++) {
-        len += (size_t)snprintf(buf + len, buf_len - len, "  Cookie %zu: %s=%s\n",
-                                i, req->cookies[i].key, req->cookies[i].value);
+    for (th_iter it = th_cookie_iter(req); th_next(&it);) {
+        len += (size_t)snprintf(buf + len, buf_len - len, "  Cookie %s: %s\n", th_key(&it), th_cval(&it));
     }
-    for (size_t i = 0; i < req->num_queryvars; i++) {
-        len += (size_t)snprintf(buf + len, buf_len - len, "  Query var %zu: %s=%s\n",
-                                i, req->queryvars[i].key, req->queryvars[i].value);
+    for (th_iter it = th_queryvar_iter(req); th_next(&it);) {
+        len += (size_t)snprintf(buf + len, buf_len - len, "  Query var %s: %s\n", th_key(&it), th_cval(&it));
     }
-    for (size_t i = 0; i < req->num_formvars; i++) {
-        len += (size_t)snprintf(buf + len, buf_len - len, "  Form var %zu: %s=%s\n",
-                                i, req->formvars[i].key, req->formvars[i].value);
+    for (th_iter it = th_formvar_iter(req); th_next(&it);) {
+        len += (size_t)snprintf(buf + len, buf_len - len, "  Form var %s: %s\n", th_key(&it), th_cval(&it));
     }
     th_set_body(resp, buf);
     th_add_header(resp, "Content-Type", "text/plain; charset=utf-8");

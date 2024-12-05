@@ -233,9 +233,19 @@ typedef struct th_iter {
     const void* end;
 } th_iter;
 
+/** th_next
+ * @brief Move the iterator to the next element.
+ * @return True if there is a next element, false otherwise.
+ */
 bool th_next(th_iter* it);
+
+// Returns the key associated with the current element.
 const char* th_key(const th_iter* it);
+
+// Returns the value associated with the current element.
 const void* th_val(const th_iter* it);
+
+// Same as (const char*)th_val(it)
 const char* th_cval(const th_iter* it);
 
 typedef struct th_request th_request;

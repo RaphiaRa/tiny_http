@@ -280,6 +280,7 @@ th_file_stat_hash_posix(th_file* stream)
     hash = FSTAT_HASH_NEXT(hash, (uint32_t)st.st_ino);
     hash = FSTAT_HASH_NEXT(hash, (uint32_t)st.st_uid);
     hash = FSTAT_HASH_NEXT(hash, (uint32_t)st.st_gid);
+    hash = FSTAT_HASH_NEXT(hash, (uint32_t)(st.st_nlink != 0));
     return hash;
 }
 #elif defined(TH_CONFIG_OS_WIN)

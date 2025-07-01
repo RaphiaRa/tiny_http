@@ -19,17 +19,15 @@ th_http_error(th_err err)
     switch (TH_ERR_CATEGORY(err)) {
     case TH_ERR_CATEGORY_SYSTEM:
         switch (TH_ERR_CODE(err)) {
-            {
-            case TH_ENOENT:
-                return TH_ERR_HTTP(TH_CODE_NOT_FOUND);
-                break;
-            case TH_ETIMEDOUT:
-                return TH_ERR_HTTP(TH_CODE_REQUEST_TIMEOUT);
-                break;
-            default:
-                return TH_ERR_HTTP(TH_CODE_INTERNAL_SERVER_ERROR);
-                break;
-            }
+        case TH_ENOENT:
+            return TH_ERR_HTTP(TH_CODE_NOT_FOUND);
+            break;
+        case TH_ETIMEDOUT:
+            return TH_ERR_HTTP(TH_CODE_REQUEST_TIMEOUT);
+            break;
+        default:
+            return TH_ERR_HTTP(TH_CODE_INTERNAL_SERVER_ERROR);
+            break;
         }
         break;
     case TH_ERR_CATEGORY_HTTP:

@@ -58,7 +58,7 @@ th_default_allocator_set(th_allocator* allocator)
 
 /* th_arena_allocator implementation begin */
 
-TH_PRIVATE(void*)
+TH_LOCAL(void*)
 th_arena_allocator_alloc(void* self, size_t size)
 {
     th_arena_allocator* allocator = self;
@@ -73,7 +73,7 @@ th_arena_allocator_alloc(void* self, size_t size)
     return ptr;
 }
 
-TH_PRIVATE(void*)
+TH_LOCAL(void*)
 th_arena_allocator_realloc(void* self, void* ptr, size_t size)
 {
     th_arena_allocator* allocator = self;
@@ -103,7 +103,7 @@ th_arena_allocator_realloc(void* self, void* ptr, size_t size)
     return newp;
 }
 
-static void
+TH_LOCAL(void)
 th_arena_allocator_free(void* self, void* ptr)
 {
     th_arena_allocator* allocator = self;
@@ -124,7 +124,7 @@ th_arena_allocator_init_with_alignment(th_arena_allocator* allocator, void* buf,
     allocator->base.realloc = th_arena_allocator_realloc;
     allocator->base.free = th_arena_allocator_free;
     allocator->allocator = fallback;
-    allocator->alignment = alignment;
+    allocator->alignment = (uint16_t)alignment;
     void* aligned = TH_ALIGNAS(alignment, buf);
     allocator->size = size - (size_t)((uint8_t*)aligned - (uint8_t*)buf);
     allocator->buf = aligned;

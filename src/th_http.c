@@ -57,7 +57,7 @@ th_http_write_error_response(th_http* http, th_err err)
     th_response_set_code(&http->response, TH_ERR_CODE(err));
     if (th_heap_string_len(&http->request.uri_path) == 0) {
         // Set default error message
-        th_printf_body(&http->response, "%d %s", TH_ERR_CODE(err), th_http_strerror(err));
+        th_printf_body(&http->response, "%d %s", TH_ERR_CODE(err), th_http_strerror((int)err));
     }
     if (http->close) {
         th_response_add_header(&http->response, TH_STRING("Connection"), TH_STRING("close"));
@@ -292,7 +292,7 @@ th_http_start(void* self)
     th_socket_async_read(th_conn_get_socket(http->conn), th_buf_vec_at(&http->buf, 0), th_buf_vec_size(&http->buf), &http->io_handler.base);
 }
 
-TH_PRIVATE(void)
+TH_LOCAL(void)
 th_http_init(th_http* http, const th_conn_tracker* tracker, th_conn* conn,
              th_router* router, th_fcache* fcache, th_allocator* allocator)
 {
@@ -313,7 +313,7 @@ th_http_init(th_http* http, const th_conn_tracker* tracker, th_conn* conn,
     http->close = TH_HTTP_KEEP_ALIVE;
 }
 
-TH_PRIVATE(th_err)
+TH_LOCAL(th_err)
 th_http_create(th_http** out, const th_conn_tracker* tracker, th_conn* conn,
                th_router* router, th_fcache* fcache, th_allocator* allocator)
 {
@@ -325,7 +325,7 @@ th_http_create(th_http** out, const th_conn_tracker* tracker, th_conn* conn,
     return TH_ERR_OK;
 }
 
-TH_PRIVATE(void)
+TH_LOCAL(void)
 th_http_upgrader_upgrade(void* self, th_conn* conn)
 {
     th_http_upgrader* upgrader = self;

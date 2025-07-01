@@ -54,7 +54,7 @@ th_main_allocator_alloc(void* self, size_t size)
     }
     if (!ptr)
         return NULL;
-    ((uint32_t*)ptr)[0] = size;
+    ((uint32_t*)ptr)[0] = (uint32_t)size;
     return (char*)ptr + ptr_offset;
 }
 

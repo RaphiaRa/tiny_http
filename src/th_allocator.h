@@ -37,7 +37,7 @@ typedef struct th_arena_allocator {
     size_t size;
     size_t pos;
     size_t prev_pos;
-    unsigned int alignment;
+    uint16_t alignment;
 } th_arena_allocator;
 
 /** th_arena_allocator_init

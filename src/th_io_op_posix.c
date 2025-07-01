@@ -37,7 +37,7 @@ th_io_op_posix_readv(void* self, size_t* result)
     th_err err = TH_ERR_OK;
     th_io_task* iot = self;
     th_iov* iov = iot->addr;
-    ssize_t ret = readv(iot->fd, (struct iovec*)iov, iot->len);
+    ssize_t ret = readv(iot->fd, (struct iovec*)iov, (int)iot->len);
     if (ret < 0)
         err = TH_ERR_SYSTEM(errno);
     else if (ret == 0)
@@ -64,7 +64,7 @@ th_io_op_posix_writev(void* self, size_t* result)
     th_err err = TH_ERR_OK;
     th_io_task* iot = self;
     th_iov* iov = iot->addr;
-    ssize_t ret = writev(iot->fd, (struct iovec*)iov, iot->len);
+    ssize_t ret = writev(iot->fd, (struct iovec*)iov, (int)iot->len);
     if (ret < 0)
         err = TH_ERR_SYSTEM(errno);
     (*result) = (size_t)ret;
@@ -98,7 +98,7 @@ th_io_op_posix_sendv(void* self, size_t* result)
 #endif
     struct msghdr msg = {0};
     msg.msg_iov = iot->addr;
-    msg.msg_iovlen = iot->len;
+    msg.msg_iovlen = (int)iot->len;
     ssize_t ret = sendmsg(iot->fd, &msg, flags);
     if (ret < 0)
         err = TH_ERR_SYSTEM(errno);
@@ -146,11 +146,11 @@ th_io_op_posix_sendfile_mmap(void* self, size_t* result)
 #endif
     struct msghdr msg = {0};
     msg.msg_iov = vec;
-    msg.msg_iovlen = veclen;
+    msg.msg_iovlen = (int)veclen;
     ssize_t ret = sendmsg(iot->fd, &msg, flags);
     if (ret < 0)
         err = TH_ERR_SYSTEM(errno);
-    *result = ret;
+    *result = (size_t)ret;
     return err;
 }
 
@@ -171,7 +171,7 @@ th_io_op_posix_sendfile_buffered(void* self, size_t* result)
         }
     }
     size_t toread = TH_MIN(sizeof(buffer), iot->len2);
-    ssize_t readlen = pread(((th_file*)iot->addr2)->fd, buffer, toread, iot->offset);
+    ssize_t readlen = pread(((th_file*)iot->addr2)->fd, buffer, toread, (off_t)iot->offset);
     if (readlen < 0)
         return TH_ERR_SYSTEM(errno);
     int flags = 0;
@@ -183,7 +183,7 @@ th_io_op_posix_sendfile_buffered(void* self, size_t* result)
     veclen++;
     struct msghdr msg = {0};
     msg.msg_iov = vec;
-    msg.msg_iovlen = veclen;
+    msg.msg_iovlen = (int)veclen;
     ssize_t writelen = sendmsg(iot->fd, &msg, flags);
     if (writelen < 0)
         return TH_ERR_SYSTEM(errno);

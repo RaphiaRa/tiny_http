@@ -209,7 +209,7 @@ TH_LOCAL(void)
 th_poll_service_run(void* self, int timeout_ms)
 {
     th_poll_service* service = (th_poll_service*)self;
-    nfds_t nfds = th_pollfd_vec_size(&service->fds);
+    nfds_t nfds = (nfds_t)th_pollfd_vec_size(&service->fds);
     int ret = poll(th_pollfd_vec_begin(&service->fds), nfds, timeout_ms);
     if (ret <= 0) {
         if (ret == -1)

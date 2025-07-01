@@ -36,13 +36,13 @@ th_date_now(void)
     struct tm tm = {0};
     gmtime_r(&t, &tm);
     th_date date = {0};
-    date.year = tm.tm_year;
-    date.month = tm.tm_mon;
-    date.day = tm.tm_mday;
-    date.weekday = tm.tm_wday;
-    date.hour = tm.tm_hour;
-    date.minute = tm.tm_min;
-    date.second = tm.tm_sec;
+    date.year = (unsigned int)tm.tm_year;
+    date.month = (unsigned int)tm.tm_mon;
+    date.day = (unsigned int)tm.tm_mday;
+    date.weekday = (unsigned int)tm.tm_wday;
+    date.hour = (unsigned int)tm.tm_hour;
+    date.minute = (unsigned int)tm.tm_min;
+    date.second = (unsigned int)tm.tm_sec;
     return date;
 }
 

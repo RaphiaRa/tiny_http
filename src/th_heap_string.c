@@ -7,7 +7,7 @@
 
 #define TH_HEAP_STRING_SMALL (sizeof(char*) + sizeof(size_t) + sizeof(size_t) - 2)
 #define TH_HEAP_STRING_ALIGNUP(size) TH_ALIGNUP(size, 16)
-TH_PRIVATE(void)
+TH_LOCAL(void)
 th_detail_small_string_init(th_detail_small_string* self, th_allocator* allocator)
 {
     self->small = 1;
@@ -39,7 +39,7 @@ th_detail_small_string_set(th_detail_small_string* self, th_string str)
     if (str.len > 0)
         memcpy(self->buf, str.ptr, str.len);
     self->buf[str.len] = '\0';
-    self->len = str.len;
+    self->len = (unsigned char)str.len;
 }
 
 TH_LOCAL(th_err)
@@ -159,7 +159,7 @@ th_detail_small_string_resize(th_detail_small_string* self, size_t new_len, char
 {
     TH_ASSERT(new_len <= TH_HEAP_STRING_SMALL_MAX_LEN && "Invalid length");
     memset(self->buf + self->len, fill, new_len - self->len);
-    self->len = new_len;
+    self->len = (unsigned char)new_len;
     self->buf[new_len] = '\0';
 }
 

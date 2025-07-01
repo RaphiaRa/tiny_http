@@ -21,10 +21,10 @@ th_io_op_bsd_sendfile(void* self, size_t* result)
     off_t len = (off_t)iot->len2;
     int ret = 0;
     if (iot->len == 0) {
-        ret = sendfile(((th_file*)iot->addr2)->fd, iot->fd, iot->offset, &len, NULL, 0);
+        ret = sendfile(((th_file*)iot->addr2)->fd, iot->fd, (off_t)iot->offset, &len, NULL, 0);
     } else {
-        struct sf_hdtr hdtr = {.headers = (struct iovec*)iov, .hdr_cnt = iot->len, .trailers = NULL, .trl_cnt = 0};
-        ret = sendfile(((th_file*)iot->addr2)->fd, iot->fd, iot->offset, &len, &hdtr, 0);
+        struct sf_hdtr hdtr = {.headers = (struct iovec*)iov, .hdr_cnt = (int)iot->len, .trailers = NULL, .trl_cnt = 0};
+        ret = sendfile(((th_file*)iot->addr2)->fd, iot->fd, (off_t)iot->offset, &len, &hdtr, 0);
     }
     th_err err = TH_ERR_OK;
     if (ret < 0 && len == 0) {

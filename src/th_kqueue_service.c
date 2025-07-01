@@ -111,7 +111,7 @@ th_kqueue_service_run(void* self, int timeout_ms)
             TH_ASSERT(0 && "Invalid filter");
             break;
         }
-        int idx = op_type - 1;
+        int idx = (int)(op_type - 1);
         if (handle->iot[idx]) {
             if (evlist[i].flags & EV_ERROR) {
                 th_runner_push_uncounted_task(service->runner, (th_task*)th_io_task_abort(TH_MOVE_PTR(handle->iot[idx]), TH_ERR_SYSTEM(errno)));

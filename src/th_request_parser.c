@@ -242,7 +242,7 @@ th_request_parser_do_path(th_request_parser* parser, th_request* request, th_str
     return TH_ERR_OK;
 }
 
-TH_PRIVATE(th_err)
+TH_LOCAL(th_err)
 th_request_parser_do_version(th_request_parser* parser, th_request* request, th_string buffer, size_t* parsed)
 {
     size_t n = th_string_find_first(buffer, 0, '\r');
@@ -275,7 +275,7 @@ th_request_parser_do_version(th_request_parser* parser, th_request* request, th_
     return TH_ERR_OK;
 }
 
-TH_PRIVATE(th_err)
+TH_LOCAL(th_err)
 th_request_parse_handle_header(th_request_parser* parser, th_request* request, th_string name, th_string value)
 {
     char arena[1024] = {0};
@@ -330,7 +330,7 @@ th_request_parser_parse_header_line(th_string line, th_string* out_name, th_stri
     return TH_ERR_OK;
 }
 
-TH_PRIVATE(th_err)
+TH_LOCAL(th_err)
 th_request_parser_do_header(th_request_parser* parser, th_request* request, th_string buffer, size_t* parsed)
 {
     size_t n = th_string_find_first(buffer, 0, '\r');
@@ -525,8 +525,8 @@ th_request_parser_multipart_do_next(th_request* request, th_string buffer, th_st
         // check the boundary
         if (buffer.ptr[0] != '\r' || buffer.ptr[1] != '\n')
             return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
-        th_string boundary = th_string_substr(buffer, 2, th_request_parser_multipart_find_eol(buffer, 0));
-        if (!th_request_parser_multipart_is_boundary_line(boundary, boundary, &last))
+        th_string line = th_string_substr(buffer, 2, th_request_parser_multipart_find_eol(buffer, 0));
+        if (!th_request_parser_multipart_is_boundary_line(line, boundary, &last))
             return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
         buffer = th_string_substr(buffer, content_len + boundary.len + 2, th_string_npos);
     } else {
@@ -597,8 +597,7 @@ th_request_parser_do_multipart_form_data(th_request* request, th_string body)
     body = th_string_substr(body, pos + 2, th_string_npos);
     do {
         size_t parsed = 0;
-        th_err err = th_request_parser_multipart_do_next(request, body, boundary, &parsed);
-        if (err != TH_ERR_OK) {
+        if ((err = th_request_parser_multipart_do_next(request, body, boundary, &parsed)) != TH_ERR_OK) {
             return err;
         }
         body = th_string_substr(body, parsed, th_string_npos);
@@ -606,7 +605,7 @@ th_request_parser_do_multipart_form_data(th_request* request, th_string body)
     return TH_ERR_OK;
 }
 
-TH_PRIVATE(th_err)
+TH_LOCAL(th_err)
 th_request_parser_do_body(th_request_parser* parser, th_request* request, th_string buffer, size_t* parsed)
 {
     if (buffer.len < parser->content_len) {

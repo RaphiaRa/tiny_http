@@ -171,7 +171,7 @@ th_response_set_body_va(th_response* response, const char* fmt, va_list args)
         }
     } else {
         th_heap_string_resize(&response->body, (size_t)len, ' ');
-        vsnprintf(th_heap_string_at(&response->body, 0), len, fmt, args);
+        vsnprintf(th_heap_string_at(&response->body, 0), (size_t)len, fmt, args);
     }
     response->is_file = 0;
     return TH_ERR_OK;
@@ -193,7 +193,7 @@ th_response_finalize_headers(th_response* response)
         return err;
     if ((err = th_heap_string_append(&response->headers, TH_STRING(" "))) != TH_ERR_OK)
         return err;
-    if ((err = th_heap_string_append_cstr(&response->headers, th_http_strerror(response->code))) != TH_ERR_OK)
+    if ((err = th_heap_string_append_cstr(&response->headers, th_http_strerror((int)response->code))) != TH_ERR_OK)
         return err;
     if ((err = th_heap_string_append(&response->headers, TH_STRING("\r\n"))) != TH_ERR_OK)
         return err;
@@ -211,12 +211,12 @@ th_response_set_default_headers(th_response* response)
     char buffer[256];
     if (response->is_file) {
         size_t len = 0;
-        const char* content_len = th_fmt_uint_to_str_ex(buffer, sizeof(buffer), response->file_len, &len);
+        const char* content_len = th_fmt_uint_to_str_ex(buffer, sizeof(buffer), (unsigned int)response->file_len, &len);
         if ((err = th_response_add_header(response, TH_STRING("Content-Length"), th_string_make(content_len, len))) != TH_ERR_OK)
             return err;
     } else {
         size_t len = 0;
-        const char* body_len = th_fmt_uint_to_str_ex(buffer, sizeof(buffer), th_heap_string_len(&response->body), &len);
+        const char* body_len = th_fmt_uint_to_str_ex(buffer, sizeof(buffer), (unsigned int)th_heap_string_len(&response->body), &len);
         if ((err = th_response_add_header(response, TH_STRING("Content-Length"), th_string_make(body_len, len))) != TH_ERR_OK)
             return err;
     }

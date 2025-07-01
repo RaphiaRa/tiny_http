@@ -14,7 +14,7 @@ th_io_op_mock_read(void* self, size_t* result)
         return TH_ERR_SYSTEM(-r);
     else if (r == 0)
         return TH_ERR_EOF;
-    *result = r;
+    *result = (size_t)r;
     return TH_ERR_OK;
 }
 
@@ -35,7 +35,7 @@ th_io_op_mock_readv(void* self, size_t* result)
             err = TH_ERR_EOF;
             break;
         }
-        *result += r;
+        *result += (size_t)r;
     }
     return err;
 }
@@ -65,7 +65,7 @@ th_io_op_mock_writev(void* self, size_t* result)
                 err = TH_ERR_SYSTEM(-r);
             break;
         }
-        *result += r;
+        *result += (size_t)r;
     }
     return err;
 }

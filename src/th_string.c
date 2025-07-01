@@ -26,7 +26,7 @@ th_string_to_uint(th_string str, unsigned int* out)
     for (size_t i = 0; i < str.len; i++) {
         if (str.ptr[i] < '0' || str.ptr[i] > '9')
             return TH_ERR_INVALID_ARG;
-        *out = *out * 10 + (str.ptr[i] - '0');
+        *out = *out * 10 + (unsigned int)(str.ptr[i] - '0');
     }
     return TH_ERR_OK;
 }

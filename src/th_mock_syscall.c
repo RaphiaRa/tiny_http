@@ -23,12 +23,12 @@ static int th_mock_close_default(void)
 static int th_mock_read_default(void* buf, size_t len)
 {
     (void)buf;
-    return len;
+    return (int)len;
 }
 
 static int th_mock_write_default(size_t len)
 {
-    return (size_t)len;
+    return (int)len;
 }
 
 static int th_mock_settime_default(void)

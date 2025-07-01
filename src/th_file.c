@@ -31,7 +31,7 @@ th_file_mmap_mmap_posix(th_file_mmap* view, th_file* file, size_t offset, size_t
 {
     size_t page_size = (size_t)sysconf(_SC_PAGESIZE);
     size_t moffset = TH_ALIGNDOWN(offset, page_size);
-    void* addr = mmap(NULL, len, PROT_READ, MAP_PRIVATE, file->fd, moffset);
+    void* addr = mmap(NULL, len, PROT_READ, MAP_PRIVATE, file->fd, (off_t)moffset);
     if (addr == MAP_FAILED) {
         return TH_ERR_SYSTEM(errno);
     }
@@ -194,7 +194,7 @@ TH_PRIVATE(th_err)
 th_file_read(th_file* stream, void* addr, size_t len, size_t offset, size_t* read)
 {
 #if defined(TH_CONFIG_OS_POSIX)
-    off_t ret = pread(stream->fd, addr, len, offset);
+    off_t ret = pread(stream->fd, addr, len, (off_t)offset);
     if (ret == -1) {
         *read = 0;
         return TH_ERR_SYSTEM(errno);
@@ -216,7 +216,7 @@ TH_PRIVATE(th_err)
 th_file_write(th_file* stream, const void* addr, size_t len, size_t offset, size_t* written)
 {
 #if defined(TH_CONFIG_OS_POSIX)
-    off_t ret = pwrite(stream->fd, addr, len, offset);
+    off_t ret = pwrite(stream->fd, addr, len, (off_t)offset);
     if (ret == -1) {
         *written = 0;
         return TH_ERR_SYSTEM(errno);

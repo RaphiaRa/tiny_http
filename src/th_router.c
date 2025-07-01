@@ -247,16 +247,15 @@ th_router_add_route(th_router* router, th_method method, th_string path, th_hand
     while (1) {
         th_string name;
         th_capture_type type = TH_CAPTURE_TYPE_NONE;
-        th_err err = th_route_parse_trail(&trail, &name, &type);
-        if (err != TH_ERR_OK)
+        th_err err = TH_ERR_OK;
+        if ((err = th_route_parse_trail(&trail, &name, &type)) != TH_ERR_OK)
             return err;
         bool last = th_string_empty(trail);
         if (type == TH_CAPTURE_TYPE_PATH && !last)
             return TH_ERR_INVALID_ARG;
 
         if (route == NULL) {
-            th_err err = th_route_create(&route, type, name, router->allocator);
-            if (err != TH_ERR_OK)
+            if ((err = th_route_create(&route, type, name, router->allocator)) != TH_ERR_OK)
                 return err;
             th_route_insert_sorted(list, route);
             route = *list; // restart

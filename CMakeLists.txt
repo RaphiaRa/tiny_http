@@ -5,13 +5,6 @@ set(CMAKE_C_STANDARD 99)
 include(CheckIPOSupported)
 check_ipo_supported()
 
-# Extra warnings, treat warnings as error
-if(CMAKE_C_COMPILER_ID MATCHES "Clang|GNU")
-   SET(TH_WARNINGS -Wall -Wextra -Wpedantic -Werror)
-   message(STATUS "Using Clang/GNU compiler, enabling extra warnings: ${TH_WARNINGS}")
-   add_compile_options(${TH_WARNINGS})
-endif()
-
 # Run gperf
 find_program(GPERF gperf)
 if (GPERF)
@@ -91,6 +84,13 @@ add_library(tiny_http
     ${TH_CORE_SRC}
 )
 add_library(tiny_http::tiny_http ALIAS tiny_http)
+
+# Extra warnings, treat warnings as error
+if(CMAKE_C_COMPILER_ID MATCHES "Clang|GNU")
+   SET(TH_WOPTIONS -Wall -Wextra -Wpedantic -Werror -Wstrict-prototypes -Wmissing-prototypes -Wshadow -Wconversion)
+   message(STATUS "Using Clang/GNU compiler, enabling extra warnings: ${TH_WOPTIONS}")
+   target_compile_options(tiny_http PRIVATE ${TH_WOPTIONS})
+endif()
 
 # Link time optimization
 check_ipo_supported(RESULT ipo_supported)

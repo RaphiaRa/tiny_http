@@ -4380,7 +4380,9 @@ th_router_add_route(th_router* router, th_method method, th_string path, th_hand
 #include <string.h>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmissing-field-initializers"
+#if defined(__clang__)
 #pragma clang diagnostic ignored "-Wshorten-64-to-32"
+#endif
 struct th_mime_mapping;
 
 #define TH_MIME_TOTAL_KEYWORDS 33
@@ -4544,7 +4546,9 @@ th_mime_mapping_find (register const char *str, register size_t len)
 #include <string.h>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmissing-field-initializers"
+#if defined(__clang__)
 #pragma clang diagnostic ignored "-Wshorten-64-to-32"
+#endif
 struct th_method_mapping;
 
 #define TH_METHOD_TOTAL_KEYWORDS 9
@@ -8664,7 +8668,9 @@ th_ssl_conn_destroy(void* self)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmissing-field-initializers"
 #pragma GCC diagnostic ignored "-Wunused-parameter"
+#if defined(__clang__)
 #pragma clang diagnostic ignored "-Wshorten-64-to-32"
+#endif
 struct th_header_id_mapping;
 
 #define TH_HEADER_ID_TOTAL_KEYWORDS 6

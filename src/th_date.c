@@ -36,13 +36,13 @@ th_date_now(void)
     struct tm tm = {0};
     gmtime_r(&t, &tm);
     th_date date = {0};
-    date.year = (unsigned int)tm.tm_year;
-    date.month = (unsigned int)tm.tm_mon;
-    date.day = (unsigned int)tm.tm_mday;
-    date.weekday = (unsigned int)tm.tm_wday;
-    date.hour = (unsigned int)tm.tm_hour;
-    date.minute = (unsigned int)tm.tm_min;
-    date.second = (unsigned int)tm.tm_sec;
+    date.year = (unsigned int)tm.tm_year & 0xFFFF;
+    date.month = (unsigned int)tm.tm_mon & 0xFF;
+    date.day = (unsigned int)tm.tm_mday & 0xFF;
+    date.weekday = (unsigned int)tm.tm_wday & 0xFF;
+    date.hour = (unsigned int)tm.tm_hour & 0xFF;
+    date.minute = (unsigned int)tm.tm_min & 0xFF;
+    date.second = (unsigned int)tm.tm_sec & 0xFF;
     return date;
 }
 
@@ -60,12 +60,12 @@ th_date_add(th_date date, th_duration d)
     t += d.seconds;
     gmtime_r(&t, &tm);
     th_date new_date = {0};
-    new_date.year = (unsigned int)tm.tm_year;
-    new_date.month = (unsigned int)tm.tm_mon;
-    new_date.day = (unsigned int)tm.tm_mday;
-    new_date.weekday = (unsigned int)tm.tm_wday;
-    new_date.hour = (unsigned int)tm.tm_hour;
-    new_date.minute = (unsigned int)tm.tm_min;
-    new_date.second = (unsigned int)tm.tm_sec;
+    new_date.year = (unsigned int)tm.tm_year & 0xFFFF;
+    new_date.month = (unsigned int)tm.tm_mon & 0xFF;
+    new_date.day = (unsigned int)tm.tm_mday & 0xFF;
+    new_date.weekday = (unsigned int)tm.tm_wday & 0xFF;
+    new_date.hour = (unsigned int)tm.tm_hour & 0xFF;
+    new_date.minute = (unsigned int)tm.tm_min & 0xFF;
+    new_date.second = (unsigned int)tm.tm_sec & 0xFF;
     return new_date;
 }

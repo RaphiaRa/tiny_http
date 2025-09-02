@@ -73,9 +73,9 @@ th_fmt_uint_to_str(char* buf, size_t len, unsigned int value)
 
     buf[len - 1] = '\0';
     size_t i = len - 2;
-    unsigned v = value;
+    unsigned int v = value;
     while (v > 0 && i > 0) {
-        buf[i--] = '0' + (v % 10);
+        buf[i--] = '0' + (char)(v % 10);
         v /= 10;
     }
     return &buf[i + 1];
@@ -91,9 +91,9 @@ th_fmt_uint_to_str_ex(char* buf, size_t len, unsigned int val, size_t* out_len)
 
     buf[len - 1] = '\0';
     size_t i = len - 2;
-    unsigned v = val;
+    unsigned int v = val;
     while (v > 0 && i > 0) {
-        buf[i--] = '0' + (v % 10);
+        buf[i--] = '0' + (char)(v % 10);
         v /= 10;
     }
     *out_len = len - i - 2;

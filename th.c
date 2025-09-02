@@ -307,17 +307,15 @@ th_http_error(th_err err)
     switch (TH_ERR_CATEGORY(err)) {
     case TH_ERR_CATEGORY_SYSTEM:
         switch (TH_ERR_CODE(err)) {
-            {
-            case TH_ENOENT:
-                return TH_ERR_HTTP(TH_CODE_NOT_FOUND);
-                break;
-            case TH_ETIMEDOUT:
-                return TH_ERR_HTTP(TH_CODE_REQUEST_TIMEOUT);
-                break;
-            default:
-                return TH_ERR_HTTP(TH_CODE_INTERNAL_SERVER_ERROR);
-                break;
-            }
+        case TH_ENOENT:
+            return TH_ERR_HTTP(TH_CODE_NOT_FOUND);
+            break;
+        case TH_ETIMEDOUT:
+            return TH_ERR_HTTP(TH_CODE_REQUEST_TIMEOUT);
+            break;
+        default:
+            return TH_ERR_HTTP(TH_CODE_INTERNAL_SERVER_ERROR);
+            break;
         }
         break;
     case TH_ERR_CATEGORY_HTTP:
@@ -768,7 +766,7 @@ typedef struct th_arena_allocator {
     size_t size;
     size_t pos;
     size_t prev_pos;
-    unsigned int alignment;
+    uint16_t alignment;
 } th_arena_allocator;
 
 /** th_arena_allocator_init
@@ -939,7 +937,7 @@ th_hash_cstr(const char* str)
 
 #include <string.h>
 
-#define TH_DEFINE_HASHMAP2(NAME, K, V, HASH, K_EQ, K_NULL, K_DEINIT, V_DEINIT)                                                      \
+#define TH_DEFINE_HASHMAP(NAME, K, V, HASH, K_EQ, K_NULL)                                                                           \
     typedef struct NAME##_entry {                                                                                                   \
         K key;                                                                                                                      \
         V value;                                                                                                                    \
@@ -1006,7 +1004,14 @@ th_hash_cstr(const char* str)
     TH_INLINE(void)                                                                                                                 \
     NAME##_deinit(NAME* map)                                                                                                        \
     {                                                                                                                               \
-        NAME##_reset(map);                                                                                                          \
+        if (map->entries) {                                                                                                         \
+            th_allocator_free(map->allocator, map->entries);                                                                        \
+            map->entries = NULL;                                                                                                    \
+        }                                                                                                                           \
+        map->size = 0;                                                                                                              \
+        map->capacity = 0;                                                                                                          \
+        map->begin = 0;                                                                                                             \
+        map->end = 0;                                                                                                               \
     }                                                                                                                               \
                                                                                                                                     \
     TH_INLINE(void)                                                                                                                 \
@@ -1016,15 +1021,10 @@ th_hash_cstr(const char* str)
             if (map->size > 0) {                                                                                                    \
                 for (size_t i = map->begin; i < map->end; i++) {                                                                    \
                     NAME##_entry* entry = &map->entries[i];                                                                         \
-                    if (!K_EQ(entry->key, K_NULL)) {                                                                                \
-                        K_DEINIT(entry->key);                                                                                       \
-                        V_DEINIT(entry->value);                                                                                     \
-                    }                                                                                                               \
+                    entry->key = K_NULL;                                                                                            \
                 }                                                                                                                   \
             }                                                                                                                       \
-            th_allocator_free(map->allocator, map->entries);                                                                        \
         }                                                                                                                           \
-        map->entries = NULL;                                                                                                        \
         map->size = 0;                                                                                                              \
         map->capacity = 0;                                                                                                          \
         map->begin = 0;                                                                                                             \
@@ -1079,9 +1079,6 @@ th_hash_cstr(const char* str)
                 return TH_ERR_OK;                                                                                                   \
             }                                                                                                                       \
             if (K_EQ(entry->key, key)) {                                                                                            \
-                K_DEINIT(entry->key);                                                                                               \
-                V_DEINIT(entry->value);                                                                                             \
-                entry->key = key;                                                                                                   \
                 entry->value = value;                                                                                               \
                 return TH_ERR_OK;                                                                                                   \
             }                                                                                                                       \
@@ -1096,9 +1093,6 @@ th_hash_cstr(const char* str)
                 return TH_ERR_OK;                                                                                                   \
             }                                                                                                                       \
             if (K_EQ(entry->key, key)) {                                                                                            \
-                K_DEINIT(entry->key);                                                                                               \
-                V_DEINIT(entry->value);                                                                                             \
-                entry->key = key;                                                                                                   \
                 entry->value = value;                                                                                               \
                 return TH_ERR_OK;                                                                                                   \
             }                                                                                                                       \
@@ -1112,8 +1106,9 @@ th_hash_cstr(const char* str)
     TH_INLINE(void)                                                                                                                 \
     NAME##_fix_hole(NAME* map, NAME##_entry* entry)                                                                                 \
     {                                                                                                                               \
-        size_t last_zeroed = entry - map->entries;                                                                                  \
-        for (size_t i = entry - map->entries + 1; i < map->end; i++) {                                                              \
+        TH_ASSERT(entry >= map->entries && entry < map->entries + map->capacity && "Entry is out of bounds");                       \
+        size_t last_zeroed = (size_t)(entry - map->entries);                                                                        \
+        for (size_t i = (size_t)(entry - map->entries + 1); i < map->end; i++) {                                                    \
             uint32_t hash = 0;                                                                                                      \
             if (K_EQ(map->entries[i].key, K_NULL)) {                                                                                \
                 break;                                                                                                              \
@@ -1127,9 +1122,9 @@ th_hash_cstr(const char* str)
             map->begin = 0;                                                                                                         \
             map->end = 0;                                                                                                           \
         } else if (last_zeroed == map->end - 1) {                                                                                   \
-            map->end = NAME##_prev(map, &map->entries[last_zeroed]) - map->entries + 1;                                             \
+            map->end = (size_t)(NAME##_prev(map, &map->entries[last_zeroed]) - map->entries + 1);                                   \
         } else if (last_zeroed == map->begin) {                                                                                     \
-            map->begin = NAME##_next(map, &map->entries[last_zeroed]) - map->entries;                                               \
+            map->begin = (size_t)(NAME##_next(map, &map->entries[last_zeroed]) - map->entries);                                     \
         }                                                                                                                           \
     }                                                                                                                               \
                                                                                                                                     \
@@ -1236,7 +1231,8 @@ th_hash_cstr(const char* str)
     TH_INLINE(NAME##_entry*)                                                                                                        \
     NAME##_next(NAME* map, NAME##_entry* entry)                                                                                     \
     {                                                                                                                               \
-        size_t i = entry - map->entries;                                                                                            \
+        TH_ASSERT(entry >= map->entries && entry < map->entries + map->capacity && "Entry is out of bounds");                       \
+        size_t i = (size_t)(entry - map->entries);                                                                                  \
         for (size_t j = i + 1; j < map->end; j++) {                                                                                 \
             NAME##_entry* e = &map->entries[j];                                                                                     \
             if (!K_EQ(e->key, K_NULL)) {                                                                                            \
@@ -1249,7 +1245,8 @@ th_hash_cstr(const char* str)
     TH_INLINE(NAME##_entry*)                                                                                                        \
     NAME##_prev(NAME* map, NAME##_entry* entry)                                                                                     \
     {                                                                                                                               \
-        size_t i = entry - map->entries;                                                                                            \
+        TH_ASSERT(entry >= map->entries && entry < map->entries + map->capacity && "Entry is out of bounds");                       \
+        size_t i = (size_t)(entry - map->entries);                                                                                  \
         for (size_t j = i - 1; j >= map->begin; j--) {                                                                              \
             NAME##_entry* e = &map->entries[j];                                                                                     \
             if (!K_EQ(e->key, K_NULL)) {                                                                                            \
@@ -1259,42 +1256,6 @@ th_hash_cstr(const char* str)
         return NAME##_begin(map);                                                                                                   \
     }
 
-/** TH_DEFINE_HASHMAP_FIND
- * Define find functions for alternative key types.
- * !!! Only makes sense if the HASH function for the alternative key type
- * is the same as the HASH function for the primary key type.
- */
-#define TH_DEFINE_HASHMAP_FIND(NAME, METHOD, K, K_HASH, K_EQ, K_NULL) \
-    TH_INLINE(NAME##_entry*)                                          \
-    NAME##_##METHOD(const NAME* map, K key)                           \
-    {                                                                 \
-        uint32_t hash = K_HASH(key) & (map->capacity - 1);            \
-        if (map->size == 0) {                                         \
-            return NULL;                                              \
-        }                                                             \
-        for (size_t i = hash; i < map->end; i++) {                    \
-            NAME##_entry* entry = &map->entries[i];                   \
-            if (K_EQ(entry->key, K_NULL)) {                           \
-                return NULL;                                          \
-            }                                                         \
-            if (K_EQ(entry->key, key)) {                              \
-                return entry;                                         \
-            }                                                         \
-        }                                                             \
-        for (size_t i = map->begin; i < hash; i++) {                  \
-            NAME##_entry* entry = &map->entries[i];                   \
-            if (K_EQ(entry->key, K_NULL)) {                           \
-                return NULL;                                          \
-            }                                                         \
-            if (K_EQ(entry->key, key)) {                              \
-                return entry;                                         \
-            }                                                         \
-        }                                                             \
-        return NULL;                                                  \
-    }
-
-#define TH_DEFINE_HASHMAP(NAME, K, V, HASH, K_EQ, K_NULL) TH_DEFINE_HASHMAP2(NAME, K, V, HASH, K_EQ, K_NULL, (void), (void))
-/* default hash maps begin */
 /* th_cstr_map begin */
 
 TH_INLINE(uint32_t)
@@ -2361,6 +2322,9 @@ th_context_drain(th_context* context);
 TH_PRIVATE(void)
 th_context_deinit(th_context* context);
 
+TH_PRIVATE(th_io_service*)
+th_context_get_io_service(th_context* context);
+
 TH_PRIVATE(void)
 th_context_dispatch_handler(th_context* context, th_io_handler* handler, size_t result, th_err err);
 
@@ -2622,7 +2586,7 @@ th_fcache_id_eq(th_fcache_id a, th_fcache_id b)
 TH_INLINE(uint32_t)
 th_fcache_id_hash(th_fcache_id id)
 {
-    return th_string_hash(id.path) + id.dir->fd;
+    return th_string_hash(id.path) + (uint32_t)id.dir->fd;
 }
 
 TH_DEFINE_HASHMAP(th_fcache_map, th_fcache_id, th_fcache_entry*, th_fcache_id_hash, th_fcache_id_eq, (th_fcache_id){0})
@@ -3667,7 +3631,7 @@ th_url_decode_string(th_string input, th_heap_string* output, th_url_decode_type
 
 #define TH_ALIGNOF(type) offsetof(struct { char c; type member; }, member)
 #define TH_ALIGNAS(align, ptr) ((void*)(((uintptr_t)(ptr) + ((align) - 1)) & ~((align) - 1)))
-#define TH_ALIGNUP(n, align) (((n) + (align) - 1) & ~((align) - 1))
+#define TH_ALIGNUP(n, align) (((n) + (size_t)(align) - 1) & ~((size_t)(align) - 1))
 #define TH_ALIGNDOWN(n, align) ((n) & ~((align) - 1))
 
 typedef long double th_max_align;
@@ -3720,7 +3684,7 @@ th_main_allocator_alloc(void* self, size_t size)
     }
     if (!ptr)
         return NULL;
-    ((uint32_t*)ptr)[0] = size;
+    ((uint32_t*)ptr)[0] = (uint32_t)size;
     return (char*)ptr + ptr_offset;
 }
 
@@ -4346,16 +4310,15 @@ th_router_add_route(th_router* router, th_method method, th_string path, th_hand
     while (1) {
         th_string name;
         th_capture_type type = TH_CAPTURE_TYPE_NONE;
-        th_err err = th_route_parse_trail(&trail, &name, &type);
-        if (err != TH_ERR_OK)
+        th_err err = TH_ERR_OK;
+        if ((err = th_route_parse_trail(&trail, &name, &type)) != TH_ERR_OK)
             return err;
         bool last = th_string_empty(trail);
         if (type == TH_CAPTURE_TYPE_PATH && !last)
             return TH_ERR_INVALID_ARG;
 
         if (route == NULL) {
-            th_err err = th_route_create(&route, type, name, router->allocator);
-            if (err != TH_ERR_OK)
+            if ((err = th_route_create(&route, type, name, router->allocator)) != TH_ERR_OK)
                 return err;
             th_route_insert_sorted(list, route);
             route = *list; // restart
@@ -4416,6 +4379,7 @@ th_router_add_route(th_router* router, th_method method, th_string path, th_hand
 #include <string.h>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmissing-field-initializers"
+#pragma GCC diagnostic ignored "-Wshorten-64-to-32"
 struct th_mime_mapping;
 
 #define TH_MIME_TOTAL_KEYWORDS 33
@@ -4579,6 +4543,7 @@ th_mime_mapping_find (register const char *str, register size_t len)
 #include <string.h>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmissing-field-initializers"
+#pragma GCC diagnostic ignored "-Wshorten-64-to-32"
 struct th_method_mapping;
 
 #define TH_METHOD_TOTAL_KEYWORDS 9
@@ -5191,7 +5156,7 @@ th_io_op_posix_readv(void* self, size_t* result)
     th_err err = TH_ERR_OK;
     th_io_task* iot = self;
     th_iov* iov = iot->addr;
-    ssize_t ret = readv(iot->fd, (struct iovec*)iov, iot->len);
+    ssize_t ret = readv(iot->fd, (struct iovec*)iov, (int)iot->len);
     if (ret < 0)
         err = TH_ERR_SYSTEM(errno);
     else if (ret == 0)
@@ -5218,7 +5183,7 @@ th_io_op_posix_writev(void* self, size_t* result)
     th_err err = TH_ERR_OK;
     th_io_task* iot = self;
     th_iov* iov = iot->addr;
-    ssize_t ret = writev(iot->fd, (struct iovec*)iov, iot->len);
+    ssize_t ret = writev(iot->fd, (struct iovec*)iov, (int)iot->len);
     if (ret < 0)
         err = TH_ERR_SYSTEM(errno);
     (*result) = (size_t)ret;
@@ -5252,7 +5217,7 @@ th_io_op_posix_sendv(void* self, size_t* result)
 #endif
     struct msghdr msg = {0};
     msg.msg_iov = iot->addr;
-    msg.msg_iovlen = iot->len;
+    msg.msg_iovlen = (int)iot->len;
     ssize_t ret = sendmsg(iot->fd, &msg, flags);
     if (ret < 0)
         err = TH_ERR_SYSTEM(errno);
@@ -5300,11 +5265,11 @@ th_io_op_posix_sendfile_mmap(void* self, size_t* result)
 #endif
     struct msghdr msg = {0};
     msg.msg_iov = vec;
-    msg.msg_iovlen = veclen;
+    msg.msg_iovlen = (int)veclen;
     ssize_t ret = sendmsg(iot->fd, &msg, flags);
     if (ret < 0)
         err = TH_ERR_SYSTEM(errno);
-    *result = ret;
+    *result = (size_t)ret;
     return err;
 }
 
@@ -5325,7 +5290,7 @@ th_io_op_posix_sendfile_buffered(void* self, size_t* result)
         }
     }
     size_t toread = TH_MIN(sizeof(buffer), iot->len2);
-    ssize_t readlen = pread(((th_file*)iot->addr2)->fd, buffer, toread, iot->offset);
+    ssize_t readlen = pread(((th_file*)iot->addr2)->fd, buffer, toread, (off_t)iot->offset);
     if (readlen < 0)
         return TH_ERR_SYSTEM(errno);
     int flags = 0;
@@ -5337,7 +5302,7 @@ th_io_op_posix_sendfile_buffered(void* self, size_t* result)
     veclen++;
     struct msghdr msg = {0};
     msg.msg_iov = vec;
-    msg.msg_iovlen = veclen;
+    msg.msg_iovlen = (int)veclen;
     ssize_t writelen = sendmsg(iot->fd, &msg, flags);
     if (writelen < 0)
         return TH_ERR_SYSTEM(errno);
@@ -5365,10 +5330,10 @@ th_io_op_bsd_sendfile(void* self, size_t* result)
     off_t len = (off_t)iot->len2;
     int ret = 0;
     if (iot->len == 0) {
-        ret = sendfile(((th_file*)iot->addr2)->fd, iot->fd, iot->offset, &len, NULL, 0);
+        ret = sendfile(((th_file*)iot->addr2)->fd, iot->fd, (off_t)iot->offset, &len, NULL, 0);
     } else {
-        struct sf_hdtr hdtr = {.headers = (struct iovec*)iov, .hdr_cnt = iot->len, .trailers = NULL, .trl_cnt = 0};
-        ret = sendfile(((th_file*)iot->addr2)->fd, iot->fd, iot->offset, &len, &hdtr, 0);
+        struct sf_hdtr hdtr = {.headers = (struct iovec*)iov, .hdr_cnt = (int)iot->len, .trailers = NULL, .trl_cnt = 0};
+        ret = sendfile(((th_file*)iot->addr2)->fd, iot->fd, (off_t)iot->offset, &len, &hdtr, 0);
     }
     th_err err = TH_ERR_OK;
     if (ret < 0 && len == 0) {
@@ -5455,7 +5420,7 @@ th_default_allocator_set(th_allocator* allocator)
 
 /* th_arena_allocator implementation begin */
 
-TH_PRIVATE(void*)
+TH_LOCAL(void*)
 th_arena_allocator_alloc(void* self, size_t size)
 {
     th_arena_allocator* allocator = self;
@@ -5470,7 +5435,7 @@ th_arena_allocator_alloc(void* self, size_t size)
     return ptr;
 }
 
-TH_PRIVATE(void*)
+TH_LOCAL(void*)
 th_arena_allocator_realloc(void* self, void* ptr, size_t size)
 {
     th_arena_allocator* allocator = self;
@@ -5500,7 +5465,7 @@ th_arena_allocator_realloc(void* self, void* ptr, size_t size)
     return newp;
 }
 
-static void
+TH_LOCAL(void)
 th_arena_allocator_free(void* self, void* ptr)
 {
     th_arena_allocator* allocator = self;
@@ -5521,7 +5486,7 @@ th_arena_allocator_init_with_alignment(th_arena_allocator* allocator, void* buf,
     allocator->base.realloc = th_arena_allocator_realloc;
     allocator->base.free = th_arena_allocator_free;
     allocator->allocator = fallback;
-    allocator->alignment = alignment;
+    allocator->alignment = (uint16_t)alignment;
     void* aligned = TH_ALIGNAS(alignment, buf);
     allocator->size = size - (size_t)((uint8_t*)aligned - (uint8_t*)buf);
     allocator->buf = aligned;
@@ -5742,7 +5707,7 @@ th_kqueue_service_run(void* self, int timeout_ms)
             TH_ASSERT(0 && "Invalid filter");
             break;
         }
-        int idx = op_type - 1;
+        int idx = (int)(op_type - 1);
         if (handle->iot[idx]) {
             if (evlist[i].flags & EV_ERROR) {
                 th_runner_push_uncounted_task(service->runner, (th_task*)th_io_task_abort(TH_MOVE_PTR(handle->iot[idx]), TH_ERR_SYSTEM(errno)));
@@ -6142,7 +6107,7 @@ TH_LOCAL(void)
 th_poll_service_run(void* self, int timeout_ms)
 {
     th_poll_service* service = (th_poll_service*)self;
-    nfds_t nfds = th_pollfd_vec_size(&service->fds);
+    nfds_t nfds = (nfds_t)th_pollfd_vec_size(&service->fds);
     int ret = poll(th_pollfd_vec_begin(&service->fds), nfds, timeout_ms);
     if (ret <= 0) {
         if (ret == -1)
@@ -7076,7 +7041,7 @@ th_request_parser_do_path(th_request_parser* parser, th_request* request, th_str
     return TH_ERR_OK;
 }
 
-TH_PRIVATE(th_err)
+TH_LOCAL(th_err)
 th_request_parser_do_version(th_request_parser* parser, th_request* request, th_string buffer, size_t* parsed)
 {
     size_t n = th_string_find_first(buffer, 0, '\r');
@@ -7109,7 +7074,7 @@ th_request_parser_do_version(th_request_parser* parser, th_request* request, th_
     return TH_ERR_OK;
 }
 
-TH_PRIVATE(th_err)
+TH_LOCAL(th_err)
 th_request_parse_handle_header(th_request_parser* parser, th_request* request, th_string name, th_string value)
 {
     char arena[1024] = {0};
@@ -7164,7 +7129,7 @@ th_request_parser_parse_header_line(th_string line, th_string* out_name, th_stri
     return TH_ERR_OK;
 }
 
-TH_PRIVATE(th_err)
+TH_LOCAL(th_err)
 th_request_parser_do_header(th_request_parser* parser, th_request* request, th_string buffer, size_t* parsed)
 {
     size_t n = th_string_find_first(buffer, 0, '\r');
@@ -7359,8 +7324,8 @@ th_request_parser_multipart_do_next(th_request* request, th_string buffer, th_st
         // check the boundary
         if (buffer.ptr[0] != '\r' || buffer.ptr[1] != '\n')
             return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
-        th_string boundary = th_string_substr(buffer, 2, th_request_parser_multipart_find_eol(buffer, 0));
-        if (!th_request_parser_multipart_is_boundary_line(boundary, boundary, &last))
+        th_string line = th_string_substr(buffer, 2, th_request_parser_multipart_find_eol(buffer, 0));
+        if (!th_request_parser_multipart_is_boundary_line(line, boundary, &last))
             return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
         buffer = th_string_substr(buffer, content_len + boundary.len + 2, th_string_npos);
     } else {
@@ -7431,8 +7396,7 @@ th_request_parser_do_multipart_form_data(th_request* request, th_string body)
     body = th_string_substr(body, pos + 2, th_string_npos);
     do {
         size_t parsed = 0;
-        th_err err = th_request_parser_multipart_do_next(request, body, boundary, &parsed);
-        if (err != TH_ERR_OK) {
+        if ((err = th_request_parser_multipart_do_next(request, body, boundary, &parsed)) != TH_ERR_OK) {
             return err;
         }
         body = th_string_substr(body, parsed, th_string_npos);
@@ -7440,7 +7404,7 @@ th_request_parser_do_multipart_form_data(th_request* request, th_string body)
     return TH_ERR_OK;
 }
 
-TH_PRIVATE(th_err)
+TH_LOCAL(th_err)
 th_request_parser_do_body(th_request_parser* parser, th_request* request, th_string buffer, size_t* parsed)
 {
     if (buffer.len < parser->content_len) {
@@ -8166,7 +8130,7 @@ th_response_set_body_va(th_response* response, const char* fmt, va_list args)
         }
     } else {
         th_heap_string_resize(&response->body, (size_t)len, ' ');
-        vsnprintf(th_heap_string_at(&response->body, 0), len, fmt, args);
+        vsnprintf(th_heap_string_at(&response->body, 0), (size_t)len, fmt, args);
     }
     response->is_file = 0;
     return TH_ERR_OK;
@@ -8188,7 +8152,7 @@ th_response_finalize_headers(th_response* response)
         return err;
     if ((err = th_heap_string_append(&response->headers, TH_STRING(" "))) != TH_ERR_OK)
         return err;
-    if ((err = th_heap_string_append_cstr(&response->headers, th_http_strerror(response->code))) != TH_ERR_OK)
+    if ((err = th_heap_string_append_cstr(&response->headers, th_http_strerror((int)response->code))) != TH_ERR_OK)
         return err;
     if ((err = th_heap_string_append(&response->headers, TH_STRING("\r\n"))) != TH_ERR_OK)
         return err;
@@ -8206,12 +8170,12 @@ th_response_set_default_headers(th_response* response)
     char buffer[256];
     if (response->is_file) {
         size_t len = 0;
-        const char* content_len = th_fmt_uint_to_str_ex(buffer, sizeof(buffer), response->file_len, &len);
+        const char* content_len = th_fmt_uint_to_str_ex(buffer, sizeof(buffer), (unsigned int)response->file_len, &len);
         if ((err = th_response_add_header(response, TH_STRING("Content-Length"), th_string_make(content_len, len))) != TH_ERR_OK)
             return err;
     } else {
         size_t len = 0;
-        const char* body_len = th_fmt_uint_to_str_ex(buffer, sizeof(buffer), th_heap_string_len(&response->body), &len);
+        const char* body_len = th_fmt_uint_to_str_ex(buffer, sizeof(buffer), (unsigned int)th_heap_string_len(&response->body), &len);
         if ((err = th_response_add_header(response, TH_STRING("Content-Length"), th_string_make(body_len, len))) != TH_ERR_OK)
             return err;
     }
@@ -8428,6 +8392,12 @@ th_context_deinit(th_context* context)
 {
     th_runner_deinit(&context->runner);
     th_io_service_destroy(context->io_service);
+}
+
+TH_PRIVATE(th_io_service*)
+th_context_get_io_service(th_context* context)
+{
+    return context->io_service;
 }
 
 TH_PRIVATE(void)
@@ -8693,6 +8663,7 @@ th_ssl_conn_destroy(void* self)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmissing-field-initializers"
 #pragma GCC diagnostic ignored "-Wunused-parameter"
+#pragma GCC diagnostic ignored "-Wshorten-64-to-32"
 struct th_header_id_mapping;
 
 #define TH_HEADER_ID_TOTAL_KEYWORDS 6
@@ -8775,7 +8746,7 @@ th_file_mmap_mmap_posix(th_file_mmap* view, th_file* file, size_t offset, size_t
 {
     size_t page_size = (size_t)sysconf(_SC_PAGESIZE);
     size_t moffset = TH_ALIGNDOWN(offset, page_size);
-    void* addr = mmap(NULL, len, PROT_READ, MAP_PRIVATE, file->fd, moffset);
+    void* addr = mmap(NULL, len, PROT_READ, MAP_PRIVATE, file->fd, (off_t)moffset);
     if (addr == MAP_FAILED) {
         return TH_ERR_SYSTEM(errno);
     }
@@ -8938,7 +8909,7 @@ TH_PRIVATE(th_err)
 th_file_read(th_file* stream, void* addr, size_t len, size_t offset, size_t* read)
 {
 #if defined(TH_CONFIG_OS_POSIX)
-    off_t ret = pread(stream->fd, addr, len, offset);
+    off_t ret = pread(stream->fd, addr, len, (off_t)offset);
     if (ret == -1) {
         *read = 0;
         return TH_ERR_SYSTEM(errno);
@@ -8960,7 +8931,7 @@ TH_PRIVATE(th_err)
 th_file_write(th_file* stream, const void* addr, size_t len, size_t offset, size_t* written)
 {
 #if defined(TH_CONFIG_OS_POSIX)
-    off_t ret = pwrite(stream->fd, addr, len, offset);
+    off_t ret = pwrite(stream->fd, addr, len, (off_t)offset);
     if (ret == -1) {
         *written = 0;
         return TH_ERR_SYSTEM(errno);
@@ -9024,6 +8995,7 @@ th_file_stat_hash_posix(th_file* stream)
     hash = FSTAT_HASH_NEXT(hash, (uint32_t)st.st_ino);
     hash = FSTAT_HASH_NEXT(hash, (uint32_t)st.st_uid);
     hash = FSTAT_HASH_NEXT(hash, (uint32_t)st.st_gid);
+    hash = FSTAT_HASH_NEXT(hash, (uint32_t)(st.st_nlink != 0));
     return hash;
 }
 #elif defined(TH_CONFIG_OS_WIN)
@@ -9446,7 +9418,7 @@ th_string_to_uint(th_string str, unsigned int* out)
     for (size_t i = 0; i < str.len; i++) {
         if (str.ptr[i] < '0' || str.ptr[i] > '9')
             return TH_ERR_INVALID_ARG;
-        *out = *out * 10 + (str.ptr[i] - '0');
+        *out = *out * 10 + (unsigned int)(str.ptr[i] - '0');
     }
     return TH_ERR_OK;
 }
@@ -9549,7 +9521,7 @@ th_string_hash(th_string str)
 
 #define TH_HEAP_STRING_SMALL (sizeof(char*) + sizeof(size_t) + sizeof(size_t) - 2)
 #define TH_HEAP_STRING_ALIGNUP(size) TH_ALIGNUP(size, 16)
-TH_PRIVATE(void)
+TH_LOCAL(void)
 th_detail_small_string_init(th_detail_small_string* self, th_allocator* allocator)
 {
     self->small = 1;
@@ -9581,7 +9553,7 @@ th_detail_small_string_set(th_detail_small_string* self, th_string str)
     if (str.len > 0)
         memcpy(self->buf, str.ptr, str.len);
     self->buf[str.len] = '\0';
-    self->len = str.len;
+    self->len = (unsigned char)str.len;
 }
 
 TH_LOCAL(th_err)
@@ -9701,7 +9673,7 @@ th_detail_small_string_resize(th_detail_small_string* self, size_t new_len, char
 {
     TH_ASSERT(new_len <= TH_HEAP_STRING_SMALL_MAX_LEN && "Invalid length");
     memset(self->buf + self->len, fill, new_len - self->len);
-    self->len = new_len;
+    self->len = (unsigned char)new_len;
     self->buf[new_len] = '\0';
 }
 
@@ -9969,7 +9941,7 @@ th_http_write_error_response(th_http* http, th_err err)
     th_response_set_code(&http->response, TH_ERR_CODE(err));
     if (th_heap_string_len(&http->request.uri_path) == 0) {
         // Set default error message
-        th_printf_body(&http->response, "%d %s", TH_ERR_CODE(err), th_http_strerror(err));
+        th_printf_body(&http->response, "%d %s", TH_ERR_CODE(err), th_http_strerror((int)err));
     }
     if (http->close) {
         th_response_add_header(&http->response, TH_STRING("Connection"), TH_STRING("close"));
@@ -10204,7 +10176,7 @@ th_http_start(void* self)
     th_socket_async_read(th_conn_get_socket(http->conn), th_buf_vec_at(&http->buf, 0), th_buf_vec_size(&http->buf), &http->io_handler.base);
 }
 
-TH_PRIVATE(void)
+TH_LOCAL(void)
 th_http_init(th_http* http, const th_conn_tracker* tracker, th_conn* conn,
              th_router* router, th_fcache* fcache, th_allocator* allocator)
 {
@@ -10225,7 +10197,7 @@ th_http_init(th_http* http, const th_conn_tracker* tracker, th_conn* conn,
     http->close = TH_HTTP_KEEP_ALIVE;
 }
 
-TH_PRIVATE(th_err)
+TH_LOCAL(th_err)
 th_http_create(th_http** out, const th_conn_tracker* tracker, th_conn* conn,
                th_router* router, th_fcache* fcache, th_allocator* allocator)
 {
@@ -10237,7 +10209,7 @@ th_http_create(th_http** out, const th_conn_tracker* tracker, th_conn* conn,
     return TH_ERR_OK;
 }
 
-TH_PRIVATE(void)
+TH_LOCAL(void)
 th_http_upgrader_upgrade(void* self, th_conn* conn)
 {
     th_http_upgrader* upgrader = self;
@@ -10483,13 +10455,13 @@ th_date_now(void)
     struct tm tm = {0};
     gmtime_r(&t, &tm);
     th_date date = {0};
-    date.year = tm.tm_year;
-    date.month = tm.tm_mon;
-    date.day = tm.tm_mday;
-    date.weekday = tm.tm_wday;
-    date.hour = tm.tm_hour;
-    date.minute = tm.tm_min;
-    date.second = tm.tm_sec;
+    date.year = (unsigned int)tm.tm_year;
+    date.month = (unsigned int)tm.tm_mon;
+    date.day = (unsigned int)tm.tm_mday;
+    date.weekday = (unsigned int)tm.tm_wday;
+    date.hour = (unsigned int)tm.tm_hour;
+    date.minute = (unsigned int)tm.tm_min;
+    date.second = (unsigned int)tm.tm_sec;
     return date;
 }
 

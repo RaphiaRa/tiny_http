@@ -139,7 +139,7 @@
     }                                                                                                                               \
                                                                                                                                     \
     TH_LOCAL(th_err)                                                                                                                \
-    NAME##_do_set(NAME* map, uint32_t hash, K key, V value)                                                                         \
+    NAME##_do_set(NAME* map, size_t hash, K key, V value)                                                                         \
     {                                                                                                                               \
         for (size_t i = hash; i < map->capacity; i++) {                                                                             \
             NAME##_entry* entry = &map->entries[i];                                                                                 \
@@ -181,7 +181,7 @@
         TH_ASSERT(entry >= map->entries && entry < map->entries + map->capacity && "Entry is out of bounds");                       \
         size_t last_zeroed = (size_t)(entry - map->entries);                                                                        \
         for (size_t i = (size_t)(entry - map->entries + 1); i < map->end; i++) {                                                    \
-            uint32_t hash = 0;                                                                                                      \
+            size_t hash = 0;                                                                                                      \
             if (K_EQ(map->entries[i].key, K_NULL)) {                                                                                \
                 break;                                                                                                              \
             } else if ((hash = (HASH(map->entries[i].key) & (map->capacity - 1))) <= last_zeroed) {                                 \
@@ -219,7 +219,7 @@
                 /* rearranged == 0; */                                                                                              \
                 continue;                                                                                                           \
             }                                                                                                                       \
-            uint32_t hash = HASH(entry->key);                                                                                       \
+            size_t hash = HASH(entry->key);                                                                                       \
             /* Don't need to rehash every entry */                                                                                  \
             hash &= (new_capacity - 1);                                                                                             \
             NAME##_entry e = *entry;                                                                                                \
@@ -242,14 +242,14 @@
                 return err;                                                                                                         \
             }                                                                                                                       \
         }                                                                                                                           \
-        uint32_t hash = HASH(key) & (map->capacity - 1);                                                                            \
+        size_t hash = HASH(key) & (map->capacity - 1);                                                                            \
         return NAME##_do_set(map, hash, key, value);                                                                                \
     }                                                                                                                               \
                                                                                                                                     \
     TH_INLINE(NAME##_entry*)                                                                                                        \
     NAME##_find(const NAME* map, K key)                                                                                             \
     {                                                                                                                               \
-        uint32_t hash = HASH(key) & (map->capacity - 1);                                                                            \
+        size_t hash = HASH(key) & (map->capacity - 1);                                                                            \
         if (map->size == 0) {                                                                                                       \
             return NULL;                                                                                                            \
         }                                                                                                                           \
@@ -330,7 +330,7 @@
 
 /* th_cstr_map begin */
 
-TH_INLINE(uint32_t)
+TH_INLINE(size_t)
 th_cstr_hash(const char* str)
 {
     return th_hash_cstr(str);

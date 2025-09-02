@@ -109,7 +109,7 @@ th_string_substr(th_string str, size_t start, size_t len);
 TH_PRIVATE(th_string)
 th_string_trim(th_string str);
 
-TH_PRIVATE(uint32_t)
+TH_PRIVATE(size_t)
 th_string_hash(th_string str);
 
 #endif

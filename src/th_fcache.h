@@ -38,10 +38,10 @@ th_fcache_id_eq(th_fcache_id a, th_fcache_id b)
     return a.dir == b.dir && th_string_eq(a.path, b.path);
 }
 
-TH_INLINE(uint32_t)
+TH_INLINE(size_t)
 th_fcache_id_hash(th_fcache_id id)
 {
-    return th_string_hash(id.path) + (uint32_t)id.dir->fd;
+    return th_string_hash(id.path) + (size_t)id.dir->fd;
 }
 
 TH_DEFINE_HASHMAP(th_fcache_map, th_fcache_id, th_fcache_entry*, th_fcache_id_hash, th_fcache_id_eq, (th_fcache_id){0})

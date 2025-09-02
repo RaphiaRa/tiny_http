@@ -117,7 +117,7 @@ th_string_trim(th_string str)
     return th_string_substr(str, start, end - start);
 }
 
-TH_PRIVATE(uint32_t)
+TH_PRIVATE(size_t)
 th_string_hash(th_string str)
 {
     return th_hash_bytes(str.ptr, str.len);

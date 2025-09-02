@@ -17,6 +17,12 @@
 #include <sys/uio.h>
 #include <unistd.h>
 
+#if defined(TH_CONFIG_OS_BSD)
+#define CAST_MSG_IOVLEN(len) ((int)(len))
+#else
+#define CAST_MSG_IOVLEN(len) ((size_t)(len))
+#endif
+
 TH_PRIVATE(th_err)
 th_io_op_posix_read(void* self, size_t* result)
 {
@@ -98,7 +104,7 @@ th_io_op_posix_sendv(void* self, size_t* result)
 #endif
     struct msghdr msg = {0};
     msg.msg_iov = iot->addr;
-    msg.msg_iovlen = (int)iot->len;
+    msg.msg_iovlen = CAST_MSG_IOVLEN(iot->len);
     ssize_t ret = sendmsg(iot->fd, &msg, flags);
     if (ret < 0)
         err = TH_ERR_SYSTEM(errno);
@@ -146,7 +152,7 @@ th_io_op_posix_sendfile_mmap(void* self, size_t* result)
 #endif
     struct msghdr msg = {0};
     msg.msg_iov = vec;
-    msg.msg_iovlen = (int)veclen;
+    msg.msg_iovlen = CAST_MSG_IOVLEN(veclen);
     ssize_t ret = sendmsg(iot->fd, &msg, flags);
     if (ret < 0)
         err = TH_ERR_SYSTEM(errno);
@@ -183,7 +189,7 @@ th_io_op_posix_sendfile_buffered(void* self, size_t* result)
     veclen++;
     struct msghdr msg = {0};
     msg.msg_iov = vec;
-    msg.msg_iovlen = (int)veclen;
+    msg.msg_iovlen = CAST_MSG_IOVLEN(veclen);
     ssize_t writelen = sendmsg(iot->fd, &msg, flags);
     if (writelen < 0)
         return TH_ERR_SYSTEM(errno);

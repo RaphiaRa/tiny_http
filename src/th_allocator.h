@@ -2,6 +2,7 @@
 #define TH_ALLOCATOR_H
 
 #include <stddef.h>
+#include <stdint.h>
 
 #include "th_config.h"
 #include "th_list.h"

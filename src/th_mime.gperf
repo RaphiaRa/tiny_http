@@ -5,7 +5,9 @@
 #include "th_string.h"
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmissing-field-initializers"
+#if defined(__clang__)
 #pragma clang diagnostic ignored "-Wshorten-64-to-32"
+#endif
 %}
 %define lookup-function-name th_mime_mapping_find
 %define constants-prefix TH_MIME_

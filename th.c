@@ -4380,6 +4380,7 @@ th_router_add_route(th_router* router, th_method method, th_string path, th_hand
 #include <string.h>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmissing-field-initializers"
+#pragma GCC diagnostic ignored "-Wconversion"
 #if defined(__clang__)
 #pragma clang diagnostic ignored "-Wshorten-64-to-32"
 #endif
@@ -4546,6 +4547,7 @@ th_mime_mapping_find (register const char *str, register size_t len)
 #include <string.h>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmissing-field-initializers"
+#pragma GCC diagnostic ignored "-Wconversion"
 #if defined(__clang__)
 #pragma clang diagnostic ignored "-Wshorten-64-to-32"
 #endif
@@ -5222,7 +5224,7 @@ th_io_op_posix_sendv(void* self, size_t* result)
 #endif
     struct msghdr msg = {0};
     msg.msg_iov = iot->addr;
-    msg.msg_iovlen = (int)iot->len;
+    msg.msg_iovlen = iot->len;
     ssize_t ret = sendmsg(iot->fd, &msg, flags);
     if (ret < 0)
         err = TH_ERR_SYSTEM(errno);
@@ -8668,6 +8670,7 @@ th_ssl_conn_destroy(void* self)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmissing-field-initializers"
 #pragma GCC diagnostic ignored "-Wunused-parameter"
+#pragma GCC diagnostic ignored "-Wconversion"
 #if defined(__clang__)
 #pragma clang diagnostic ignored "-Wshorten-64-to-32"
 #endif
@@ -10317,7 +10320,7 @@ th_fmt_uint_to_str(char* buf, size_t len, unsigned int value)
     size_t i = len - 2;
     unsigned v = value;
     while (v > 0 && i > 0) {
-        buf[i--] = '0' + (v % 10);
+        buf[i--] = '0' + (char)(v % 10);
         v /= 10;
     }
     return &buf[i + 1];

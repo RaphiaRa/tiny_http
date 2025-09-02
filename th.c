@@ -734,6 +734,7 @@ th_next_pow2(size_t n)
 /* Start of th_allocator.h */
 
 #include <stddef.h>
+#include <stdint.h>
 
 
 TH_INLINE(void*)
@@ -912,10 +913,10 @@ th_pool_allocator_deinit(th_pool_allocator* pool);
  * @brief Fowler-Noll-Vo hash function (FNV-1a).
  * See https://en.wikipedia.org/wiki/Fowler%E2%80%93Noll%E2%80%93Vo_hash_function
  */
-TH_INLINE(uint32_t)
+TH_INLINE(size_t)
 th_hash_bytes(const void* data, size_t len)
 {
-    uint32_t hash = 2166136261u;
+    size_t hash = 2166136261u;
     const uint8_t* bytes = (const uint8_t*)data;
     for (size_t i = 0; i < len; ++i) {
         hash ^= bytes[i];
@@ -924,7 +925,7 @@ th_hash_bytes(const void* data, size_t len)
     return hash;
 }
 
-TH_INLINE(uint32_t)
+TH_INLINE(size_t)
 th_hash_cstr(const char* str)
 {
     return th_hash_bytes(str, strlen(str));
@@ -1067,7 +1068,7 @@ th_hash_cstr(const char* str)
     }                                                                                                                               \
                                                                                                                                     \
     TH_LOCAL(th_err)                                                                                                                \
-    NAME##_do_set(NAME* map, uint32_t hash, K key, V value)                                                                         \
+    NAME##_do_set(NAME* map, size_t hash, K key, V value)                                                                         \
     {                                                                                                                               \
         for (size_t i = hash; i < map->capacity; i++) {                                                                             \
             NAME##_entry* entry = &map->entries[i];                                                                                 \
@@ -1109,7 +1110,7 @@ th_hash_cstr(const char* str)
         TH_ASSERT(entry >= map->entries && entry < map->entries + map->capacity && "Entry is out of bounds");                       \
         size_t last_zeroed = (size_t)(entry - map->entries);                                                                        \
         for (size_t i = (size_t)(entry - map->entries + 1); i < map->end; i++) {                                                    \
-            uint32_t hash = 0;                                                                                                      \
+            size_t hash = 0;                                                                                                      \
             if (K_EQ(map->entries[i].key, K_NULL)) {                                                                                \
                 break;                                                                                                              \
             } else if ((hash = (HASH(map->entries[i].key) & (map->capacity - 1))) <= last_zeroed) {                                 \
@@ -1147,7 +1148,7 @@ th_hash_cstr(const char* str)
                 /* rearranged == 0; */                                                                                              \
                 continue;                                                                                                           \
             }                                                                                                                       \
-            uint32_t hash = HASH(entry->key);                                                                                       \
+            size_t hash = HASH(entry->key);                                                                                       \
             /* Don't need to rehash every entry */                                                                                  \
             hash &= (new_capacity - 1);                                                                                             \
             NAME##_entry e = *entry;                                                                                                \
@@ -1170,14 +1171,14 @@ th_hash_cstr(const char* str)
                 return err;                                                                                                         \
             }                                                                                                                       \
         }                                                                                                                           \
-        uint32_t hash = HASH(key) & (map->capacity - 1);                                                                            \
+        size_t hash = HASH(key) & (map->capacity - 1);                                                                            \
         return NAME##_do_set(map, hash, key, value);                                                                                \
     }                                                                                                                               \
                                                                                                                                     \
     TH_INLINE(NAME##_entry*)                                                                                                        \
     NAME##_find(const NAME* map, K key)                                                                                             \
     {                                                                                                                               \
-        uint32_t hash = HASH(key) & (map->capacity - 1);                                                                            \
+        size_t hash = HASH(key) & (map->capacity - 1);                                                                            \
         if (map->size == 0) {                                                                                                       \
             return NULL;                                                                                                            \
         }                                                                                                                           \
@@ -1258,7 +1259,7 @@ th_hash_cstr(const char* str)
 
 /* th_cstr_map begin */
 
-TH_INLINE(uint32_t)
+TH_INLINE(size_t)
 th_cstr_hash(const char* str)
 {
     return th_hash_cstr(str);
@@ -1385,7 +1386,7 @@ th_string_substr(th_string str, size_t start, size_t len);
 TH_PRIVATE(th_string)
 th_string_trim(th_string str);
 
-TH_PRIVATE(uint32_t)
+TH_PRIVATE(size_t)
 th_string_hash(th_string str);
 
 /* End of th_string.h */
@@ -2583,10 +2584,10 @@ th_fcache_id_eq(th_fcache_id a, th_fcache_id b)
     return a.dir == b.dir && th_string_eq(a.path, b.path);
 }
 
-TH_INLINE(uint32_t)
+TH_INLINE(size_t)
 th_fcache_id_hash(th_fcache_id id)
 {
-    return th_string_hash(id.path) + (uint32_t)id.dir->fd;
+    return th_string_hash(id.path) + (size_t)id.dir->fd;
 }
 
 TH_DEFINE_HASHMAP(th_fcache_map, th_fcache_id, th_fcache_entry*, th_fcache_id_hash, th_fcache_id_eq, (th_fcache_id){0})
@@ -3629,7 +3630,7 @@ th_url_decode_string(th_string input, th_heap_string* output, th_url_decode_type
 
 #include <stdint.h>
 
-#define TH_ALIGNOF(type) offsetof(struct { char c; type member; }, member)
+#define TH_ALIGNOF(type) ((size_t)&(((struct { char c; type member; }*)0)->member))
 #define TH_ALIGNAS(align, ptr) ((void*)(((uintptr_t)(ptr) + ((align) - 1)) & ~((align) - 1)))
 #define TH_ALIGNUP(n, align) (((n) + (size_t)(align) - 1) & ~((size_t)(align) - 1))
 #define TH_ALIGNDOWN(n, align) ((n) & ~((align) - 1))
@@ -4379,7 +4380,7 @@ th_router_add_route(th_router* router, th_method method, th_string path, th_hand
 #include <string.h>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmissing-field-initializers"
-#pragma GCC diagnostic ignored "-Wshorten-64-to-32"
+#pragma clang diagnostic ignored "-Wshorten-64-to-32"
 struct th_mime_mapping;
 
 #define TH_MIME_TOTAL_KEYWORDS 33
@@ -4543,7 +4544,7 @@ th_mime_mapping_find (register const char *str, register size_t len)
 #include <string.h>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmissing-field-initializers"
-#pragma GCC diagnostic ignored "-Wshorten-64-to-32"
+#pragma clang diagnostic ignored "-Wshorten-64-to-32"
 struct th_method_mapping;
 
 #define TH_METHOD_TOTAL_KEYWORDS 9
@@ -8663,7 +8664,7 @@ th_ssl_conn_destroy(void* self)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmissing-field-initializers"
 #pragma GCC diagnostic ignored "-Wunused-parameter"
-#pragma GCC diagnostic ignored "-Wshorten-64-to-32"
+#pragma clang diagnostic ignored "-Wshorten-64-to-32"
 struct th_header_id_mapping;
 
 #define TH_HEADER_ID_TOTAL_KEYWORDS 6
@@ -9509,7 +9510,7 @@ th_string_trim(th_string str)
     return th_string_substr(str, start, end - start);
 }
 
-TH_PRIVATE(uint32_t)
+TH_PRIVATE(size_t)
 th_string_hash(th_string str)
 {
     return th_hash_bytes(str.ptr, str.len);

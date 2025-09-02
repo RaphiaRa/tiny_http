@@ -5,6 +5,7 @@
 #include "th_string.h"
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmissing-field-initializers"
+#pragma GCC diagnostic ignored "-Wconversion"
 #if defined(__clang__)
 #pragma clang diagnostic ignored "-Wshorten-64-to-32"
 #endif

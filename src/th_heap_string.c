@@ -39,7 +39,7 @@ th_detail_small_string_set(th_detail_small_string* self, th_string str)
     if (str.len > 0)
         memcpy(self->buf, str.ptr, str.len);
     self->buf[str.len] = '\0';
-    self->len = (unsigned char)str.len;
+    self->len = str.len & 0x7F;
 }
 
 TH_LOCAL(th_err)
@@ -103,7 +103,7 @@ th_detail_small_string_append(th_detail_small_string* self, th_string str)
 {
     TH_ASSERT(self->len + str.len <= TH_HEAP_STRING_SMALL_MAX_LEN);
     memcpy(self->buf + self->len, str.ptr, str.len);
-    self->len += str.len;
+    self->len += str.len & 0x7F;
     self->buf[self->len] = '\0';
 }
 
@@ -159,7 +159,7 @@ th_detail_small_string_resize(th_detail_small_string* self, size_t new_len, char
 {
     TH_ASSERT(new_len <= TH_HEAP_STRING_SMALL_MAX_LEN && "Invalid length");
     memset(self->buf + self->len, fill, new_len - self->len);
-    self->len = (unsigned char)new_len;
+    self->len = new_len & 0x7F;
     self->buf[new_len] = '\0';
 }
 

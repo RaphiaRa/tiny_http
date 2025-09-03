@@ -172,13 +172,13 @@ typedef struct th_bind_opt {
  * @brief Date struct corresponding to the Date header in HTTP. Always in GMT.
  */
 typedef struct th_date {
-    unsigned year : 16;
-    unsigned month : 8;
-    unsigned day : 8;
-    unsigned weekday : 8;
-    unsigned hour : 8;
-    unsigned minute : 8;
-    unsigned second : 8;
+    unsigned int year : 16;
+    unsigned int month : 8;
+    unsigned int day : 8;
+    unsigned int weekday : 8;
+    unsigned int hour : 8;
+    unsigned int minute : 8;
+    unsigned int second : 8;
 } th_date;
 
 typedef struct th_duration {

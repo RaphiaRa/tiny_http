@@ -244,31 +244,34 @@ th_router_add_route(th_router* router, th_method method, th_string path, th_hand
     th_route_segment* route = *list;
 
     // find a matching route
-    while (1) {
-        th_string name;
+    bool last = false;
+    while (!last) {
+        th_string name = {0};
         th_capture_type type = TH_CAPTURE_TYPE_NONE;
         th_err err = TH_ERR_OK;
         if ((err = th_route_parse_trail(&trail, &name, &type)) != TH_ERR_OK)
             return err;
-        bool last = th_string_empty(trail);
+        last = th_string_empty(trail);
         if (type == TH_CAPTURE_TYPE_PATH && !last)
             return TH_ERR_INVALID_ARG;
-
-        if (route == NULL) {
-            if ((err = th_route_create(&route, type, name, router->allocator)) != TH_ERR_OK)
-                return err;
-            th_route_insert_sorted(list, route);
-            route = *list; // restart
-        }
-        if ((type == TH_CAPTURE_TYPE_NONE
-             && th_string_eq(th_heap_string_view(&route->name), name))
-            || (type != TH_CAPTURE_TYPE_NONE && type == route->type)) {
-            if (last)
+        while (1) {
+            if (route == NULL) {
+                if ((err = th_route_create(&route, type, name, router->allocator)) != TH_ERR_OK)
+                    return err;
+                th_route_insert_sorted(list, route);
+                route = *list; // restart
+            }
+            if ((type == TH_CAPTURE_TYPE_NONE
+                 && th_string_eq(th_heap_string_view(&route->name), name))
+                || (type != TH_CAPTURE_TYPE_NONE && type == route->type)) {
+                if (last)
+                    break;
+                list = &route->children;
+                route = *list;
                 break;
-            list = &route->children;
-            route = *list;
-        } else {
-            route = route->next;
+            } else {
+                route = route->next;
+            }
         }
     }
 

@@ -2323,9 +2323,6 @@ th_context_drain(th_context* context);
 TH_PRIVATE(void)
 th_context_deinit(th_context* context);
 
-TH_PRIVATE(th_io_service*)
-th_context_get_io_service(th_context* context);
-
 TH_PRIVATE(void)
 th_context_dispatch_handler(th_context* context, th_io_handler* handler, size_t result, th_err err);
 
@@ -3631,7 +3628,7 @@ th_url_decode_string(th_string input, th_heap_string* output, th_url_decode_type
 #include <stdint.h>
 
 #define TH_ALIGNOF(type) ((size_t)&(((struct { char c; type member; }*)0)->member))
-#define TH_ALIGNAS(align, ptr) ((void*)(((uintptr_t)(ptr) + ((align) - 1)) & ~((align) - 1)))
+#define TH_ALIGNAS(align, ptr) ((void*)(((uintptr_t)(ptr) + ((uintptr_t)(align) - 1)) & ~((uintptr_t)(align) - 1)))
 #define TH_ALIGNUP(n, align) (((n) + (size_t)(align) - 1) & ~((size_t)(align) - 1))
 #define TH_ALIGNDOWN(n, align) ((n) & ~((align) - 1))
 
@@ -4308,31 +4305,34 @@ th_router_add_route(th_router* router, th_method method, th_string path, th_hand
     th_route_segment* route = *list;
 
     // find a matching route
-    while (1) {
-        th_string name;
+    bool last = false;
+    while (!last) {
+        th_string name = {0};
         th_capture_type type = TH_CAPTURE_TYPE_NONE;
         th_err err = TH_ERR_OK;
         if ((err = th_route_parse_trail(&trail, &name, &type)) != TH_ERR_OK)
             return err;
-        bool last = th_string_empty(trail);
+        last = th_string_empty(trail);
         if (type == TH_CAPTURE_TYPE_PATH && !last)
             return TH_ERR_INVALID_ARG;
-
-        if (route == NULL) {
-            if ((err = th_route_create(&route, type, name, router->allocator)) != TH_ERR_OK)
-                return err;
-            th_route_insert_sorted(list, route);
-            route = *list; // restart
-        }
-        if ((type == TH_CAPTURE_TYPE_NONE
-             && th_string_eq(th_heap_string_view(&route->name), name))
-            || (type != TH_CAPTURE_TYPE_NONE && type == route->type)) {
-            if (last)
+        while (1) {
+            if (route == NULL) {
+                if ((err = th_route_create(&route, type, name, router->allocator)) != TH_ERR_OK)
+                    return err;
+                th_route_insert_sorted(list, route);
+                route = *list; // restart
+            }
+            if ((type == TH_CAPTURE_TYPE_NONE
+                 && th_string_eq(th_heap_string_view(&route->name), name))
+                || (type != TH_CAPTURE_TYPE_NONE && type == route->type)) {
+                if (last)
+                    break;
+                list = &route->children;
+                route = *list;
                 break;
-            list = &route->children;
-            route = *list;
-        } else {
-            route = route->next;
+            } else {
+                route = route->next;
+            }
         }
     }
 
@@ -5143,6 +5143,12 @@ th_io_composite_unref(void* self)
 #include <sys/uio.h>
 #include <unistd.h>
 
+#if defined(TH_CONFIG_OS_BSD)
+#define CAST_MSG_IOVLEN(len) ((int)(len))
+#else
+#define CAST_MSG_IOVLEN(len) ((size_t)(len))
+#endif
+
 TH_PRIVATE(th_err)
 th_io_op_posix_read(void* self, size_t* result)
 {
@@ -5224,7 +5230,7 @@ th_io_op_posix_sendv(void* self, size_t* result)
 #endif
     struct msghdr msg = {0};
     msg.msg_iov = iot->addr;
-    msg.msg_iovlen = iot->len;
+    msg.msg_iovlen = CAST_MSG_IOVLEN(iot->len);
     ssize_t ret = sendmsg(iot->fd, &msg, flags);
     if (ret < 0)
         err = TH_ERR_SYSTEM(errno);
@@ -5272,7 +5278,7 @@ th_io_op_posix_sendfile_mmap(void* self, size_t* result)
 #endif
     struct msghdr msg = {0};
     msg.msg_iov = vec;
-    msg.msg_iovlen = (int)veclen;
+    msg.msg_iovlen = CAST_MSG_IOVLEN(veclen);
     ssize_t ret = sendmsg(iot->fd, &msg, flags);
     if (ret < 0)
         err = TH_ERR_SYSTEM(errno);
@@ -5309,7 +5315,7 @@ th_io_op_posix_sendfile_buffered(void* self, size_t* result)
     veclen++;
     struct msghdr msg = {0};
     msg.msg_iov = vec;
-    msg.msg_iovlen = (int)veclen;
+    msg.msg_iovlen = CAST_MSG_IOVLEN(veclen);
     ssize_t writelen = sendmsg(iot->fd, &msg, flags);
     if (writelen < 0)
         return TH_ERR_SYSTEM(errno);
@@ -8401,12 +8407,6 @@ th_context_deinit(th_context* context)
     th_io_service_destroy(context->io_service);
 }
 
-TH_PRIVATE(th_io_service*)
-th_context_get_io_service(th_context* context)
-{
-    return context->io_service;
-}
-
 TH_PRIVATE(void)
 th_context_dispatch_handler(th_context* context, th_io_handler* handler, size_t result, th_err err)
 {
@@ -9563,7 +9563,7 @@ th_detail_small_string_set(th_detail_small_string* self, th_string str)
     if (str.len > 0)
         memcpy(self->buf, str.ptr, str.len);
     self->buf[str.len] = '\0';
-    self->len = (unsigned char)str.len;
+    self->len = str.len & 0x7F;
 }
 
 TH_LOCAL(th_err)
@@ -9627,7 +9627,7 @@ th_detail_small_string_append(th_detail_small_string* self, th_string str)
 {
     TH_ASSERT(self->len + str.len <= TH_HEAP_STRING_SMALL_MAX_LEN);
     memcpy(self->buf + self->len, str.ptr, str.len);
-    self->len += str.len;
+    self->len += str.len & 0x7F;
     self->buf[self->len] = '\0';
 }
 
@@ -9683,7 +9683,7 @@ th_detail_small_string_resize(th_detail_small_string* self, size_t new_len, char
 {
     TH_ASSERT(new_len <= TH_HEAP_STRING_SMALL_MAX_LEN && "Invalid length");
     memset(self->buf + self->len, fill, new_len - self->len);
-    self->len = (unsigned char)new_len;
+    self->len = new_len & 0x7F;
     self->buf[new_len] = '\0';
 }
 
@@ -10318,7 +10318,7 @@ th_fmt_uint_to_str(char* buf, size_t len, unsigned int value)
 
     buf[len - 1] = '\0';
     size_t i = len - 2;
-    unsigned v = value;
+    unsigned int v = value;
     while (v > 0 && i > 0) {
         buf[i--] = '0' + (char)(v % 10);
         v /= 10;
@@ -10336,9 +10336,9 @@ th_fmt_uint_to_str_ex(char* buf, size_t len, unsigned int val, size_t* out_len)
 
     buf[len - 1] = '\0';
     size_t i = len - 2;
-    unsigned v = val;
+    unsigned int v = val;
     while (v > 0 && i > 0) {
-        buf[i--] = '0' + (v % 10);
+        buf[i--] = '0' + (char)(v % 10);
         v /= 10;
     }
     *out_len = len - i - 2;
@@ -10465,13 +10465,13 @@ th_date_now(void)
     struct tm tm = {0};
     gmtime_r(&t, &tm);
     th_date date = {0};
-    date.year = (unsigned int)tm.tm_year;
-    date.month = (unsigned int)tm.tm_mon;
-    date.day = (unsigned int)tm.tm_mday;
-    date.weekday = (unsigned int)tm.tm_wday;
-    date.hour = (unsigned int)tm.tm_hour;
-    date.minute = (unsigned int)tm.tm_min;
-    date.second = (unsigned int)tm.tm_sec;
+    date.year = (unsigned int)tm.tm_year & 0xFFFF;
+    date.month = (unsigned int)tm.tm_mon & 0xFF;
+    date.day = (unsigned int)tm.tm_mday & 0xFF;
+    date.weekday = (unsigned int)tm.tm_wday & 0xFF;
+    date.hour = (unsigned int)tm.tm_hour & 0xFF;
+    date.minute = (unsigned int)tm.tm_min & 0xFF;
+    date.second = (unsigned int)tm.tm_sec & 0xFF;
     return date;
 }
 
@@ -10489,13 +10489,13 @@ th_date_add(th_date date, th_duration d)
     t += d.seconds;
     gmtime_r(&t, &tm);
     th_date new_date = {0};
-    new_date.year = (unsigned int)tm.tm_year;
-    new_date.month = (unsigned int)tm.tm_mon;
-    new_date.day = (unsigned int)tm.tm_mday;
-    new_date.weekday = (unsigned int)tm.tm_wday;
-    new_date.hour = (unsigned int)tm.tm_hour;
-    new_date.minute = (unsigned int)tm.tm_min;
-    new_date.second = (unsigned int)tm.tm_sec;
+    new_date.year = (unsigned int)tm.tm_year & 0xFFFF;
+    new_date.month = (unsigned int)tm.tm_mon & 0xFF;
+    new_date.day = (unsigned int)tm.tm_mday & 0xFF;
+    new_date.weekday = (unsigned int)tm.tm_wday & 0xFF;
+    new_date.hour = (unsigned int)tm.tm_hour & 0xFF;
+    new_date.minute = (unsigned int)tm.tm_min & 0xFF;
+    new_date.second = (unsigned int)tm.tm_sec & 0xFF;
     return new_date;
 }
 /* End of src/th_date.c */

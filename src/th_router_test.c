@@ -189,5 +189,25 @@ TH_TEST_BEGIN(router)
         th_router_deinit(&router);
     }
     TH_TEST_CASE_END
+    TH_TEST_CASE_BEGIN(router_handle_multiple_simple_routes)
+    {
+        th_router router;
+        th_router_init(&router, NULL);
+        const char* routes[] = {"/first", "/second", "/third", "/fourth", "/fifth"};
+        for (size_t i = 0; i < sizeof(routes) / sizeof(routes[0]); i++) {
+            TH_EXPECT(th_router_add_route(&router, TH_METHOD_GET, th_string_from_cstr(routes[i]), mock_handler, NULL) == TH_ERR_OK);
+        }
+        for (size_t i = 0; i < sizeof(routes) / sizeof(routes[0]); i++) {
+            th_request request = {0};
+            th_request_init(&request, NULL, NULL);
+            request.method = TH_METHOD_GET;
+            th_heap_string_set(&request.uri_path, th_string_from_cstr(routes[i]));
+            th_response response = {0};
+            TH_EXPECT(th_router_handle(&router, &request, &response) == TH_ERR_OK);
+            th_request_deinit(&request);
+        }
+        th_router_deinit(&router);
+    }
+    TH_TEST_CASE_END
 }
 TH_TEST_END

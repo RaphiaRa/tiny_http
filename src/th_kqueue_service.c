@@ -168,6 +168,7 @@ th_kqueue_service_init(th_kqueue_service* service, th_runner* runner, th_allocat
     service->base.destroy = th_kqueue_service_destroy;
     service->allocator = allocator;
     service->runner = runner;
+    service->timer_list = (th_kqueue_timer_list){0};
     if ((service->kq = kqueue()) == -1) {
         return TH_ERR_SYSTEM(errno);
     }

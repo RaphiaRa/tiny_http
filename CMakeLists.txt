@@ -61,6 +61,7 @@ SET(TH_CORE_SRC
     src/th_fmt.c
     src/th_date.c
     src/th_io_op.c
+    src/th_clock.c
     src/th_timer.c
     src/th_conn_tracker.c
     src/th_url_decode.c
@@ -189,9 +190,10 @@ if (NOT TH_DISABLE_TESTS)
     set(CMAKE_TESTDRIVER_BEFORE_TESTMAIN "th_test_setup();")
     set(CMAKE_TESTDRIVER_AFTER_TESTMAIN "th_test_teardown();")
 
-    set(TH_TESTS 
+    set(TH_TESTS
         src/th_io_task_test.c
         src/th_task_test.c
+        src/th_timer_test.c
         src/th_router_test.c
         src/th_allocator_test.c
         src/th_request_parser_test.c

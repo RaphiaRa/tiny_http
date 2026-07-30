@@ -298,7 +298,7 @@ th_kqueue_handle_init(th_kqueue_handle* handle, th_kqueue_service* service, int 
     handle->service = service;
     handle->fd = fd;
     handle->active = TH_IO_OP_TYPE_NONE;
-    th_timer_init(&handle->timer);
+    th_timer_init(&handle->timer, th_clock_os());
 }
 
 /* th_kqueue_handle implementation end */

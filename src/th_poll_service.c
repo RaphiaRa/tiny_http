@@ -179,7 +179,7 @@ th_poll_handle_init(th_poll_handle* handle, th_poll_service* service, int fd, th
     handle->base.destroy = th_poll_handle_destroy;
     handle->base.get_fd = th_poll_handle_get_fd;
     handle->base.enable_timeout = th_poll_handle_enable_timeout;
-    th_timer_init(&handle->timer);
+    th_timer_init(&handle->timer, th_clock_os());
     handle->iot[TH_IO_OP_TYPE_READ - 1] = NULL;
     handle->iot[TH_IO_OP_TYPE_WRITE - 1] = NULL;
     handle->allocator = allocator;

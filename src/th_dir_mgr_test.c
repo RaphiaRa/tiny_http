@@ -21,8 +21,8 @@ TH_TEST_BEGIN(dir_mgr)
     {
         th_dir_mgr mgr = {0};
         th_dir_mgr_init(&mgr, NULL);
-        TH_EXPECT(th_dir_mgr_add(&mgr, TH_STRING("test"), TH_STRING("/")) == TH_ERR_OK);
-        TH_EXPECT(th_dir_mgr_get(&mgr, TH_STRING("test")) != NULL);
+        TH_EXPECT(th_dir_mgr_add(&mgr, TH_STR("test"), TH_STR("/")) == TH_ERR_OK);
+        TH_EXPECT(th_dir_mgr_get(&mgr, TH_STR("test")) != NULL);
         th_dir_mgr_deinit(&mgr);
     }
     TH_TEST_CASE_END
@@ -31,8 +31,8 @@ TH_TEST_BEGIN(dir_mgr)
         th_mock_syscall_get()->open = bad_open;
         th_dir_mgr mgr = {0};
         th_dir_mgr_init(&mgr, NULL);
-        TH_EXPECT(th_dir_mgr_add(&mgr, TH_STRING("test"), TH_STRING("/")) == TH_ERR_SYSTEM(TH_ENOENT));
-        TH_EXPECT(th_dir_mgr_get(&mgr, TH_STRING("test")) == NULL);
+        TH_EXPECT(th_dir_mgr_add(&mgr, TH_STR("test"), TH_STR("/")) == TH_ERR_SYSTEM(TH_ENOENT));
+        TH_EXPECT(th_dir_mgr_get(&mgr, TH_STR("test")) == NULL);
         th_dir_mgr_deinit(&mgr);
     }
     TH_TEST_END

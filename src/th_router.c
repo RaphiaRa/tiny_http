@@ -2,7 +2,7 @@
 #include "th_allocator.h"
 #include "th_log.h"
 #include "th_request.h"
-#include "th_string.h"
+#include "th_str.h"
 #include "th_url_decode.h"
 #include "th_utility.h"
 
@@ -13,12 +13,12 @@
 #define TH_LOG_TAG "router"
 
 TH_LOCAL(th_err)
-th_route_init(th_route_segment* route, th_capture_type type, th_string segment, th_allocator* allocator)
+th_route_init(th_route_segment* route, th_capture_type type, th_str segment, th_allocator* allocator)
 {
-    th_heap_string_init(&route->name, allocator);
+    th_string_init(&route->name, allocator);
     th_err err = TH_ERR_OK;
-    if ((err = th_heap_string_set(&route->name, segment)) != TH_ERR_OK) {
-        th_heap_string_deinit(&route->name);
+    if ((err = th_string_set(&route->name, segment)) != TH_ERR_OK) {
+        th_string_deinit(&route->name);
         return err;
     }
     route->type = type;
@@ -31,7 +31,7 @@ th_route_init(th_route_segment* route, th_capture_type type, th_string segment, 
 }
 
 TH_LOCAL(th_err)
-th_route_create(th_route_segment** out, th_capture_type type, th_string token, th_allocator* allocator)
+th_route_create(th_route_segment** out, th_capture_type type, th_str token, th_allocator* allocator)
 {
     th_route_segment* route = th_allocator_alloc(allocator, sizeof(th_route_segment));
     if (!route)
@@ -56,7 +56,7 @@ th_route_deinit(th_route_segment* route)
         th_route_destroy(child);
         child = next;
     }
-    th_heap_string_deinit(&route->name);
+    th_string_deinit(&route->name);
 }
 
 TH_LOCAL(void)
@@ -86,61 +86,61 @@ th_router_deinit(th_router* router)
 }
 
 TH_LOCAL(th_err)
-th_route_consume_trail(th_route_segment* route, th_request* request, th_string* trail, bool dry, bool* result)
+th_route_consume_trail(th_route_segment* route, th_request* request, th_str* trail, bool dry, bool* result)
 {
-    th_string route_name = th_heap_string_view(&route->name);
-    th_heap_string decoded = {0};
-    th_heap_string_init(&decoded, route->allocator);
+    th_str route_name = th_string_view(&route->name);
+    th_string decoded = {0};
+    th_string_init(&decoded, route->allocator);
     th_err err = TH_ERR_OK;
-    if ((err = th_url_decode_string(th_string_substr(*trail, 0, th_string_find_first_of(*trail, 0, "/?")), &decoded, TH_URL_DECODE_TYPE_PATH))
+    if ((err = th_url_decode_string(th_str_substr(*trail, 0, th_str_find_first_of(*trail, 0, "/?")), &decoded, TH_URL_DECODE_TYPE_PATH))
         != TH_ERR_OK) {
         goto cleanup;
     }
-    th_string segment = th_heap_string_view(&decoded);
-    // if (th_string_empty(segment) && route->type != TH_CAPTURE_TYPE_NONE)
+    th_str segment = th_string_view(&decoded);
+    // if (th_str_empty(segment) && route->type != TH_CAPTURE_TYPE_NONE)
     //     return false;
     switch (route->type) {
     case TH_CAPTURE_TYPE_NONE:
-        if (th_string_eq(route_name, segment)) {
-            *trail = th_string_substr(*trail, segment.len + 1, th_string_npos);
+        if (th_str_eq(route_name, segment)) {
+            *trail = th_str_substr(*trail, segment.len + 1, th_str_npos);
             *result = true;
         }
         break;
     case TH_CAPTURE_TYPE_INT:
-        if (th_string_is_uint(segment)) {
+        if (th_str_is_uint(segment)) {
             if (!dry)
                 (void)th_request_add_pathvar(request, route_name, segment);
-            *trail = th_string_substr(*trail, segment.len + 1, th_string_npos);
+            *trail = th_str_substr(*trail, segment.len + 1, th_str_npos);
             *result = true;
         }
         break;
     case TH_CAPTURE_TYPE_STRING:
         if (!dry)
             (void)th_request_add_pathvar(request, route_name, segment);
-        *trail = th_string_substr(*trail, segment.len + 1, th_string_npos);
+        *trail = th_str_substr(*trail, segment.len + 1, th_str_npos);
         *result = true;
         break;
     case TH_CAPTURE_TYPE_PATH:
         if (!dry)
             (void)th_request_add_pathvar(request, route_name, *trail);
-        *trail = th_string_make(NULL, 0);
+        *trail = th_str_make(NULL, 0);
         *result = true;
         break;
     default:
         break;
     }
 cleanup:
-    th_heap_string_deinit(&decoded);
+    th_string_deinit(&decoded);
     return err;
 }
 
 TH_LOCAL(th_err)
 th_router_do_handle(th_router* router, th_method method, th_request* request, th_response* response, bool dry)
 {
-    TH_LOG_DEBUG("Handling request %p: %s", request, th_heap_string_data(&request->uri_path));
-    if (*th_heap_string_at(&request->uri_path, 0) != '/')
+    TH_LOG_DEBUG("Handling request %p: %s", request, th_string_data(&request->uri_path));
+    if (*th_string_at(&request->uri_path, 0) != '/')
         return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
-    th_string trail = th_string_substr(th_heap_string_view(&request->uri_path), 1, th_string_npos);
+    th_str trail = th_str_substr(th_string_view(&request->uri_path), 1, th_str_npos);
     th_route_segment* route = router->routes;
     while (1) {
         th_err err = TH_ERR_OK;
@@ -151,7 +151,7 @@ th_router_do_handle(th_router* router, th_method method, th_request* request, th
                    || consumed) {
             if (err != TH_ERR_OK)
                 return err;
-            if (th_string_empty(trail))
+            if (th_str_empty(trail))
                 break;
             route = route->children;
         } else {
@@ -200,58 +200,58 @@ th_route_insert_sorted(th_route_segment** list, th_route_segment* route)
 }
 
 TH_LOCAL(th_err)
-th_route_parse_trail(th_string* trail, th_string* name, th_capture_type* type)
+th_route_parse_trail(th_str* trail, th_str* name, th_capture_type* type)
 {
-    th_string segment = th_string_substr(*trail, 0, th_string_find_first_of(*trail, 0, "/"));
-    size_t open_curly = th_string_find_first(segment, 0, '{');
-    size_t close_curly = th_string_find_first(segment, 0, '}');
+    th_str segment = th_str_substr(*trail, 0, th_str_find_first_of(*trail, 0, "/"));
+    size_t open_curly = th_str_find_first(segment, 0, '{');
+    size_t close_curly = th_str_find_first(segment, 0, '}');
     if (segment.len > 2 && open_curly == 0 && close_curly == segment.len - 1) {
-        th_string capture = th_string_substr(segment, 1, segment.len - 2);
-        size_t sep = th_string_find_first(capture, 0, ':');
-        if (sep == th_string_npos) {
+        th_str capture = th_str_substr(segment, 1, segment.len - 2);
+        size_t sep = th_str_find_first(capture, 0, ':');
+        if (sep == th_str_npos) {
             *name = capture;
             *type = TH_CAPTURE_TYPE_STRING;
         } else {
-            th_string type_str = th_string_substr(capture, 0, sep);
-            if (th_string_eq(type_str, TH_STRING("int"))) {
-                *name = th_string_substr(capture, sep + 1, th_string_npos);
+            th_str type_str = th_str_substr(capture, 0, sep);
+            if (th_str_eq(type_str, TH_STR("int"))) {
+                *name = th_str_substr(capture, sep + 1, th_str_npos);
                 *type = TH_CAPTURE_TYPE_INT;
-            } else if (th_string_eq(type_str, TH_STRING("path"))) {
-                *name = th_string_substr(capture, sep + 1, th_string_npos);
+            } else if (th_str_eq(type_str, TH_STR("path"))) {
+                *name = th_str_substr(capture, sep + 1, th_str_npos);
                 *type = TH_CAPTURE_TYPE_PATH;
             } else {
                 return TH_ERR_INVALID_ARG;
             }
         }
-    } else if (open_curly == th_string_npos && close_curly == th_string_npos) {
+    } else if (open_curly == th_str_npos && close_curly == th_str_npos) {
         *name = segment;
         *type = TH_CAPTURE_TYPE_NONE;
     } else {
         return TH_ERR_INVALID_ARG;
     }
     // Consume segment
-    *trail = th_string_substr(*trail, segment.len + 1, th_string_npos);
+    *trail = th_str_substr(*trail, segment.len + 1, th_str_npos);
     return TH_ERR_OK;
 }
 
 TH_PRIVATE(th_err)
-th_router_add_route(th_router* router, th_method method, th_string path, th_handler handler, void* user_data)
+th_router_add_route(th_router* router, th_method method, th_str path, th_handler handler, void* user_data)
 {
-    if (th_string_empty(path) || path.ptr[0] != '/')
+    if (th_str_empty(path) || path.ptr[0] != '/')
         return TH_ERR_INVALID_ARG;
-    th_string trail = th_string_substr(path, 1, th_string_npos);
+    th_str trail = th_str_substr(path, 1, th_str_npos);
     th_route_segment** list = &router->routes;
     th_route_segment* route = *list;
 
     // find a matching route
     bool last = false;
     while (!last) {
-        th_string name = {0};
+        th_str name = {0};
         th_capture_type type = TH_CAPTURE_TYPE_NONE;
         th_err err = TH_ERR_OK;
         if ((err = th_route_parse_trail(&trail, &name, &type)) != TH_ERR_OK)
             return err;
-        last = th_string_empty(trail);
+        last = th_str_empty(trail);
         if (type == TH_CAPTURE_TYPE_PATH && !last)
             return TH_ERR_INVALID_ARG;
         while (1) {
@@ -262,7 +262,7 @@ th_router_add_route(th_router* router, th_method method, th_string path, th_hand
                 route = *list; // restart
             }
             if ((type == TH_CAPTURE_TYPE_NONE
-                 && th_string_eq(th_heap_string_view(&route->name), name))
+                 && th_str_eq(th_string_view(&route->name), name))
                 || (type != TH_CAPTURE_TYPE_NONE && type == route->type)) {
                 if (last)
                     break;

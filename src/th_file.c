@@ -3,9 +3,9 @@
 #include "th_allocator.h"
 #include "th_config.h"
 #include "th_fmt.h"
-#include "th_heap_string.h"
 #include "th_log.h"
 #include "th_path.h"
+#include "th_string.h"
 #include "th_system_error.h"
 
 #if defined(TH_CONFIG_OS_POSIX)
@@ -103,25 +103,25 @@ th_file_mmap_deinit(th_file_mmap* view)
 /* th_file implementation begin */
 
 TH_LOCAL(th_err)
-th_file_validate_path(th_dir* dir, th_string path, th_allocator* allocator)
+th_file_validate_path(th_dir* dir, th_str path, th_allocator* allocator)
 {
     if (path.len > TH_CONFIG_MAX_PATH_LEN)
         return TH_ERR_INVALID_ARG;
-    th_heap_string realpath = {0};
-    th_heap_string_init(&realpath, allocator);
+    th_string realpath = {0};
+    th_string_init(&realpath, allocator);
     th_err err = TH_ERR_OK;
     if ((err = th_path_resolve_against(path, dir, &realpath)) != TH_ERR_OK)
         goto cleanup;
-    if (!th_path_is_within(th_heap_string_view(&realpath), dir)) {
+    if (!th_path_is_within(th_string_view(&realpath), dir)) {
         err = TH_ERR_HTTP(TH_CODE_FORBIDDEN);
         goto cleanup;
     }
-    if (th_path_is_hidden(th_heap_string_view(&realpath))) {
+    if (th_path_is_hidden(th_string_view(&realpath))) {
         err = TH_ERR_HTTP(TH_CODE_FORBIDDEN);
         goto cleanup;
     }
 cleanup:
-    th_heap_string_deinit(&realpath);
+    th_string_deinit(&realpath);
     return err;
 }
 
@@ -133,16 +133,16 @@ th_file_init(th_file* stream)
 }
 
 TH_PRIVATE(th_err)
-th_file_openat(th_file* stream, th_dir* dir, th_string path, th_open_opt opt)
+th_file_openat(th_file* stream, th_dir* dir, th_str path, th_open_opt opt)
 {
     th_err err = TH_ERR_OK;
     if ((err = th_file_validate_path(dir, path, dir->allocator)) != TH_ERR_OK) {
         if (err == TH_ERR_SYSTEM(TH_ENOENT) && opt.create) {
             // resolve only the directory part
-            size_t last_slash = th_string_find_last(path, 0, '/');
-            if (last_slash == th_string_npos)
+            size_t last_slash = th_str_find_last(path, 0, '/');
+            if (last_slash == th_str_npos)
                 last_slash = 0;
-            th_string dirpath = th_string_substr(path, 0, last_slash);
+            th_str dirpath = th_str_substr(path, 0, last_slash);
             if ((err = th_file_validate_path(dir, dirpath, dir->allocator)) != TH_ERR_OK)
                 return err;
         } else {

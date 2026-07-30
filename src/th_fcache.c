@@ -7,7 +7,7 @@
 TH_LOCAL(th_fcache_id)
 th_fcache_entry_id(th_fcache_entry* entry)
 {
-    return (th_fcache_id){th_heap_string_view(&entry->path), entry->dir};
+    return (th_fcache_id){th_string_view(&entry->path), entry->dir};
 }
 
 TH_LOCAL(void)
@@ -20,7 +20,7 @@ th_fcache_entry_actual_destroy(void* self)
         th_fcache_map_erase(&entry->cache->map, it);
     }
     th_file_deinit(&entry->stream);
-    th_heap_string_deinit(&entry->path);
+    th_string_deinit(&entry->path);
     th_allocator_free(entry->allocator, entry);
 }
 
@@ -30,14 +30,14 @@ th_fcache_entry_init(th_fcache_entry* entry, th_fcache* cache, th_allocator* all
     entry->allocator = allocator ? allocator : th_default_allocator_get();
     th_refcounted_init(&entry->base, th_fcache_entry_actual_destroy);
     th_file_init(&entry->stream);
-    th_heap_string_init(&entry->path, entry->allocator);
+    th_string_init(&entry->path, entry->allocator);
     entry->cache = cache;
     entry->next = NULL;
     entry->prev = NULL;
 }
 
 TH_LOCAL(th_err)
-th_fcache_entry_open(th_fcache_entry* entry, th_string root, th_string path)
+th_fcache_entry_open(th_fcache_entry* entry, th_str root, th_str path)
 {
     th_err err = TH_ERR_OK;
     th_dir* dir = th_dir_mgr_get(&entry->cache->dir_mgr, root);
@@ -48,7 +48,7 @@ th_fcache_entry_open(th_fcache_entry* entry, th_string root, th_string path)
         TH_LOG_INFO("Failed to open file at %.*s: %s", (int)path.len, path.ptr, th_strerror(err));
         goto cleanup;
     }
-    if ((err = th_heap_string_set(&entry->path, path)) != TH_ERR_OK) {
+    if ((err = th_string_set(&entry->path, path)) != TH_ERR_OK) {
         TH_LOG_ERROR("Failed to set path: %s", th_strerror(err));
         goto cleanup_fstream;
     }
@@ -94,7 +94,7 @@ th_fcache_erase(th_fcache* cache, th_fcache_entry* entry)
 }
 
 TH_LOCAL(th_fcache_entry*)
-th_fcache_try_get(th_fcache* cache, th_string root, th_string path)
+th_fcache_try_get(th_fcache* cache, th_str root, th_str path)
 {
     th_dir* dir = th_dir_mgr_get(&cache->dir_mgr, root);
     if (!dir)
@@ -117,13 +117,13 @@ th_fcache_try_get(th_fcache* cache, th_string root, th_string path)
 }
 
 TH_PRIVATE(th_err)
-th_fcache_add_dir(th_fcache* cache, th_string label, th_string path)
+th_fcache_add_dir(th_fcache* cache, th_str label, th_str path)
 {
     return th_dir_mgr_add(&cache->dir_mgr, label, path);
 }
 
 TH_PRIVATE(th_dir*)
-th_fcache_find_dir(th_fcache* cache, th_string label)
+th_fcache_find_dir(th_fcache* cache, th_str label)
 {
     return th_dir_mgr_get(&cache->dir_mgr, label);
 }
@@ -147,7 +147,7 @@ th_fcache_insert(th_fcache* cache, th_fcache_entry* entry)
 }
 
 TH_PRIVATE(th_err)
-th_fcache_get(th_fcache* cache, th_string root, th_string path, th_fcache_entry** out)
+th_fcache_get(th_fcache* cache, th_str root, th_str path, th_fcache_entry** out)
 {
     th_fcache_entry* entry = th_fcache_try_get(cache, root, path);
     if (entry) {

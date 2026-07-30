@@ -55,12 +55,12 @@ TH_LOCAL(void)
 th_http_write_error_response(th_http* http, th_err err)
 {
     th_response_set_code(&http->response, TH_ERR_CODE(err));
-    if (th_heap_string_len(&http->request.uri_path) == 0) {
+    if (th_string_len(&http->request.uri_path) == 0) {
         // Set default error message
         th_printf_body(&http->response, "%d %s", TH_ERR_CODE(err), th_http_strerror((int)err));
     }
     if (http->close) {
-        th_response_add_header(&http->response, TH_STRING("Connection"), TH_STRING("close"));
+        th_response_add_header(&http->response, TH_STR("Connection"), TH_STR("close"));
         http->close = TH_HTTP_CLOSE;
     }
     th_http_write_response(http);
@@ -87,7 +87,7 @@ TH_LOCAL(void)
 th_http_handle_require_1_1(th_http* http)
 {
     TH_LOG_ERROR("%p: Trying send a HTTP/1.1 response to a HTTP/1.0 client, sending 400 Bad Request instead", http);
-    th_response_set_body(&http->response, TH_STRING("HTTP/1.1 required for this request"));
+    th_response_set_body(&http->response, TH_STR("HTTP/1.1 required for this request"));
     th_http_handle_error(http, TH_ERR_HTTP(TH_CODE_BAD_REQUEST));
 }
 
@@ -107,7 +107,7 @@ th_http_handle_options(th_router* router, th_request* request, th_response* resp
     };
     char allow[512] = {0};
     size_t pos = th_fmt_str_append(allow, 0, sizeof(allow), "OPTIONS"); // OPTIONS is always allowed
-    if (strcmp(th_heap_string_data(&request->uri_path), "*") != 0) {
+    if (strcmp(th_string_data(&request->uri_path), "*") != 0) {
         for (size_t i = 0; i < TH_ARRAY_SIZE(methods); i++) {
             if (th_router_would_handle(router, methods[i].method, request)) {
                 pos += th_fmt_str_append(allow, pos, sizeof(allow) - pos, ", ");
@@ -121,9 +121,9 @@ th_http_handle_options(th_router* router, th_request* request, th_response* resp
         }
     }
     th_err err = TH_ERR_OK;
-    if ((err = th_response_add_header(response, TH_STRING("Allow"), th_string_make(allow, pos))) != TH_ERR_OK)
+    if ((err = th_response_add_header(response, TH_STR("Allow"), th_str_make(allow, pos))) != TH_ERR_OK)
         return err;
-    if ((err = th_response_add_header(response, TH_STRING("Content-Type"), TH_STRING("text/plain"))) != TH_ERR_OK)
+    if ((err = th_response_add_header(response, TH_STR("Content-Type"), TH_STR("text/plain"))) != TH_ERR_OK)
         return err;
     return TH_ERR_OK;
 }
@@ -173,10 +173,10 @@ th_http_handle_request_and_write_response(th_http* http)
     }
     // All good, write the response
     if (request->close) {
-        th_response_add_header(response, TH_STRING("Connection"), TH_STRING("close"));
+        th_response_add_header(response, TH_STR("Connection"), TH_STR("close"));
         http->close = true;
     } else {
-        th_response_add_header(response, TH_STRING("Connection"), TH_STRING("keep-alive"));
+        th_response_add_header(response, TH_STR("Connection"), TH_STR("keep-alive"));
     }
     TH_LOG_TRACE("%p: Write response %p", http, response);
     th_http_write_response(http);
@@ -193,8 +193,8 @@ th_http_handle_read_request(th_http* http, size_t len, th_err err)
     }
     http->read_bytes += len;
     size_t parsed = 0;
-    th_string parser_input = (th_string){.ptr = th_buf_vec_at(&http->buf, http->parsed_bytes),
-                                         .len = http->read_bytes - http->parsed_bytes};
+    th_str parser_input = (th_str){.ptr = th_buf_vec_at(&http->buf, http->parsed_bytes),
+                                   .len = http->read_bytes - http->parsed_bytes};
     if ((err = th_request_parser_parse(&http->parser, &http->request, parser_input, &parsed)) != TH_ERR_OK) {
         th_http_write_error_response(http, th_http_error(err));
         return;

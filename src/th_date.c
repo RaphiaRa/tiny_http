@@ -3,7 +3,7 @@
 #include <time.h>
 
 #include "th_config.h"
-#include "th_string.h"
+#include "th_str.h"
 
 TH_PUBLIC(th_duration)
 th_seconds(int seconds)

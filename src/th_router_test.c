@@ -42,7 +42,7 @@ th_router_init(&router, NULL);
 th_request request = {0};
 th_request_init(&request, NULL, NULL);
 request.method = TH_METHOD_GET;
-th_heap_string_set(&request.uri_path, TH_STRING("/test"));
+th_string_set(&request.uri_path, TH_STR("/test"));
 th_response response = {0};
 TH_EXPECT(th_router_handle(&router, &request, &response) == TH_ERR_HTTP(TH_CODE_NOT_FOUND));
 th_router_deinit(&router);
@@ -52,7 +52,7 @@ ROUTER_TEST_CASE_BEGIN(router_add_route)
 {
     th_router router;
     th_router_init(&router, NULL);
-    th_err err = th_router_add_route(&router, TH_METHOD_GET, TH_STRING("/test"), mock_handler, NULL);
+    th_err err = th_router_add_route(&router, TH_METHOD_GET, TH_STR("/test"), mock_handler, NULL);
     TH_EXPECT(err == TH_ERR_OK);
     th_router_deinit(&router);
 }
@@ -61,12 +61,12 @@ ROUTER_TEST_CASE_BEGIN(router_handle)
 {
     th_router router;
     th_router_init(&router, NULL);
-    th_err err = th_router_add_route(&router, TH_METHOD_GET, TH_STRING("/test"), mock_handler, NULL);
+    th_err err = th_router_add_route(&router, TH_METHOD_GET, TH_STR("/test"), mock_handler, NULL);
     TH_EXPECT(err == TH_ERR_OK);
     th_request request = {0};
     th_request_init(&request, NULL, NULL);
     request.method = TH_METHOD_GET;
-    th_heap_string_set(&request.uri_path, TH_STRING("/test"));
+    th_string_set(&request.uri_path, TH_STR("/test"));
     th_response response = {0};
     TH_EXPECT(th_router_handle(&router, &request, &response) == TH_ERR_OK);
     th_router_deinit(&router);
@@ -76,12 +76,12 @@ ROUTER_TEST_CASE_BEGIN(router_handle_empty)
 {
     th_router router;
     th_router_init(&router, NULL);
-    TH_EXPECT(th_router_add_route(&router, TH_METHOD_GET, TH_STRING("/"), mock_handler, NULL) == TH_ERR_OK);
+    TH_EXPECT(th_router_add_route(&router, TH_METHOD_GET, TH_STR("/"), mock_handler, NULL) == TH_ERR_OK);
     {
         th_request request = {0};
         th_request_init(&request, NULL, NULL);
         request.method = TH_METHOD_GET;
-        th_heap_string_set(&request.uri_path, TH_STRING("/"));
+        th_string_set(&request.uri_path, TH_STR("/"));
         th_response response = {0};
         TH_EXPECT(th_router_handle(&router, &request, &response) == TH_ERR_OK);
         th_request_deinit(&request);
@@ -90,7 +90,7 @@ ROUTER_TEST_CASE_BEGIN(router_handle_empty)
         th_request request = {0};
         th_request_init(&request, NULL, NULL);
         request.method = TH_METHOD_GET;
-        th_heap_string_set(&request.uri_path, TH_STRING("/test"));
+        th_string_set(&request.uri_path, TH_STR("/test"));
         th_response response = {0};
         TH_EXPECT(th_router_handle(&router, &request, &response) == TH_ERR_HTTP(TH_CODE_NOT_FOUND));
         th_request_deinit(&request);
@@ -102,13 +102,13 @@ ROUTER_TEST_CASE_BEGIN(router_handle_path_capture)
 {
     th_router router;
     th_router_init(&router, NULL);
-    th_err err = th_router_add_route(&router, TH_METHOD_GET, TH_STRING("/test/{path:path}"), mock_handler, NULL);
+    th_err err = th_router_add_route(&router, TH_METHOD_GET, TH_STR("/test/{path:path}"), mock_handler, NULL);
     TH_EXPECT(err == TH_ERR_OK);
     {
         th_request request = {0};
         th_request_init(&request, NULL, NULL);
         request.method = TH_METHOD_GET;
-        th_heap_string_set(&request.uri_path, TH_STRING("/test/abc"));
+        th_string_set(&request.uri_path, TH_STR("/test/abc"));
         th_response response = {0};
         required = (const struct keyval[]){
             {.key = "path", .value = "abc"},
@@ -122,7 +122,7 @@ ROUTER_TEST_CASE_BEGIN(router_handle_path_capture)
         th_request request = {0};
         th_request_init(&request, NULL, NULL);
         request.method = TH_METHOD_GET;
-        th_heap_string_set(&request.uri_path, TH_STRING("/test/abc/def"));
+        th_string_set(&request.uri_path, TH_STR("/test/abc/def"));
         th_response response = {0};
         required = (const struct keyval[]){
             {.key = "path", .value = "abc/def"},
@@ -139,13 +139,13 @@ ROUTER_TEST_CASE_BEGIN(router_handle_capture_default)
 {
     th_router router;
     th_router_init(&router, NULL);
-    th_err err = th_router_add_route(&router, TH_METHOD_GET, TH_STRING("/test/{first}/test2/{second}"), mock_handler, NULL);
+    th_err err = th_router_add_route(&router, TH_METHOD_GET, TH_STR("/test/{first}/test2/{second}"), mock_handler, NULL);
     TH_EXPECT(err == TH_ERR_OK);
     {
         th_request request = {0};
         th_request_init(&request, NULL, NULL);
         request.method = TH_METHOD_GET;
-        th_heap_string_set(&request.uri_path, TH_STRING("/test/abc/test2/def"));
+        th_string_set(&request.uri_path, TH_STR("/test/abc/test2/def"));
         th_response response = {0};
         required = (const struct keyval[]){
             {.key = "first", .value = "abc"},
@@ -163,13 +163,13 @@ ROUTER_TEST_CASE_BEGIN(router_handle_capture_int)
 {
     th_router router;
     th_router_init(&router, NULL);
-    th_err err = th_router_add_route(&router, TH_METHOD_GET, TH_STRING("/test/{int:id}"), mock_handler, NULL);
+    th_err err = th_router_add_route(&router, TH_METHOD_GET, TH_STR("/test/{int:id}"), mock_handler, NULL);
     TH_EXPECT(err == TH_ERR_OK);
     {
         th_request request = {0};
         th_request_init(&request, NULL, NULL);
         request.method = TH_METHOD_GET;
-        th_heap_string_set(&request.uri_path, TH_STRING("/test/123"));
+        th_string_set(&request.uri_path, TH_STR("/test/123"));
         th_response response = {0};
         required = (const struct keyval[]){
             {.key = "id", .value = "123"},
@@ -183,7 +183,7 @@ ROUTER_TEST_CASE_BEGIN(router_handle_capture_int)
         th_request request = {0};
         th_request_init(&request, NULL, NULL);
         request.method = TH_METHOD_GET;
-        th_heap_string_set(&request.uri_path, TH_STRING("/test/abc"));
+        th_string_set(&request.uri_path, TH_STR("/test/abc"));
         th_response response = {0};
         TH_EXPECT(th_router_handle(&router, &request, &response) == TH_ERR_HTTP(TH_CODE_NOT_FOUND));
         th_request_deinit(&request);
@@ -195,8 +195,8 @@ ROUTER_TEST_CASE_BEGIN(router_handle_invalid_capture)
 {
     th_router router;
     th_router_init(&router, NULL);
-    TH_EXPECT(th_router_add_route(&router, TH_METHOD_GET, TH_STRING("/test/{invalid:arg}"), mock_handler, NULL) == TH_ERR_INVALID_ARG);
-    TH_EXPECT(th_router_add_route(&router, TH_METHOD_GET, TH_STRING("/test/asdsad{invalid}"), mock_handler, NULL) == TH_ERR_INVALID_ARG);
+    TH_EXPECT(th_router_add_route(&router, TH_METHOD_GET, TH_STR("/test/{invalid:arg}"), mock_handler, NULL) == TH_ERR_INVALID_ARG);
+    TH_EXPECT(th_router_add_route(&router, TH_METHOD_GET, TH_STR("/test/asdsad{invalid}"), mock_handler, NULL) == TH_ERR_INVALID_ARG);
     th_router_deinit(&router);
 }
 ROUTER_TEST_CASE_END
@@ -206,13 +206,13 @@ ROUTER_TEST_CASE_BEGIN(router_handle_multiple_simple_routes)
     th_router_init(&router, NULL);
     const char* routes[] = {"/first", "/second", "/third", "/fourth", "/fifth"};
     for (size_t i = 0; i < sizeof(routes) / sizeof(routes[0]); i++) {
-        TH_EXPECT(th_router_add_route(&router, TH_METHOD_GET, th_string_from_cstr(routes[i]), mock_handler, NULL) == TH_ERR_OK);
+        TH_EXPECT(th_router_add_route(&router, TH_METHOD_GET, th_str_from_cstr(routes[i]), mock_handler, NULL) == TH_ERR_OK);
     }
     for (size_t i = 0; i < sizeof(routes) / sizeof(routes[0]); i++) {
         th_request request = {0};
         th_request_init(&request, NULL, NULL);
         request.method = TH_METHOD_GET;
-        th_heap_string_set(&request.uri_path, th_string_from_cstr(routes[i]));
+        th_string_set(&request.uri_path, th_str_from_cstr(routes[i]));
         th_response response = {0};
         TH_EXPECT(th_router_handle(&router, &request, &response) == TH_ERR_OK);
         th_request_deinit(&request);
@@ -263,13 +263,13 @@ ROUTER_TEST_CASE_BEGIN(router_handle_multiple_complex_routes)
         {"/album/{int:album_id}/photos", "/album/321/photos", "album_id", "321", NULL},
     };
     for (size_t i = 0; i < sizeof(routes) / sizeof(routes[0]); i++) {
-        TH_EXPECT(th_router_add_route(&router, TH_METHOD_GET, th_string_from_cstr(routes[i][0]), mock_handler, NULL) == TH_ERR_OK);
+        TH_EXPECT(th_router_add_route(&router, TH_METHOD_GET, th_str_from_cstr(routes[i][0]), mock_handler, NULL) == TH_ERR_OK);
     }
     for (size_t i = 0; i < sizeof(routes) / sizeof(routes[0]); i++) {
         th_request request = {0};
         th_request_init(&request, NULL, NULL);
         request.method = TH_METHOD_GET;
-        th_heap_string_set(&request.uri_path, th_string_from_cstr(routes[i][1]));
+        th_string_set(&request.uri_path, th_str_from_cstr(routes[i][1]));
         th_response response = {0};
         struct keyval required_buf[10];
         required = required_buf;

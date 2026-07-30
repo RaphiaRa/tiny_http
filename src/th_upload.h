@@ -5,29 +5,29 @@
 
 #include "th_config.h"
 #include "th_fcache.h"
-#include "th_heap_string.h"
+#include "th_string.h"
 
 struct th_upload {
-    th_heap_string name;
-    th_heap_string filename;
-    th_heap_string content_type;
-    th_string data;
+    th_string name;
+    th_string filename;
+    th_string content_type;
+    th_str data;
     th_fcache* fcache;
 };
 
 TH_PRIVATE(void)
-th_upload_init(th_upload* upload, th_string buffer, th_fcache* fcache, th_allocator* allocator);
+th_upload_init(th_upload* upload, th_str buffer, th_fcache* fcache, th_allocator* allocator);
 
 TH_PRIVATE(void)
 th_upload_deinit(th_upload* upload);
 
 TH_PRIVATE(th_err)
-th_upload_set_name(th_upload* upload, th_string name);
+th_upload_set_name(th_upload* upload, th_str name);
 
 TH_PRIVATE(th_err)
-th_upload_set_filename(th_upload* upload, th_string filename);
+th_upload_set_filename(th_upload* upload, th_str filename);
 
 TH_PRIVATE(th_err)
-th_upload_set_content_type(th_upload* upload, th_string content_type);
+th_upload_set_content_type(th_upload* upload, th_str content_type);
 
 #endif

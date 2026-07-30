@@ -39,7 +39,7 @@ TH_PRIVATE(size_t)
 th_request_parser_content_len(th_request_parser* parser);
 
 TH_PRIVATE(th_err)
-th_request_parser_parse(th_request_parser* parser, th_request* request, th_string data, size_t* parsed);
+th_request_parser_parse(th_request_parser* parser, th_request* request, th_str data, size_t* parsed);
 
 TH_PRIVATE(bool)
 th_request_parser_header_done(th_request_parser* parser);

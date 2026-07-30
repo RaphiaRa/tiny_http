@@ -28,7 +28,7 @@ typedef struct th_open_opt {
 } th_open_opt;
 
 TH_PRIVATE(th_err)
-th_file_openat(th_file* stream, th_dir* dir, th_string path, th_open_opt opt);
+th_file_openat(th_file* stream, th_dir* dir, th_str path, th_open_opt opt);
 
 TH_PRIVATE(th_err)
 th_file_read(th_file* stream, void* addr, size_t len, size_t offset, size_t* read) TH_MAYBE_UNUSED;

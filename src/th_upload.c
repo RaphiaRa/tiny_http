@@ -1,11 +1,11 @@
 #include "th_upload.h"
 
 TH_PRIVATE(void)
-th_upload_init(th_upload* upload, th_string buffer, th_fcache* fcache, th_allocator* allocator)
+th_upload_init(th_upload* upload, th_str buffer, th_fcache* fcache, th_allocator* allocator)
 {
-    th_heap_string_init(&upload->name, allocator);
-    th_heap_string_init(&upload->filename, allocator);
-    th_heap_string_init(&upload->content_type, allocator);
+    th_string_init(&upload->name, allocator);
+    th_string_init(&upload->filename, allocator);
+    th_string_init(&upload->content_type, allocator);
     upload->data = buffer;
     upload->fcache = fcache;
 }
@@ -13,27 +13,27 @@ th_upload_init(th_upload* upload, th_string buffer, th_fcache* fcache, th_alloca
 TH_PRIVATE(void)
 th_upload_deinit(th_upload* upload)
 {
-    th_heap_string_deinit(&upload->name);
-    th_heap_string_deinit(&upload->filename);
-    th_heap_string_deinit(&upload->content_type);
+    th_string_deinit(&upload->name);
+    th_string_deinit(&upload->filename);
+    th_string_deinit(&upload->content_type);
 }
 
 TH_PRIVATE(th_err)
-th_upload_set_name(th_upload* upload, th_string name)
+th_upload_set_name(th_upload* upload, th_str name)
 {
-    return th_heap_string_set(&upload->name, name);
+    return th_string_set(&upload->name, name);
 }
 
 TH_PRIVATE(th_err)
-th_upload_set_filename(th_upload* upload, th_string filename)
+th_upload_set_filename(th_upload* upload, th_str filename)
 {
-    return th_heap_string_set(&upload->filename, filename);
+    return th_string_set(&upload->filename, filename);
 }
 
 TH_PRIVATE(th_err)
-th_upload_set_content_type(th_upload* upload, th_string content_type)
+th_upload_set_content_type(th_upload* upload, th_str content_type)
 {
-    return th_heap_string_set(&upload->content_type, content_type);
+    return th_string_set(&upload->content_type, content_type);
 }
 
 // Public API
@@ -42,9 +42,9 @@ TH_PUBLIC(th_upload_info)
 th_upload_get_info(const th_upload* upload)
 {
     return (th_upload_info){
-        .name = th_heap_string_data(&upload->name),
-        .filename = th_heap_string_data(&upload->filename),
-        .content_type = th_heap_string_data(&upload->content_type),
+        .name = th_string_data(&upload->name),
+        .filename = th_string_data(&upload->filename),
+        .content_type = th_string_data(&upload->content_type),
         .size = upload->data.len,
     };
 }
@@ -58,13 +58,13 @@ th_upload_get_data(const th_upload* upload)
 TH_PUBLIC(th_err)
 th_upload_save(const th_upload* upload, const char* dir_label, const char* filepath)
 {
-    th_dir* dir = th_fcache_find_dir(upload->fcache, th_string_from_cstr(dir_label));
+    th_dir* dir = th_fcache_find_dir(upload->fcache, th_str_from_cstr(dir_label));
     if (!dir)
         return TH_ERR_HTTP(TH_CODE_NOT_FOUND);
     th_err err = TH_ERR_OK;
     th_open_opt opt = {.create = true, .write = true, .truncate = true};
     th_file file;
-    if ((err = th_file_openat(&file, dir, th_string_from_cstr(filepath), opt)) != TH_ERR_OK)
+    if ((err = th_file_openat(&file, dir, th_str_from_cstr(filepath), opt)) != TH_ERR_OK)
         return err;
     size_t total_written = 0;
     while (total_written < upload->data.len) {

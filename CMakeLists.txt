@@ -168,6 +168,16 @@ if (NOT TH_DISABLE_TESTS)
     else()
         message(WARNING "Address sanitizer not found, tests will not be run with ASAN")
     endif()
+
+    option(TH_ENABLE_COVERAGE "Instrument tiny_http_test with gcov coverage" OFF)
+    if (TH_ENABLE_COVERAGE)
+        if (NOT CMAKE_C_COMPILER_ID MATCHES "Clang|GNU")
+            message(FATAL_ERROR "TH_ENABLE_COVERAGE requires Clang or GNU")
+        endif()
+        target_compile_options(tiny_http_test PUBLIC --coverage -O0 -g)
+        target_link_options(tiny_http_test PUBLIC --coverage)
+    endif()
+
     target_compile_definitions(tiny_http_test PRIVATE TH_CONFIG_OS_MOCK=1)
     target_compile_definitions(tiny_http_test PRIVATE TH_LOG_LEVEL=${TH_LOG_LEVEL})
     target_compile_definitions(tiny_http_test PRIVATE TH_WITH_SSL=${TH_WITH_SSL})
@@ -210,6 +220,28 @@ if (NOT TH_DISABLE_TESTS)
         get_filename_component(test_name ${test_src} NAME_WE)
         add_test(NAME src/${test_name} COMMAND th_test src/${test_name})
     endforeach()
+
+    if (TH_ENABLE_COVERAGE)
+        find_program(GCOVR gcovr)
+        if (GCOVR)
+            add_custom_target(coverage
+                COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
+                COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/coverage
+                COMMAND ${GCOVR} --root ${CMAKE_CURRENT_SOURCE_DIR}
+                    --filter ${CMAKE_CURRENT_SOURCE_DIR}/src/
+                    --exclude .*_test\\.c$$
+                    --object-directory ${CMAKE_CURRENT_BINARY_DIR}
+                    --print-summary
+                    --html-details ${CMAKE_CURRENT_BINARY_DIR}/coverage/index.html
+                WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+                DEPENDS th_test
+                COMMENT "Running tests and generating coverage report"
+                VERBATIM
+            )
+        else()
+            message(WARNING "TH_ENABLE_COVERAGE is on but gcovr was not found, 'coverage' target will not be available")
+        endif()
+    endif()
 endif()
 
 # Amalgamation

@@ -188,13 +188,13 @@ th_server_bind(th_server* server, const char* host, const char* port, th_bind_op
 TH_LOCAL(th_err)
 th_server_route(th_server* server, th_method method, const char* path, th_handler handler, void* user_data)
 {
-    return th_router_add_route(&server->router, method, th_string_from_cstr(path), handler, user_data);
+    return th_router_add_route(&server->router, method, th_str_from_cstr(path), handler, user_data);
 }
 
 TH_LOCAL(th_err)
 th_server_add_dir(th_server* server, const char* name, const char* path)
 {
-    return th_fcache_add_dir(&server->fcache, th_string_from_cstr(name), th_string_from_cstr(path));
+    return th_fcache_add_dir(&server->fcache, th_str_from_cstr(name), th_str_from_cstr(path));
 }
 
 TH_LOCAL(th_err)

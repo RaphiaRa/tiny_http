@@ -5,7 +5,7 @@
 #include "th_log.h"
 #include "th_mime.h"
 #include "th_response.h"
-#include "th_string.h"
+#include "th_str.h"
 
 #include <assert.h>
 #include <fcntl.h>
@@ -23,8 +23,8 @@ TH_PRIVATE(void)
 th_response_init(th_response* response, th_fcache* fcache, th_allocator* allocator)
 {
     allocator = allocator ? allocator : th_default_allocator_get();
-    th_heap_string_init(&response->headers, allocator);
-    th_heap_string_init(&response->body, allocator);
+    th_string_init(&response->headers, allocator);
+    th_string_init(&response->body, allocator);
     response->iov[0] = (th_iov){0};
     response->iov[1] = (th_iov){0};
     response->iov[2] = (th_iov){0};
@@ -41,8 +41,8 @@ th_response_init(th_response* response, th_fcache* fcache, th_allocator* allocat
 TH_PRIVATE(void)
 th_response_deinit(th_response* response)
 {
-    th_heap_string_deinit(&response->headers);
-    th_heap_string_deinit(&response->body);
+    th_string_deinit(&response->headers);
+    th_string_deinit(&response->body);
     if (response->fcache_entry) {
         th_fcache_entry_unref(response->fcache_entry);
         response->fcache_entry = NULL;
@@ -52,8 +52,8 @@ th_response_deinit(th_response* response)
 TH_PRIVATE(void)
 th_response_reset(th_response* response)
 {
-    th_heap_string_clear(&response->headers);
-    th_heap_string_clear(&response->body);
+    th_string_clear(&response->headers);
+    th_string_clear(&response->body);
     response->iov[0] = (th_iov){0};
     response->iov[1] = (th_iov){0};
     response->iov[2] = (th_iov){0};
@@ -75,33 +75,33 @@ th_response_set_code(th_response* response, th_code code)
 }
 
 TH_PUBLIC(th_err)
-th_response_add_header(th_response* response, th_string key, th_string value)
+th_response_add_header(th_response* response, th_str key, th_str value)
 {
     th_header_id header_id = th_header_id_from_string(key.ptr, key.len);
     if (header_id != TH_HEADER_ID_UNKNOWN && response->header_is_set[header_id]) {
         return TH_ERR_INVALID_ARG;
     }
     th_err err = TH_ERR_OK;
-    size_t old_len = th_heap_string_len(&response->headers);
-    if ((err = th_heap_string_append(&response->headers, key)) != TH_ERR_OK)
+    size_t old_len = th_string_len(&response->headers);
+    if ((err = th_string_append(&response->headers, key)) != TH_ERR_OK)
         goto cleanup;
-    if ((err = th_heap_string_append(&response->headers, TH_STRING(": "))) != TH_ERR_OK)
+    if ((err = th_string_append(&response->headers, TH_STR(": "))) != TH_ERR_OK)
         goto cleanup;
-    if ((err = th_heap_string_append(&response->headers, value)) != TH_ERR_OK)
+    if ((err = th_string_append(&response->headers, value)) != TH_ERR_OK)
         goto cleanup;
-    if ((err = th_heap_string_append(&response->headers, TH_STRING("\r\n"))) != TH_ERR_OK)
+    if ((err = th_string_append(&response->headers, TH_STR("\r\n"))) != TH_ERR_OK)
         goto cleanup;
     if (header_id != TH_HEADER_ID_UNKNOWN) {
         response->header_is_set[header_id] = 1;
     }
     return TH_ERR_OK;
 cleanup:
-    th_heap_string_resize(&response->headers, old_len, '\0');
+    th_string_resize(&response->headers, old_len, '\0');
     return err;
 }
 
-TH_LOCAL(th_string)
-th_response_get_mime_type(th_string filename)
+TH_LOCAL(th_str)
+th_response_get_mime_type(th_str filename)
 {
     char ext[256];
     size_t ei = 0;
@@ -117,14 +117,14 @@ th_response_get_mime_type(th_string filename)
     struct th_mime_mapping* mm = NULL;
     if (ext[ei] == '.') {
         mm = th_mime_mapping_find(&ext[ei + 1], max - ei - 1);
-        return mm ? mm->mime : TH_STRING("application/octet-stream");
+        return mm ? mm->mime : TH_STR("application/octet-stream");
     } else {
-        return TH_STRING("application/octet-stream");
+        return TH_STR("application/octet-stream");
     }
 }
 
 TH_LOCAL(th_err)
-th_response_set_body_from_file(th_response* response, th_string root, th_string path)
+th_response_set_body_from_file(th_response* response, th_str root, th_str path)
 {
     th_err err = TH_ERR_OK;
     if ((err = th_fcache_get(response->fcache, root, path, &response->fcache_entry)) != TH_ERR_OK) {
@@ -132,8 +132,8 @@ th_response_set_body_from_file(th_response* response, th_string root, th_string 
     }
     // Set the content type, if not already set
     if (response->header_is_set[TH_HEADER_ID_CONTENT_TYPE] == 0) {
-        th_string mime_type = th_response_get_mime_type(path);
-        if ((err = th_response_add_header(response, TH_STRING("Content-Type"), mime_type)) != TH_ERR_OK)
+        th_str mime_type = th_response_get_mime_type(path);
+        if ((err = th_response_add_header(response, TH_STR("Content-Type"), mime_type)) != TH_ERR_OK)
             goto cleanup_fcache_entry;
     }
     response->is_file = 1;
@@ -145,10 +145,10 @@ cleanup_fcache_entry:
 }
 
 TH_PRIVATE(th_err)
-th_response_set_body(th_response* response, th_string body)
+th_response_set_body(th_response* response, th_str body)
 {
     th_err err = TH_ERR_OK;
-    if ((err = th_heap_string_set(&response->body, body)) != TH_ERR_OK)
+    if ((err = th_string_set(&response->body, body)) != TH_ERR_OK)
         return err;
     response->is_file = 0;
     return TH_ERR_OK;
@@ -166,12 +166,12 @@ th_response_set_body_va(th_response* response, const char* fmt, va_list args)
     if (len < 0) {
         return TH_ERR_INVALID_ARG;
     } else if ((size_t)len < sizeof(buffer)) {
-        if ((err = th_heap_string_set(&response->body, th_string_make(buffer, (size_t)len))) != TH_ERR_OK) {
+        if ((err = th_string_set(&response->body, th_str_make(buffer, (size_t)len))) != TH_ERR_OK) {
             return err;
         }
     } else {
-        th_heap_string_resize(&response->body, (size_t)len, ' ');
-        vsnprintf(th_heap_string_at(&response->body, 0), (size_t)len, fmt, args);
+        th_string_resize(&response->body, (size_t)len, ' ');
+        vsnprintf(th_string_at(&response->body, 0), (size_t)len, fmt, args);
     }
     response->is_file = 0;
     return TH_ERR_OK;
@@ -181,25 +181,25 @@ TH_LOCAL(th_err)
 th_response_finalize_headers(th_response* response)
 {
     th_err err = TH_ERR_OK;
-    if ((err = th_heap_string_append(&response->headers, TH_STRING("\r\n"))) != TH_ERR_OK)
+    if ((err = th_string_append(&response->headers, TH_STR("\r\n"))) != TH_ERR_OK)
         return err;
-    size_t headers_len = th_heap_string_len(&response->headers);
+    size_t headers_len = th_string_len(&response->headers);
 
     // Set the start line
     char int_buffer[128]; // Buffer for the integer to string conversion
-    if ((err = th_heap_string_append(&response->headers, TH_STRING("HTTP/1.1 "))) != TH_ERR_OK)
+    if ((err = th_string_append(&response->headers, TH_STR("HTTP/1.1 "))) != TH_ERR_OK)
         return err;
-    if ((err = th_heap_string_append_cstr(&response->headers, th_fmt_uint_to_str(int_buffer, sizeof(int_buffer), response->code))) != TH_ERR_OK)
+    if ((err = th_string_append_cstr(&response->headers, th_fmt_uint_to_str(int_buffer, sizeof(int_buffer), response->code))) != TH_ERR_OK)
         return err;
-    if ((err = th_heap_string_append(&response->headers, TH_STRING(" "))) != TH_ERR_OK)
+    if ((err = th_string_append(&response->headers, TH_STR(" "))) != TH_ERR_OK)
         return err;
-    if ((err = th_heap_string_append_cstr(&response->headers, th_http_strerror((int)response->code))) != TH_ERR_OK)
+    if ((err = th_string_append_cstr(&response->headers, th_http_strerror((int)response->code))) != TH_ERR_OK)
         return err;
-    if ((err = th_heap_string_append(&response->headers, TH_STRING("\r\n"))) != TH_ERR_OK)
+    if ((err = th_string_append(&response->headers, TH_STR("\r\n"))) != TH_ERR_OK)
         return err;
-    response->iov[0].base = th_heap_string_at(&response->headers, headers_len);
-    response->iov[0].len = th_heap_string_len(&response->headers) - headers_len;
-    response->iov[1].base = th_heap_string_at(&response->headers, 0);
+    response->iov[0].base = th_string_at(&response->headers, headers_len);
+    response->iov[0].len = th_string_len(&response->headers) - headers_len;
+    response->iov[1].base = th_string_at(&response->headers, 0);
     response->iov[1].len = headers_len;
     return TH_ERR_OK;
 }
@@ -212,23 +212,23 @@ th_response_set_default_headers(th_response* response)
     if (response->is_file) {
         size_t len = 0;
         const char* content_len = th_fmt_uint_to_str_ex(buffer, sizeof(buffer), (unsigned int)response->file_len, &len);
-        if ((err = th_response_add_header(response, TH_STRING("Content-Length"), th_string_make(content_len, len))) != TH_ERR_OK)
+        if ((err = th_response_add_header(response, TH_STR("Content-Length"), th_str_make(content_len, len))) != TH_ERR_OK)
             return err;
     } else {
         size_t len = 0;
-        const char* body_len = th_fmt_uint_to_str_ex(buffer, sizeof(buffer), (unsigned int)th_heap_string_len(&response->body), &len);
-        if ((err = th_response_add_header(response, TH_STRING("Content-Length"), th_string_make(body_len, len))) != TH_ERR_OK)
+        const char* body_len = th_fmt_uint_to_str_ex(buffer, sizeof(buffer), (unsigned int)th_string_len(&response->body), &len);
+        if ((err = th_response_add_header(response, TH_STR("Content-Length"), th_str_make(body_len, len))) != TH_ERR_OK)
             return err;
     }
     if (!response->header_is_set[TH_HEADER_ID_SERVER]) {
-        if ((err = th_response_add_header(response, TH_STRING("Server"), TH_STRING("TinyHTTP"))) != TH_ERR_OK)
+        if ((err = th_response_add_header(response, TH_STR("Server"), TH_STR("TinyHTTP"))) != TH_ERR_OK)
             return err;
     }
     if (!response->header_is_set[TH_HEADER_ID_DATE]) {
         th_date now = th_date_now();
         char date[64];
         size_t len = th_fmt_strtime(date, sizeof(date), now);
-        if ((err = th_response_add_header(response, TH_STRING("Date"), th_string_make(date, len))) != TH_ERR_OK)
+        if ((err = th_response_add_header(response, TH_STR("Date"), th_str_make(date, len))) != TH_ERR_OK)
             return err;
     }
     return TH_ERR_OK;
@@ -251,9 +251,9 @@ th_response_async_write(th_response* response, th_socket* socket, th_io_handler*
         return;
     }
     if (response->is_file == 0) { // user provided body
-        if (th_heap_string_len(&response->body) > 0) {
-            response->iov[iovcnt].base = (void*)th_heap_string_data(&response->body);
-            response->iov[iovcnt].len = th_heap_string_len(&response->body);
+        if (th_string_len(&response->body) > 0) {
+            response->iov[iovcnt].base = (void*)th_string_data(&response->body);
+            response->iov[iovcnt].len = th_string_len(&response->body);
             iovcnt++;
         }
         th_socket_async_writev_exact(socket, response->iov, iovcnt, handler);
@@ -270,7 +270,7 @@ cleanup:
 TH_PUBLIC(th_err)
 th_set_body(th_response* response, const char* body)
 {
-    return th_response_set_body(response, th_string_from_cstr(body));
+    return th_response_set_body(response, th_str_from_cstr(body));
 }
 
 TH_PUBLIC(th_err)
@@ -287,13 +287,13 @@ TH_PUBLIC(th_err)
 th_set_body_from_file(th_response* response, const char* root, const char* filepath)
 {
     (void)root;
-    return th_response_set_body_from_file(response, th_string_from_cstr(root), th_string_from_cstr(filepath));
+    return th_response_set_body_from_file(response, th_str_from_cstr(root), th_str_from_cstr(filepath));
 }
 
 TH_PUBLIC(th_err)
 th_add_header(th_response* response, const char* key, const char* value)
 {
-    return th_response_add_header(response, th_string_from_cstr(key), th_string_from_cstr(value));
+    return th_response_add_header(response, th_str_from_cstr(key), th_str_from_cstr(value));
 }
 
 TH_PUBLIC(th_err)
@@ -352,5 +352,5 @@ th_add_cookie(th_response* response, const char* key, const char* value, th_cook
             }
         }
     }
-    return th_response_add_header(response, TH_STRING("Set-Cookie"), th_string_make(buffer, len));
+    return th_response_add_header(response, TH_STR("Set-Cookie"), th_str_make(buffer, len));
 }

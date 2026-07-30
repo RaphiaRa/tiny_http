@@ -9,16 +9,16 @@
 #include "th_config.h"
 #include "th_fcache.h"
 #include "th_header_id.h"
-#include "th_heap_string.h"
 #include "th_socket.h"
+#include "th_string.h"
 /* th_response begin */
 
 // 3 = start line + headers + body
 #define TH_RESPONSE_MAX_CHUNK_NUM 3
 
 struct th_response {
-    th_heap_string headers;
-    th_heap_string body;
+    th_string headers;
+    th_string body;
     th_iov iov[TH_RESPONSE_MAX_CHUNK_NUM];
     th_allocator* allocator;
     th_fcache* fcache;
@@ -41,10 +41,10 @@ TH_PRIVATE(void)
 th_response_set_code(th_response* response, th_code code);
 
 TH_PRIVATE(th_err)
-th_response_add_header(th_response* response, th_string key, th_string value);
+th_response_add_header(th_response* response, th_str key, th_str value);
 
 TH_PRIVATE(th_err)
-th_response_set_body(th_response* response, th_string body);
+th_response_set_body(th_response* response, th_str body);
 
 TH_PRIVATE(void)
 th_response_deinit(th_response* response);

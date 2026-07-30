@@ -2,7 +2,7 @@
 #include <stddef.h>
 #include <string.h>
 #include "th_mime.h"
-#include "th_string.h"
+#include "th_str.h"
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmissing-field-initializers"
 #pragma GCC diagnostic ignored "-Wconversion"
@@ -17,39 +17,39 @@
 %compare-strncmp
 struct th_mime_mapping;
 %%
-aac,  TH_STRING_INIT("audio/aac")
-mp3,  TH_STRING_INIT("audio/mpeg")
-ogg,  TH_STRING_INIT("audio/ogg")
-opus, TH_STRING_INIT("audio/opus")
-wav,  TH_STRING_INIT("audio/wav")
-weba, TH_STRING_INIT("audio/webm")
-otf,  TH_STRING_INIT("font/otf")
-ttf,  TH_STRING_INIT("font/ttf")
-woff, TH_STRING_INIT("font/woff")
-woff2,TH_STRING_INIT("font/woff2")
-avif, TH_STRING_INIT("image/avif")
-gif,  TH_STRING_INIT("image/gif")
-jpg,  TH_STRING_INIT("image/jpeg")
-jpeg, TH_STRING_INIT("image/jpeg")
-png,  TH_STRING_INIT("image/png")
-svg,  TH_STRING_INIT("image/svg+xml")
-webp, TH_STRING_INIT("image/webp")
-ico,  TH_STRING_INIT("image/x-icon")
-css,  TH_STRING_INIT("text/css")
-csv,  TH_STRING_INIT("text/csv")
-html, TH_STRING_INIT("text/html")
-js,   TH_STRING_INIT("text/javascript")
-md,   TH_STRING_INIT("text/markdown")
-txt,  TH_STRING_INIT("text/plain")
-mp4,  TH_STRING_INIT("video/mp4")
-mpeg, TH_STRING_INIT("video/mpeg")
-ogv,  TH_STRING_INIT("video/ogg")
-webm, TH_STRING_INIT("video/webm")
-json, TH_STRING_INIT("application/json")
-pdf,  TH_STRING_INIT("application/pdf")
-zip,  TH_STRING_INIT("application/zip")
-xhtml,TH_STRING_INIT("application/xhtml+xml")
-xml,  TH_STRING_INIT("application/xml")
+aac,  TH_STR_INIT("audio/aac")
+mp3,  TH_STR_INIT("audio/mpeg")
+ogg,  TH_STR_INIT("audio/ogg")
+opus, TH_STR_INIT("audio/opus")
+wav,  TH_STR_INIT("audio/wav")
+weba, TH_STR_INIT("audio/webm")
+otf,  TH_STR_INIT("font/otf")
+ttf,  TH_STR_INIT("font/ttf")
+woff, TH_STR_INIT("font/woff")
+woff2,TH_STR_INIT("font/woff2")
+avif, TH_STR_INIT("image/avif")
+gif,  TH_STR_INIT("image/gif")
+jpg,  TH_STR_INIT("image/jpeg")
+jpeg, TH_STR_INIT("image/jpeg")
+png,  TH_STR_INIT("image/png")
+svg,  TH_STR_INIT("image/svg+xml")
+webp, TH_STR_INIT("image/webp")
+ico,  TH_STR_INIT("image/x-icon")
+css,  TH_STR_INIT("text/css")
+csv,  TH_STR_INIT("text/csv")
+html, TH_STR_INIT("text/html")
+js,   TH_STR_INIT("text/javascript")
+md,   TH_STR_INIT("text/markdown")
+txt,  TH_STR_INIT("text/plain")
+mp4,  TH_STR_INIT("video/mp4")
+mpeg, TH_STR_INIT("video/mpeg")
+ogv,  TH_STR_INIT("video/ogg")
+webm, TH_STR_INIT("video/webm")
+json, TH_STR_INIT("application/json")
+pdf,  TH_STR_INIT("application/pdf")
+zip,  TH_STR_INIT("application/zip")
+xhtml,TH_STR_INIT("application/xhtml+xml")
+xml,  TH_STR_INIT("application/xml")
 %%
 #pragma GCC diagnostic pop
 

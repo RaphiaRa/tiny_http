@@ -8,9 +8,9 @@
 #include "th_dir_mgr.h"
 #include "th_file.h"
 #include "th_hashmap.h"
-#include "th_heap_string.h"
 #include "th_queue.h"
 #include "th_refcounted.h"
+#include "th_string.h"
 #include "th_timer.h"
 
 typedef struct th_fcache th_fcache;
@@ -18,7 +18,7 @@ typedef struct th_fcache_entry th_fcache_entry;
 struct th_fcache_entry {
     th_refcounted base;
     th_file stream;
-    th_heap_string path;
+    th_string path;
     th_dir* dir;
     th_allocator* allocator;
     th_fcache* cache;
@@ -28,20 +28,20 @@ struct th_fcache_entry {
 };
 
 typedef struct th_fcache_id {
-    th_string path;
+    th_str path;
     th_dir* dir;
 } th_fcache_id;
 
 TH_INLINE(bool)
 th_fcache_id_eq(th_fcache_id a, th_fcache_id b)
 {
-    return a.dir == b.dir && th_string_eq(a.path, b.path);
+    return a.dir == b.dir && th_str_eq(a.path, b.path);
 }
 
 TH_INLINE(size_t)
 th_fcache_id_hash(th_fcache_id id)
 {
-    return th_string_hash(id.path) + (size_t)id.dir->fd;
+    return th_str_hash(id.path) + (size_t)id.dir->fd;
 }
 
 TH_DEFINE_HASHMAP(th_fcache_map, th_fcache_id, th_fcache_entry*, th_fcache_id_hash, th_fcache_id_eq, (th_fcache_id){0})
@@ -67,13 +67,13 @@ TH_PRIVATE(void)
 th_fcache_init(th_fcache* cache, th_allocator* allocator);
 
 TH_PRIVATE(th_err)
-th_fcache_get(th_fcache* cache, th_string root, th_string path, th_fcache_entry** out);
+th_fcache_get(th_fcache* cache, th_str root, th_str path, th_fcache_entry** out);
 
 TH_PRIVATE(th_err)
-th_fcache_add_dir(th_fcache* cache, th_string label, th_string path);
+th_fcache_add_dir(th_fcache* cache, th_str label, th_str path);
 
 TH_PRIVATE(th_dir*)
-th_fcache_find_dir(th_fcache* cache, th_string label);
+th_fcache_find_dir(th_fcache* cache, th_str label);
 
 TH_PRIVATE(void)
 th_fcache_deinit(th_fcache* cache);

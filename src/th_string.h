@@ -1,115 +1,81 @@
 #ifndef TH_STRING_H
 #define TH_STRING_H
 
-#include <stdint.h>
-#include <string.h>
+#include "th_allocator.h"
+#include "th_str.h"
+#include "th_vec.h"
 
-#include <th.h>
+typedef struct th_detail_large_string {
+    size_t capacity;
+    size_t len;
+    char* ptr;
+    th_allocator* allocator;
+} th_detail_large_string;
 
-#include "th_config.h"
-
-extern size_t th_string_npos;
+#define TH_STRING_SMALL_BUF_LEN (sizeof(char*) + sizeof(size_t) + sizeof(size_t) - 1)
+#define TH_STRING_SMALL_MAX_LEN (TH_STRING_SMALL_BUF_LEN - 1)
+typedef struct th_detail_small_string {
+    unsigned char small : 1;
+    unsigned char len : 7;
+    char buf[TH_STRING_SMALL_BUF_LEN];
+    th_allocator* allocator;
+} th_detail_small_string;
 
 typedef struct th_string {
-    const char* ptr;
-    size_t len;
+    union {
+        th_detail_small_string small;
+        th_detail_large_string large;
+    } impl;
 } th_string;
 
-/** th_string_make
- * @brief Helper function to create a th_string from a pointer and a length.
- */
-TH_INLINE(th_string)
-th_string_make(const char* ptr, size_t len)
-{
-    return (th_string){ptr, len};
-}
-
-/** th_string_make_empty
- * @brief Helper function to create an empty th_string.
- */
-TH_INLINE(th_string)
-th_string_make_empty(void)
-{
-    return (th_string){"", 0};
-}
-
-/** th_string_from_cstr
- * @brief Helper function to create a th_string from a null-terminated string.
- */
-TH_INLINE(th_string)
-th_string_from_cstr(const char* str)
-{
-    return th_string_make(str, strlen(str));
-}
-
-/** th_string_eq
- * @brief Helper function to compare two th_strings.
- * @return 1 if the strings are equal, 0 otherwise.
- */
-TH_PRIVATE(bool)
-th_string_eq(th_string a, th_string b);
-
-/** th_string_empty
- * @brief Helper function to check if a th_string is empty.
- * @return true if the string is empty, false otherwise.
- */
-TH_INLINE(bool)
-th_string_empty(th_string str)
-{
-    return str.len == 0;
-}
-
-/** TH_STRING_INIT
- * @brief Helper macro to initialize a th_string from string literal.
- */
-#define TH_STRING_INIT(str) {"" str, sizeof(str) - 1}
-
-/** TH_STRING
- * @brief Helper macro to create a th_string compound literal from a string literal.
- */
-#define TH_STRING(str) ((th_string){"" str, sizeof(str) - 1})
-
-/** TH_STRING_EQ
- * @brief Helper macro to compare a th_string with a string literal.
- */
-#define TH_STRING_EQ(str, cmp) (th_string_eq(str, TH_STRING(cmp)))
-
-TH_PRIVATE(bool)
-th_string_is_uint(th_string str);
+TH_PRIVATE(void)
+th_string_init(th_string* self, th_allocator* allocator);
 
 TH_PRIVATE(th_err)
-th_string_to_uint(th_string str, unsigned int* out);
+th_string_init_with(th_string* self, th_str str, th_allocator* allocator);
+
+TH_PRIVATE(th_err)
+th_string_set(th_string* self, th_str str);
+
+TH_PRIVATE(th_err)
+th_string_append(th_string* self, th_str str);
+
+TH_PRIVATE(th_err)
+th_string_append_cstr(th_string* self, const char* str);
+
+TH_PRIVATE(th_err)
+th_string_push_back(th_string* self, char c);
+
+TH_PRIVATE(th_err)
+th_string_resize(th_string* self, size_t new_len, char fill);
+
+TH_PRIVATE(th_str)
+th_string_view(const th_string* self);
+
+TH_PRIVATE(char*)
+th_string_at(th_string* self, size_t index);
+
+TH_PRIVATE(const char*)
+th_string_data(const th_string* self);
 
 TH_PRIVATE(size_t)
-th_string_find_first(th_string str, size_t start, char c);
+th_string_len(const th_string* self);
 
-TH_PRIVATE(size_t)
-th_string_find_first_not(th_string str, size_t start, char c);
+TH_PRIVATE(void)
+th_string_deinit(th_string* self);
 
-TH_PRIVATE(size_t)
-th_string_find_first_of(th_string str, size_t start, const char* chars);
+TH_PRIVATE(void)
+th_string_clear(th_string* self);
 
-TH_PRIVATE(size_t)
-th_string_find_last(th_string str, size_t start, char c);
+TH_PRIVATE(void)
+th_string_to_lower(th_string* self);
 
-/** th_string_substr
- * @brief Returns a substring of a string.
- * If len == th_string_npos, the substring will go to the end of the string.
- * If start > len, an empty string is returned (ptr = str.ptr + str.len, len = 0).
- */
-TH_PRIVATE(th_string)
-th_string_substr(th_string str, size_t start, size_t len);
+TH_PRIVATE(bool)
+th_string_eq(const th_string* self, th_str other);
 
-/** th_string_trim
- * @brief Removes leading and trailing whitespace from a string.
- * This doesn't modify the original string, just returns a new view of it.
- * @param str The string to trim.
- * @return A new string view with leading and trailing whitespace removed.
- */
-TH_PRIVATE(th_string)
-th_string_trim(th_string str);
+// TH_PRIVATE(uint32_t)
+// th_string_hash(const th_string* self);
 
-TH_PRIVATE(size_t)
-th_string_hash(th_string str);
+TH_DEFINE_VEC(th_string_vec, th_string, th_string_deinit)
 
 #endif

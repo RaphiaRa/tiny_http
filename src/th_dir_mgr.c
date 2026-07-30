@@ -5,45 +5,45 @@ th_dir_mgr_init(th_dir_mgr* mgr, th_allocator* allocator)
 {
     mgr->allocator = allocator ? allocator : th_default_allocator_get();
     th_dir_map_init(&mgr->map, allocator);
-    th_heap_string_vec_init(&mgr->heap_strings, allocator);
+    th_string_vec_init(&mgr->strings, allocator);
 }
 
 TH_LOCAL(bool)
-th_dir_mgr_label_exists(th_dir_mgr* mgr, th_string label)
+th_dir_mgr_label_exists(th_dir_mgr* mgr, th_str label)
 {
     return th_dir_map_find(&mgr->map, label) != NULL;
 }
 
 TH_LOCAL(th_err)
-th_dir_mgr_store_string(th_dir_mgr* mgr, th_string str)
+th_dir_mgr_store_string(th_dir_mgr* mgr, th_str str)
 {
-    th_heap_string heap_str = {0};
-    th_heap_string_init(&heap_str, mgr->allocator);
-    if (th_heap_string_set(&heap_str, str) != TH_ERR_OK) {
+    th_string owned = {0};
+    th_string_init(&owned, mgr->allocator);
+    if (th_string_set(&owned, str) != TH_ERR_OK) {
         return TH_ERR_BAD_ALLOC;
     }
-    if (th_heap_string_vec_push_back(&mgr->heap_strings, heap_str) != TH_ERR_OK) {
-        th_heap_string_deinit(&heap_str);
+    if (th_string_vec_push_back(&mgr->strings, owned) != TH_ERR_OK) {
+        th_string_deinit(&owned);
         return TH_ERR_BAD_ALLOC;
     }
     return TH_ERR_OK;
 }
 
-TH_LOCAL(th_string)
+TH_LOCAL(th_str)
 th_dir_mgr_get_last_string(th_dir_mgr* mgr)
 {
-    return th_heap_string_view(th_heap_string_vec_end(&mgr->heap_strings) - 1);
+    return th_string_view(th_string_vec_end(&mgr->strings) - 1);
 }
 
 TH_LOCAL(void)
 th_dir_mgr_remove_last_string(th_dir_mgr* mgr)
 {
-    th_heap_string_deinit(th_heap_string_vec_end(&mgr->heap_strings) - 1);
-    th_heap_string_vec_resize(&mgr->heap_strings, th_heap_string_vec_size(&mgr->heap_strings) - 1);
+    th_string_deinit(th_string_vec_end(&mgr->strings) - 1);
+    th_string_vec_resize(&mgr->strings, th_string_vec_size(&mgr->strings) - 1);
 }
 
 TH_PRIVATE(th_err)
-th_dir_mgr_add(th_dir_mgr* mgr, th_string label, th_string path)
+th_dir_mgr_add(th_dir_mgr* mgr, th_str label, th_str path)
 {
     th_err err = TH_ERR_OK;
     if (th_dir_mgr_label_exists(mgr, label))
@@ -65,7 +65,7 @@ cleanup_dir:
 }
 
 TH_PRIVATE(th_dir*)
-th_dir_mgr_get(th_dir_mgr* mgr, th_string label)
+th_dir_mgr_get(th_dir_mgr* mgr, th_str label)
 {
     th_dir_map_iter it = th_dir_map_find(&mgr->map, label);
     if (it == NULL)
@@ -82,5 +82,5 @@ th_dir_mgr_deinit(th_dir_mgr* mgr)
         it = th_dir_map_next(&mgr->map, it);
     }
     th_dir_map_deinit(&mgr->map);
-    th_heap_string_vec_deinit(&mgr->heap_strings);
+    th_string_vec_deinit(&mgr->strings);
 }

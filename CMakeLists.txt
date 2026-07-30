@@ -54,8 +54,8 @@ SET(TH_CORE_SRC
     src/th_fcache.c
     src/th_dir.c
     src/th_dir_mgr.c
+    src/th_str.c
     src/th_string.c
-    src/th_heap_string.c
     src/th_log.c
     src/th_http.c
     src/th_fmt.c
@@ -188,11 +188,11 @@ if (NOT TH_DISABLE_TESTS)
         src/th_response_test.c
         src/th_fcache_test.c
         src/th_hashmap_test.c
-        src/th_string_test.c
+        src/th_str_test.c
         src/th_list_test.c
         src/th_dir_mgr_test.c
         src/th_tcp_socket_test.c
-        src/th_heap_string_test.c
+        src/th_string_test.c
     )
 
     create_test_sourcelist(TH_TEST_SRC_LIST th_test.c

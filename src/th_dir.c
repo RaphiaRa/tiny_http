@@ -1,7 +1,7 @@
 #include "th_dir.h"
 #include "th_config.h"
-#include "th_utility.h"
 #include "th_path.h"
+#include "th_utility.h"
 
 #if defined(TH_CONFIG_OS_POSIX)
 #include <assert.h>
@@ -18,11 +18,11 @@ th_dir_init(th_dir* dir, th_allocator* allocator)
 {
     dir->allocator = allocator ? allocator : th_default_allocator_get();
     dir->fd = -1;
-    th_heap_string_init(&dir->path, dir->allocator);
+    th_string_init(&dir->path, dir->allocator);
 }
 
 TH_PRIVATE(th_err)
-th_dir_open(th_dir* dir, th_string path)
+th_dir_open(th_dir* dir, th_str path)
 {
     th_err err = TH_ERR_OK;
     if ((err = th_path_resolve(path, &dir->path)) != TH_ERR_OK)
@@ -48,16 +48,16 @@ th_dir_open(th_dir* dir, th_string path)
 #endif
 }
 
-TH_PRIVATE(th_string)
+TH_PRIVATE(th_str)
 th_dir_get_path(th_dir* dir)
 {
-    return th_heap_string_view(&dir->path);
+    return th_string_view(&dir->path);
 }
 
 TH_PRIVATE(void)
 th_dir_deinit(th_dir* dir)
 {
-    th_heap_string_deinit(&dir->path);
+    th_string_deinit(&dir->path);
 #if defined(TH_CONFIG_OS_POSIX)
     if (dir->fd >= 0) {
         int ret = close(dir->fd);

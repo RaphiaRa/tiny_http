@@ -4,9 +4,9 @@
 #include <th.h>
 
 #include "th_allocator.h"
-#include "th_heap_string.h"
 #include "th_request.h"
 #include "th_response.h"
+#include "th_str.h"
 #include "th_string.h"
 
 typedef struct th_route_handler {
@@ -15,8 +15,8 @@ typedef struct th_route_handler {
 } th_route_handler;
 
 typedef struct th_capture {
-    th_string key;
-    th_string value;
+    th_str key;
+    th_str value;
 } th_capture;
 
 typedef enum th_capture_type {
@@ -29,7 +29,7 @@ typedef enum th_capture_type {
 typedef struct th_route_segment th_route_segment;
 struct th_route_segment {
     th_capture_type type;
-    th_heap_string name;
+    th_string name;
     th_route_handler handler[TH_METHOD_MAX];
     th_route_segment* next;
     th_route_segment* children;
@@ -58,6 +58,6 @@ TH_PRIVATE(bool)
 th_router_would_handle(th_router* router, th_method method, th_request* request);
 
 TH_PRIVATE(th_err)
-th_router_add_route(th_router* router, th_method method, th_string route, th_handler handler, void* user_data);
+th_router_add_route(th_router* router, th_method method, th_str route, th_handler handler, void* user_data);
 
 #endif

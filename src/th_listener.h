@@ -5,11 +5,11 @@
 #include "th_conn.h"
 #include "th_conn_tracker.h"
 #include "th_fcache.h"
-#include "th_heap_string.h"
 #include "th_http.h"
 #include "th_io_service.h"
 #include "th_router.h"
 #include "th_socket.h"
+#include "th_string.h"
 
 typedef struct th_listener th_listener;
 

@@ -3,11 +3,11 @@
 
 #include <th.h>
 
-#include "th_string.h"
+#include "th_str.h"
 
 struct th_mime_mapping {
     const char* name;
-    th_string mime;
+    th_str mime;
 };
 
 struct th_mime_mapping* th_mime_mapping_find(const char* ext, size_t len);

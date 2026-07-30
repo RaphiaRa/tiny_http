@@ -1,7 +1,7 @@
 #include "th_url_decode.h"
 
 TH_LOCAL(th_err)
-th_url_decode_next(th_string str, size_t* pos, char* out, th_url_decode_type type)
+th_url_decode_next(th_str str, size_t* pos, char* out, th_url_decode_type type)
 {
     size_t i = *pos;
     if (str.ptr[i] == '%') {
@@ -54,9 +54,9 @@ th_url_decode_inplace(char* str, size_t* in_out_len, th_url_decode_type type)
 */
 
 TH_PRIVATE(th_err)
-th_url_decode_string(th_string input, th_heap_string* output, th_url_decode_type type)
+th_url_decode_string(th_str input, th_string* output, th_url_decode_type type)
 {
-    th_heap_string_clear(output);
+    th_string_clear(output);
 
     th_err err = TH_ERR_OK;
     if (input.len == 0)
@@ -67,7 +67,7 @@ th_url_decode_string(th_string input, th_heap_string* output, th_url_decode_type
         if ((err = th_url_decode_next(input, &i, &c, type)) != TH_ERR_OK) {
             return err;
         }
-        if ((err = th_heap_string_push_back(output, c)) != TH_ERR_OK) {
+        if ((err = th_string_push_back(output, c)) != TH_ERR_OK) {
             return err;
         }
     }

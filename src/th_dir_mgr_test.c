@@ -35,6 +35,6 @@ TH_TEST_BEGIN(dir_mgr)
         TH_EXPECT(th_dir_mgr_get(&mgr, TH_STR("test")) == NULL);
         th_dir_mgr_deinit(&mgr);
     }
-    TH_TEST_END
+    TH_TEST_CASE_END
 }
 TH_TEST_END

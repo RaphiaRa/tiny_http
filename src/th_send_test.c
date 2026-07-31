@@ -162,24 +162,7 @@ TH_TEST_BEGIN(send)
     th_socket_init(&socket, &loop, &ops.base);
     th_socket_set_fd(&socket, 5);
 
-    TH_TEST_CASE_BEGIN(send_partial_completes_immediately_when_not_exact)
-    {
-        th_fake_socket_ops_reset(&ops);
-        ops.chunk_len = 5;
-
-        th_recorded_result result;
-        th_recorded_result_init(&result);
-        th_send_op op;
-        th_send_op_init(&op, &socket, "hello world", 11, false, th_recorded_result_cb, &result);
-        th_op_perform(&op.base);
-        th_loop_run(&loop);
-
-        TH_EXPECT(result.called);
-        TH_EXPECT(result.err == TH_ERR_OK);
-        TH_EXPECT(result.result == 5);
-    }
-    TH_TEST_CASE_END
-    TH_TEST_CASE_BEGIN(send_exact_retries_until_all_bytes_written)
+    TH_TEST_CASE_BEGIN(send_retries_until_all_bytes_written)
     {
         th_fake_socket_ops_reset(&ops);
         ops.chunk_len = 4;
@@ -187,7 +170,7 @@ TH_TEST_BEGIN(send)
         th_recorded_result result;
         th_recorded_result_init(&result);
         th_send_op op;
-        th_send_op_init(&op, &socket, "hello world", 11, true, th_recorded_result_cb, &result);
+        th_send_op_init(&op, &socket, "hello world", 11, th_recorded_result_cb, &result);
         th_op_perform(&op.base);
         th_loop_run(&loop);
 
@@ -205,7 +188,7 @@ TH_TEST_BEGIN(send)
         th_recorded_result result;
         th_recorded_result_init(&result);
         th_send_op op;
-        th_send_op_init(&op, &socket, "hi", 2, false, th_recorded_result_cb, &result);
+        th_send_op_init(&op, &socket, "hi", 2, th_recorded_result_cb, &result);
         th_op_perform(&op.base);
         th_loop_run(&loop);
 
@@ -222,7 +205,7 @@ TH_TEST_BEGIN(send)
         th_recorded_result result;
         th_recorded_result_init(&result);
         th_send_op op;
-        th_send_op_init(&op, &socket, "hi", 2, false, th_recorded_result_cb, &result);
+        th_send_op_init(&op, &socket, "hi", 2, th_recorded_result_cb, &result);
         th_op_perform(&op.base);
         th_loop_run(&loop);
 
@@ -238,7 +221,7 @@ TH_TEST_BEGIN(send)
         th_recorded_result result;
         th_recorded_result_init(&result);
         th_send_op op;
-        th_send_op_init(&op, &socket, "hi", 2, false, th_recorded_result_cb, &result);
+        th_send_op_init(&op, &socket, "hi", 2, th_recorded_result_cb, &result);
         th_op_abort(&op.base, TH_ERR_SYSTEM(TH_ECANCELED));
         th_loop_run(&loop);
 

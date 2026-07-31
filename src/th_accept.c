@@ -25,6 +25,7 @@ th_accept_op_complete(th_accept_op* op, th_err err)
 TH_LOCAL(th_err)
 th_accept_op_perform(th_accept_op* op)
 {
+    th_op_clear_flags(&op->base, TH_OP_IMMEDIATE);
     th_address_init(op->addr);
     return th_acceptor_accept(op->acceptor, op->addr, &op->fd);
 }

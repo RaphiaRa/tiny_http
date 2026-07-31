@@ -3,65 +3,83 @@
 
 #include <th.h>
 
-#include "th_allocator.h"
-#include "th_config.h"
-#include "th_request.h"
-#include "th_response.h"
-#include "th_router.h"
-#include "th_ssl_socket.h"
-#include "th_tcp_socket.h"
+#include "th_address.h"
+#include "th_iov.h"
+#include "th_op.h"
+#include "th_recv.h"
+#include "th_send.h"
 
-/* th_prot interface begin */
-
-/* th_prot interface end */
 /* th_conn interface begin */
-typedef struct th_conn th_conn;
-struct th_conn {
-    th_socket_legacy* (*get_socket)(void* self);
+
+/** th_conn_methods
+ * @brief A connection: an accepted socket plus the send/recv operations
+ * needed to shuttle an HTTP request/response over it. th_response/th_http
+ * call these directly instead of reaching through to a socket type, so
+ * that e.g. th_ssl_conn can do handshake/BIO shuttling internally without
+ * callers needing to know the connection is encrypted.
+ */
+typedef struct th_conn_methods {
     th_address* (*get_address)(void* self);
     void (*start)(void* self);
+
+    /** recv
+     * @brief Reads into addr. If exact is false, completes as soon as
+     * any bytes arrive (0 bytes => TH_ERR_EOF); if true, retries until
+     * exactly len bytes have been read or an error/EOF occurs.
+     */
+    void (*recv)(void* self, void* addr, size_t len, bool exact, th_recv_cb callback, void* user_data);
+
+    /** send
+     * @brief Writes iov (mutated in place as buffers are consumed),
+     * retrying until every byte has been written or an error occurs.
+     * If file is NULL, only iov is sent. If file is non-NULL, iov is
+     * sent as a header followed by len bytes of file starting at
+     * offset (offset/len are ignored when file is NULL).
+     */
+    void (*send)(void* self, th_iov* iov, size_t iovcnt, th_file* file, size_t offset, size_t len, th_send_cb callback, void* user_data);
+
+    void (*cancel)(void* self);
     void (*destroy)(void* self);
-};
+} th_conn_methods;
 
-/** th_conn_init
- * @brief Initialize the client interface, this function should be called
- * by the parent client implementation on initialization.
- */
-TH_INLINE(void)
-th_conn_init(th_conn* client,
-             th_socket_legacy* (*get_socket)(void* self),
-             th_address* (*get_address)(void* self),
-             void (*start)(void* self),
-             void (*destroy)(void* self))
-{
-    client->get_socket = get_socket;
-    client->get_address = get_address;
-    client->start = start;
-    client->destroy = destroy;
-}
-
-TH_INLINE(th_socket_legacy*)
-th_conn_get_socket(th_conn* client)
-{
-    return client->get_socket(client);
-}
+typedef struct th_conn {
+    const th_conn_methods* methods;
+} th_conn;
 
 TH_INLINE(th_address*)
-th_conn_get_address(th_conn* client)
+th_conn_get_address(th_conn* conn)
 {
-    return client->get_address(client);
+    return conn->methods->get_address(conn);
 }
 
 TH_INLINE(void)
-th_conn_start(th_conn* client)
+th_conn_start(th_conn* conn)
 {
-    client->start(client);
+    conn->methods->start(conn);
 }
 
 TH_INLINE(void)
-th_conn_destroy(th_conn* client)
+th_conn_recv(th_conn* conn, void* addr, size_t len, bool exact, th_recv_cb callback, void* user_data)
 {
-    client->destroy(client);
+    conn->methods->recv(conn, addr, len, exact, callback, user_data);
+}
+
+TH_INLINE(void)
+th_conn_send(th_conn* conn, th_iov* iov, size_t iovcnt, th_file* file, size_t offset, size_t len, th_send_cb callback, void* user_data)
+{
+    conn->methods->send(conn, iov, iovcnt, file, offset, len, callback, user_data);
+}
+
+TH_INLINE(void)
+th_conn_cancel(th_conn* conn)
+{
+    conn->methods->cancel(conn);
+}
+
+TH_INLINE(void)
+th_conn_destroy(th_conn* conn)
+{
+    conn->methods->destroy(conn);
 }
 
 /* th_conn interface end */
@@ -121,48 +139,18 @@ struct th_conn_observable {
     th_conn_observable *next, *prev;
 };
 
+TH_PRIVATE(void)
+th_conn_observable_init(th_conn_observable* observable, const th_conn_methods* methods,
+                        void (*destroy)(void* self), th_conn_observer* observer);
+
+/** th_conn_observable_destroy
+ * @brief The destroy every concrete conn type's th_conn_methods table
+ * must point at: notifies the observer, then calls the type's real
+ * destructor (the destroy passed to th_conn_observable_init).
+ */
+TH_PRIVATE(void)
+th_conn_observable_destroy(void* self);
+
 /* th_conn_observable interface end */
-/* th_tcp_conn declaration begin */
 
-typedef struct th_tcp_conn th_tcp_conn;
-
-struct th_tcp_conn {
-    th_conn_observable base;
-    th_tcp_socket socket;
-    th_address addr;
-    th_context* context;
-    th_conn_upgrader* upgrader;
-    th_allocator* allocator;
-};
-
-TH_PRIVATE(th_err)
-th_tcp_conn_create(th_conn** out, th_context* context,
-                   th_conn_upgrader* upgrader, th_conn_observer* observer,
-                   th_allocator* allocator);
-
-/* th_tcp_conn declaration end */
-/* th_ssl_conn declaration begin */
-#if TH_WITH_SSL
-typedef struct th_ssl_conn th_ssl_conn;
-typedef struct th_ssl_conn_io_handler {
-    th_io_handler base;
-    th_ssl_conn* conn;
-} th_ssl_conn_io_handler;
-
-struct th_ssl_conn {
-    th_conn_observable base;
-    th_ssl_conn_io_handler handshake_handler;
-    th_ssl_conn_io_handler shutdown_handler;
-    th_ssl_socket socket;
-    th_address addr;
-    th_context* context;
-    th_conn_upgrader* upgrader;
-    th_allocator* allocator;
-};
-
-TH_PRIVATE(th_err)
-th_ssl_conn_create(th_conn** out, th_context* context, th_ssl_context* ssl_context,
-                   th_conn_upgrader* upgrader, th_conn_observer* observer,
-                   th_allocator* allocator);
-#endif
 #endif

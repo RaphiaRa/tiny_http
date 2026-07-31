@@ -235,7 +235,7 @@ th_response_set_default_headers(th_response* response)
 }
 
 TH_PRIVATE(void)
-th_response_async_write(th_response* response, th_socket_legacy* socket, th_io_handler* handler)
+th_response_async_write(th_response* response, th_conn* conn, th_send_cb callback, void* user_data)
 {
     th_err err = TH_ERR_OK;
     if (response->is_file) {
@@ -246,23 +246,21 @@ th_response_async_write(th_response* response, th_socket_legacy* socket, th_io_h
     if ((err = th_response_finalize_headers(response)) != TH_ERR_OK)
         goto cleanup;
     size_t iovcnt = 2; // start line + headers
-    if (response->only_headers) {
-        th_socket_legacy_async_writev_exact(socket, response->iov, iovcnt, handler);
-        return;
+    if (!response->only_headers && response->is_file == 0 && th_string_len(&response->body) > 0) {
+        response->iov[iovcnt].base = (void*)th_string_data(&response->body);
+        response->iov[iovcnt].len = th_string_len(&response->body);
+        iovcnt++;
     }
-    if (response->is_file == 0) { // user provided body
-        if (th_string_len(&response->body) > 0) {
-            response->iov[iovcnt].base = (void*)th_string_data(&response->body);
-            response->iov[iovcnt].len = th_string_len(&response->body);
-            iovcnt++;
-        }
-        th_socket_legacy_async_writev_exact(socket, response->iov, iovcnt, handler);
+    if (!response->only_headers && response->is_file != 0) {
+        th_conn_send(conn, response->iov, iovcnt, &response->fcache_entry->stream, 0, (size_t)response->file_len, callback, user_data);
     } else {
-        th_socket_legacy_async_sendfile_exact(socket, response->iov, iovcnt, &response->fcache_entry->stream, 0, (size_t)response->file_len, handler);
+        th_conn_send(conn, response->iov, iovcnt, NULL, 0, 0, callback, user_data);
     }
     return;
 cleanup:
-    th_context_dispatch_handler(th_socket_legacy_get_context(socket), handler, 0, err);
+    // Header formatting failed before any I/O was attempted (out of
+    // memory); safe to call back synchronously since no op is pending.
+    callback(user_data, 0, err);
 }
 
 /* Public response API begin */

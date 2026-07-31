@@ -41,7 +41,7 @@ th_conn_tracker_cancel_all(th_conn_tracker* conn_tracker)
          observable != NULL;
          observable = th_conn_observable_list_next(observable)) {
         th_conn* client = &observable->base;
-        th_socket_legacy_cancel(th_conn_get_socket(client));
+        th_conn_cancel(client);
     }
 }
 

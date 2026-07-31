@@ -34,8 +34,16 @@ th_loop_push_task(th_loop* loop, th_task* task);
 TH_PRIVATE(void)
 th_loop_push_uncounted_task(th_loop* loop, th_task* task);
 
+/** th_loop_increase_task_count
+ * @brief Tells the loop it has pending work it wouldn't otherwise see —
+ * e.g. a reactor holding an op pending for readiness, not yet queued.
+ * Pair with th_loop_decrease_task_count once that work resolves.
+ */
 TH_PRIVATE(void)
 th_loop_increase_task_count(th_loop* loop);
+
+TH_PRIVATE(void)
+th_loop_decrease_task_count(th_loop* loop);
 
 /** th_loop_poll
  * @brief Run exactly one pending task, or poll the reactor for readiness if

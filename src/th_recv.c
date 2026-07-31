@@ -5,7 +5,7 @@ TH_LOCAL(bool)
 th_recv_op_is_retryable(th_err err)
 {
     return err == TH_ERR_SYSTEM(TH_EAGAIN)
-        || err == TH_ERR_SYSTEM(TH_EWOULDBLOCK);
+           || err == TH_ERR_SYSTEM(TH_EWOULDBLOCK);
 }
 
 TH_LOCAL(void)
@@ -25,6 +25,7 @@ th_recv_op_complete(th_recv_op* op, th_err err)
 TH_LOCAL(th_err)
 th_recv_op_perform(th_recv_op* op)
 {
+    th_op_clear_flags(&op->base, TH_OP_IMMEDIATE);
     size_t result = 0;
     th_err err = th_socket_recv(op->socket, (char*)op->addr + op->pos, op->len - op->pos, &result);
     if (err != TH_ERR_OK)

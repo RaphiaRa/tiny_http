@@ -6,6 +6,7 @@
 #include "th_allocator.h"
 #include "th_clock.h"
 #include "th_config.h"
+#include "th_loop.h"
 #include "th_reactor.h"
 
 #if !defined(TH_CONFIG_OS_WIN)
@@ -25,12 +26,17 @@ th_pollops_os(void);
 
 /** th_poll_create
  * @brief Create a poll-based reactor.
+ * @param loop The th_loop this reactor will be registered with (via
+ * loop->reactor, set by the caller after this returns — th_loop_init
+ * must run first since it doesn't require a reactor yet). Used to keep
+ * loop's task count in sync with ops the reactor is holding pending for
+ * readiness, which otherwise aren't visible to th_loop_poll's own queue.
  * @param clock Clock used for per-handle I/O timeouts.
  * @param ops The poll(2) implementation to use; pass th_pollops_os() in
  * production, a fake in tests.
  */
 TH_PRIVATE(th_err)
-th_poll_create(th_reactor** out, th_allocator* allocator, th_clock* clock, th_pollops* ops);
+th_poll_create(th_reactor** out, th_loop* loop, th_allocator* allocator, th_clock* clock, th_pollops* ops);
 
 #endif /* !TH_CONFIG_OS_WIN */
 #endif

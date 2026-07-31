@@ -6,7 +6,7 @@ TH_LOCAL(bool)
 th_sendfile_op_is_retryable(th_err err)
 {
     return err == TH_ERR_SYSTEM(TH_EAGAIN)
-        || err == TH_ERR_SYSTEM(TH_EWOULDBLOCK);
+           || err == TH_ERR_SYSTEM(TH_EWOULDBLOCK);
 }
 
 TH_LOCAL(void)
@@ -26,6 +26,7 @@ th_sendfile_op_complete(th_sendfile_op* op, th_err err)
 TH_LOCAL(th_err)
 th_sendfile_op_perform(th_sendfile_op* op)
 {
+    th_op_clear_flags(&op->base, TH_OP_IMMEDIATE);
     size_t file_pos = op->pos > op->header_len ? op->pos - op->header_len : 0;
     size_t remaining = op->len - file_pos;
     size_t chunk = TH_MIN(remaining, TH_CONFIG_SENDFILE_CHUNK_LEN);

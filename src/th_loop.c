@@ -29,6 +29,12 @@ th_loop_increase_task_count(th_loop* loop)
     ++loop->num_tasks;
 }
 
+TH_PRIVATE(void)
+th_loop_decrease_task_count(th_loop* loop)
+{
+    --loop->num_tasks;
+}
+
 TH_PRIVATE(th_err)
 th_loop_poll(th_loop* loop, int timeout_ms)
 {
@@ -56,7 +62,8 @@ th_loop_poll(th_loop* loop, int timeout_ms)
 TH_PRIVATE(void)
 th_loop_run(th_loop* loop)
 {
-    while (th_loop_poll(loop, 0) == TH_ERR_OK) { }
+    while (th_loop_poll(loop, 0) == TH_ERR_OK) {
+    }
 }
 
 TH_PRIVATE(void)

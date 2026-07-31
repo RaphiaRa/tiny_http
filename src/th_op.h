@@ -23,9 +23,25 @@ typedef enum th_op_type {
  * a queue drain rather than synchronously inside the call that completed
  * the I/O — this bounds stack depth when I/O completes immediately over
  * and over (e.g. a fast local socket).
+ *
+ * TH_OP_IMMEDIATE marks that this op has not yet had its first real
+ * attempt (set once at th_op_init). th_handle_submit checks it before
+ * calling th_op_perform: if set, it tries the op inline right now — this
+ * lets an op that's immediately satisfiable (e.g. data already buffered)
+ * complete without ever touching the reactor. An op's perform function
+ * must clear TH_OP_IMMEDIATE unconditionally on its very first attempt,
+ * before checking the result — so on EAGAIN/EWOULDBLOCK it is already
+ * clear on all resubmissions from then on. Once clear, th_handle_submit
+ * skips the inline attempt entirely and registers straight for real
+ * readiness. Without this, a submit that hits EAGAIN would recurse into
+ * th_handle_submit -> th_op_perform -> the op's fn -> submit again, once
+ * per retry with no real event ever separating attempts (e.g. a
+ * listening socket with no pending connection loops until the stack
+ * overflows, since nothing ever changes between synchronous attempts).
  */
 typedef uint32_t th_op_flags;
 #define TH_OP_COMPLETED ((th_op_flags)1 << 0)
+#define TH_OP_IMMEDIATE ((th_op_flags)1 << 1)
 
 /** th_op
  * @brief A task submitted to a th_handle (see th_reactor.h). th_handle_submit
@@ -47,7 +63,7 @@ th_op_init(th_op* op, th_op_type type, void (*fn)(void* self), void (*destroy)(v
     th_task_init(&op->base, fn, destroy);
     op->abort = abort;
     op->type = type;
-    op->flags = 0;
+    op->flags = TH_OP_IMMEDIATE;
 }
 
 /** th_op_perform
@@ -70,6 +86,12 @@ TH_INLINE(void)
 th_op_set_flags(th_op* op, th_op_flags flags)
 {
     op->flags |= flags;
+}
+
+TH_INLINE(void)
+th_op_clear_flags(th_op* op, th_op_flags flags)
+{
+    op->flags &= ~flags;
 }
 
 TH_INLINE(th_op_flags)

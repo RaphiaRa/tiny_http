@@ -95,8 +95,11 @@ TH_TEST_BEGIN(poll)
     th_fake_pollops_init(&ops);
     th_fake_clock clock;
     th_fake_clock_init(&clock, 100);
+    th_loop loop;
+    th_loop_init(&loop, NULL);
     th_reactor* reactor = NULL;
-    TH_EXPECT(th_poll_create(&reactor, th_default_allocator_get(), &clock.base, &ops.base) == TH_ERR_OK);
+    TH_EXPECT(th_poll_create(&reactor, &loop, th_default_allocator_get(), &clock.base, &ops.base) == TH_ERR_OK);
+    loop.reactor = reactor;
     th_handle* handle = NULL;
     TH_EXPECT(th_reactor_create_handle(reactor, &handle, 42) == TH_ERR_OK);
 
@@ -226,5 +229,6 @@ TH_TEST_BEGIN(poll)
 
     th_handle_destroy(handle);
     th_reactor_destroy(reactor);
+    th_loop_deinit(&loop);
 }
 TH_TEST_END

@@ -1,7 +1,7 @@
 #ifndef TH_LISTENER_H
 #define TH_LISTENER_H
 
-#include "th_acceptor.h"
+#include "th_acceptor_legacy.h"
 #include "th_conn.h"
 #include "th_conn_tracker.h"
 #include "th_fcache.h"
@@ -24,7 +24,7 @@ typedef struct th_listener_conn_destroy_handler {
 } th_listener_conn_destroy_handler;
 
 struct th_listener {
-    th_acceptor acceptor;
+    th_acceptor_legacy acceptor;
     th_listener* next;
     th_context* context;
 

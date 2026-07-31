@@ -4,13 +4,13 @@
 #include <string.h>
 
 #include "th_align.h"
+#include "th_clock.h"
 #include "th_config.h"
-#include "th_context.h"
 #include "th_dir_mgr.h"
-#include "th_kqueue_service.h"
 #include "th_listener.h"
+#include "th_loop.h"
+#include "th_poll.h"
 #include "th_router.h"
-#include "th_runner.h"
 #include "th_task.h"
 
 #define TH_MAIN_ALLOCATOR_PTR_OFFSET TH_ALIGNUP(sizeof(uint32_t), TH_ALIGNOF(th_max_align))
@@ -114,7 +114,8 @@ th_main_allocator_deinit(th_main_allocator* allocator)
 }
 
 struct th_server {
-    th_context context;
+    th_reactor* reactor;
+    th_loop loop;
     th_router router;
     th_fcache fcache;
     th_listener* listeners;
@@ -127,8 +128,10 @@ th_server_init(th_server* server, th_allocator* allocator)
 {
     th_router_init(&server->router, allocator);
     th_err err = TH_ERR_OK;
-    if ((err = th_context_init(&server->context, allocator)) != TH_ERR_OK)
+    th_loop_init(&server->loop, NULL);
+    if ((err = th_poll_create(&server->reactor, &server->loop, allocator, th_clock_os(), th_pollops_os())) != TH_ERR_OK)
         goto cleanup_router;
+    server->loop.reactor = server->reactor;
     th_fcache_init(&server->fcache, allocator);
     th_main_allocator_init(&server->pool, allocator);
     server->listeners = NULL;
@@ -146,7 +149,7 @@ th_server_stop(th_server* server)
         th_listener_stop(listener);
         listener = listener->next;
     }
-    th_context_drain(&server->context);
+    th_loop_run(&server->loop);
 }
 
 TH_LOCAL(void)
@@ -158,7 +161,8 @@ th_server_deinit(th_server* server)
         th_listener_destroy(listener);
         listener = next;
     }
-    th_context_deinit(&server->context);
+    th_loop_deinit(&server->loop);
+    th_reactor_destroy(server->reactor);
     th_router_deinit(&server->router);
     th_fcache_deinit(&server->fcache);
     th_main_allocator_deinit(&server->pool);
@@ -169,7 +173,7 @@ th_server_bind(th_server* server, const char* host, const char* port, th_bind_op
 {
     th_listener* listener = NULL;
     th_err err = TH_ERR_OK;
-    if ((err = th_listener_create(&listener, &server->context,
+    if ((err = th_listener_create(&listener, &server->loop,
                                   host, port,
                                   &server->router, &server->fcache,
                                   opt, &server->pool.base))
@@ -200,7 +204,7 @@ th_server_add_dir(th_server* server, const char* name, const char* path)
 TH_LOCAL(th_err)
 th_server_poll(th_server* server, int timeout_ms)
 {
-    return th_context_poll(&server->context, timeout_ms);
+    return th_loop_poll(&server->loop, timeout_ms);
 }
 
 /* public server API */

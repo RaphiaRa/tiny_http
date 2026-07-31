@@ -23,6 +23,12 @@ th_http_destroy(void* self)
 }
 
 TH_LOCAL(void)
+th_http_handle_read_request(void* user_data, size_t len, th_err err);
+
+TH_LOCAL(void)
+th_http_handle_write_response(void* user_data, size_t len, th_err err);
+
+TH_LOCAL(void)
 th_http_restart(th_http* http)
 {
     http->read_bytes = 0;
@@ -30,8 +36,7 @@ th_http_restart(th_http* http)
     th_request_parser_reset(&http->parser);
     th_request_reset(&http->request);
     th_response_reset(&http->response);
-    http->state = TH_HTTP_STATE_READ_REQUEST;
-    th_socket_legacy_async_read(th_conn_get_socket(http->conn), th_buf_vec_at(&http->buf, 0), th_buf_vec_size(&http->buf), &http->io_handler.base);
+    th_conn_recv(http->conn, th_buf_vec_at(&http->buf, 0), th_buf_vec_size(&http->buf), false, th_http_handle_read_request, http);
 }
 
 TH_LOCAL(void)
@@ -47,8 +52,7 @@ th_http_complete(th_http* http)
 TH_LOCAL(void)
 th_http_write_response(th_http* http)
 {
-    http->state = TH_HTTP_STATE_WRITE_RESPONSE;
-    th_response_async_write(&http->response, th_conn_get_socket(http->conn), &http->io_handler.base);
+    th_response_async_write(&http->response, http->conn, th_http_handle_write_response, http);
 }
 
 TH_LOCAL(void)
@@ -183,8 +187,9 @@ th_http_handle_request_and_write_response(th_http* http)
 }
 
 TH_LOCAL(void)
-th_http_handle_read_request(th_http* http, size_t len, th_err err)
+th_http_handle_read_request(void* user_data, size_t len, th_err err)
 {
+    th_http* http = user_data;
     if (err != TH_ERR_OK) {
         TH_LOG_DEBUG("%p: Read error: %s", http, th_strerror(err));
         http->close = TH_HTTP_CLOSE; // No other choice if we can't even read the request
@@ -214,8 +219,8 @@ th_http_handle_read_request(th_http* http, size_t len, th_err err)
                 return;
             }
         }
-        th_socket_legacy_async_read(th_conn_get_socket(http->conn), th_buf_vec_at(&http->buf, http->read_bytes),
-                             th_buf_vec_size(&http->buf) - http->read_bytes, &http->io_handler.base);
+        th_conn_recv(http->conn, th_buf_vec_at(&http->buf, http->read_bytes),
+                     th_buf_vec_size(&http->buf) - http->read_bytes, false, th_http_handle_read_request, http);
     } else {
         if (th_conn_tracker_count(http->tracker) > TH_CONFIG_MAX_CONNECTIONS) {
             TH_LOG_WARN("Too many connections, rejecting new connection");
@@ -238,14 +243,15 @@ th_http_handle_read_request(th_http* http, size_t len, th_err err)
                 th_buf_vec_resize(&http->buf, content_len);
             }
         }
-        th_socket_legacy_async_read_exact(th_conn_get_socket(http->conn), th_buf_vec_at(&http->buf, http->read_bytes),
-                                   remaining, &http->io_handler.base);
+        th_conn_recv(http->conn, th_buf_vec_at(&http->buf, http->read_bytes),
+                     remaining, true, th_http_handle_read_request, http);
     }
 }
 
 TH_LOCAL(void)
-th_http_handle_write_response(th_http* http, size_t len, th_err err)
+th_http_handle_write_response(void* user_data, size_t len, th_err err)
 {
+    th_http* http = user_data;
     (void)len;
     if (err != TH_ERR_OK) {
         TH_LOG_ERROR("%p: Write error: %s", http, th_strerror(err));
@@ -257,39 +263,12 @@ th_http_handle_write_response(th_http* http, size_t len, th_err err)
 }
 
 TH_LOCAL(void)
-th_http_io_handler_fn(void* self, size_t len, th_err err)
-{
-    th_http_io_handler* handler = self;
-    th_http* http = handler->http;
-    switch (http->state) {
-        {
-        case TH_HTTP_STATE_READ_REQUEST:
-            th_http_handle_read_request(http, len, err);
-            break;
-        case TH_HTTP_STATE_WRITE_RESPONSE:
-            th_http_handle_write_response(http, len, err);
-            break;
-        default:
-            TH_ASSERT(0 && "Invalid state");
-            break;
-        }
-    }
-}
-
-TH_LOCAL(void)
-th_http_io_handler_init(th_http_io_handler* handler, th_http* http)
-{
-    th_io_handler_init(&handler->base, th_http_io_handler_fn, NULL);
-    handler->http = http;
-}
-
-TH_LOCAL(void)
 th_http_start(void* self)
 {
     th_http* http = self;
     TH_LOG_TRACE("%p: Starting", http);
     th_buf_vec_resize(&http->buf, TH_CONFIG_SMALL_HEADER_LEN);
-    th_socket_legacy_async_read(th_conn_get_socket(http->conn), th_buf_vec_at(&http->buf, 0), th_buf_vec_size(&http->buf), &http->io_handler.base);
+    th_conn_recv(http->conn, th_buf_vec_at(&http->buf, 0), th_buf_vec_size(&http->buf), false, th_http_handle_read_request, http);
 }
 
 TH_LOCAL(void)
@@ -297,7 +276,6 @@ th_http_init(th_http* http, const th_conn_tracker* tracker, th_conn* conn,
              th_router* router, th_fcache* fcache, th_allocator* allocator)
 {
     allocator = allocator ? allocator : th_default_allocator_get();
-    th_http_io_handler_init(&http->io_handler, http);
     th_request_parser_init(&http->parser);
     th_request_init(&http->request, fcache, allocator);
     th_response_init(&http->response, fcache, allocator);
@@ -309,7 +287,6 @@ th_http_init(th_http* http, const th_conn_tracker* tracker, th_conn* conn,
     http->allocator = allocator;
     http->read_bytes = 0;
     http->parsed_bytes = 0;
-    http->state = TH_HTTP_STATE_READ_REQUEST;
     http->close = TH_HTTP_KEEP_ALIVE;
 }
 

@@ -159,6 +159,7 @@ th_poll_handle_map_remove(th_poll_handle_map* map, int fd)
 
 struct th_poll_reactor {
     th_reactor base;
+    th_loop* loop;
     th_allocator* allocator;
     th_clock* clock;
     th_pollops* ops;
@@ -176,9 +177,11 @@ th_poll_handle_submit(void* self, th_op* op)
     th_poll_handle* handle = (th_poll_handle*)self;
     th_poll_reactor* reactor = handle->reactor;
     TH_ASSERT(handle->pending[op->type] == NULL && "Handle already has a pending op for this op type");
-    th_op_perform(op);
-    if (th_op_get_flags(op) & TH_OP_COMPLETED)
-        return TH_ERR_OK;
+    if (th_op_get_flags(op) & TH_OP_IMMEDIATE) {
+        th_op_perform(op);
+        if (th_op_get_flags(op) & TH_OP_COMPLETED)
+            return TH_ERR_OK;
+    }
     handle->pending[op->type] = op;
     struct pollfd pfd = {.fd = handle->fd, .events = (op->type == TH_OP_READ) ? POLLIN : POLLOUT};
     if (handle->timeout_enabled) {
@@ -189,6 +192,7 @@ th_poll_handle_submit(void* self, th_op* op)
         handle->pending[op->type] = NULL;
         return err;
     }
+    th_loop_increase_task_count(reactor->loop);
     return TH_ERR_OK;
 }
 
@@ -201,6 +205,7 @@ th_poll_handle_cancel(void* self)
         if (op) {
             handle->pending[i] = NULL;
             th_op_abort(op, TH_ERR_SYSTEM(TH_ECANCELED));
+            th_loop_decrease_task_count(handle->reactor->loop);
         }
     }
 }
@@ -288,6 +293,7 @@ th_poll_reactor_run(void* self, int timeout_ms)
         th_op* op = handle->pending[type];
         if (revents && op) {
             handle->pending[type] = NULL;
+            th_loop_decrease_task_count(reactor->loop);
             if (revents & pfd->events) {
                 th_op_perform(op);
             } else if (revents & POLLHUP) {
@@ -303,6 +309,7 @@ th_poll_reactor_run(void* self, int timeout_ms)
         } else if (op) { // reenqueue
             if (handle->timeout_enabled && th_timer_expired(&handle->timer)) {
                 handle->pending[type] = NULL;
+                th_loop_decrease_task_count(reactor->loop);
                 th_op_abort(op, TH_ERR_SYSTEM(TH_ETIMEDOUT));
             } else {
                 if (reenqueue < i)
@@ -339,9 +346,10 @@ static const th_reactor_methods th_poll_reactor_methods = {
 };
 
 TH_LOCAL(void)
-th_poll_reactor_init(th_poll_reactor* reactor, th_allocator* allocator, th_clock* clock, th_pollops* ops)
+th_poll_reactor_init(th_poll_reactor* reactor, th_loop* loop, th_allocator* allocator, th_clock* clock, th_pollops* ops)
 {
     reactor->base.methods = &th_poll_reactor_methods;
+    reactor->loop = loop;
     reactor->allocator = allocator;
     reactor->clock = clock;
     reactor->ops = ops;
@@ -351,14 +359,14 @@ th_poll_reactor_init(th_poll_reactor* reactor, th_allocator* allocator, th_clock
 }
 
 TH_PRIVATE(th_err)
-th_poll_create(th_reactor** out, th_allocator* allocator, th_clock* clock, th_pollops* ops)
+th_poll_create(th_reactor** out, th_loop* loop, th_allocator* allocator, th_clock* clock, th_pollops* ops)
 {
     allocator = allocator ? allocator : th_default_allocator_get();
     th_poll_reactor* reactor = th_allocator_alloc(allocator, sizeof(th_poll_reactor));
     if (!reactor) {
         return TH_ERR_BAD_ALLOC;
     }
-    th_poll_reactor_init(reactor, allocator, clock, ops);
+    th_poll_reactor_init(reactor, loop, allocator, clock, ops);
     *out = &reactor->base;
     return TH_ERR_OK;
 }

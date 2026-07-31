@@ -29,10 +29,13 @@ th_handle_cancel(th_handle* handle)
 }
 
 /** th_handle_submit
- * @brief Runs op->base.fn immediately. If that leaves op incomplete
- * (TH_OP_COMPLETED unset — i.e. it hit TH_EAGAIN/TH_EWOULDBLOCK), waits
- * for op->type readiness on this handle's fd and runs fn again once
- * ready. At most one op per op type may be pending at a time.
+ * @brief If op is still TH_OP_IMMEDIATE (its very first attempt), runs
+ * op->base.fn inline right now — an op that's immediately satisfiable
+ * completes without ever touching the reactor. Otherwise (a resubmit
+ * after TH_EAGAIN/TH_EWOULDBLOCK, where TH_OP_IMMEDIATE is already
+ * clear) skips straight to waiting for op->type readiness on this
+ * handle's fd and runs fn once ready. At most one op per op type may be
+ * pending at a time.
  */
 TH_INLINE(th_err)
 th_handle_submit(th_handle* handle, th_op* op)

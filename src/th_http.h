@@ -14,19 +14,8 @@
 
 typedef struct th_http th_http;
 
-typedef enum th_http_state {
-    TH_HTTP_STATE_READ_REQUEST,
-    TH_HTTP_STATE_WRITE_RESPONSE,
-} th_http_state;
-
-typedef struct th_http_io_handler {
-    th_io_handler base;
-    th_http* http;
-} th_http_io_handler;
-
 struct th_http {
     const th_conn_tracker* tracker;
-    th_http_io_handler io_handler;
     th_request_parser parser;
     th_request request;
     th_response response;
@@ -37,9 +26,6 @@ struct th_http {
     th_allocator* allocator;
     size_t read_bytes;
     size_t parsed_bytes;
-
-    // the current state of the http connection
-    th_http_state state;
 
     // true if the connection should be closed
     bool close;

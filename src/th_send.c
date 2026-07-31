@@ -5,7 +5,7 @@ TH_LOCAL(bool)
 th_send_op_is_retryable(th_err err)
 {
     return err == TH_ERR_SYSTEM(TH_EAGAIN)
-        || err == TH_ERR_SYSTEM(TH_EWOULDBLOCK);
+           || err == TH_ERR_SYSTEM(TH_EWOULDBLOCK);
 }
 
 TH_LOCAL(void)
@@ -25,12 +25,13 @@ th_send_op_complete(th_send_op* op, th_err err)
 TH_LOCAL(th_err)
 th_send_op_perform(th_send_op* op)
 {
+    th_op_clear_flags(&op->base, TH_OP_IMMEDIATE);
     size_t result = 0;
     th_err err = th_socket_send(op->socket, (const char*)op->addr + op->pos, op->len - op->pos, &result);
     if (err != TH_ERR_OK)
         return err;
     op->pos += result;
-    if (!op->exact || op->pos == op->len)
+    if (op->pos == op->len)
         return TH_ERR_OK;
     return TH_ERR_SYSTEM(TH_EAGAIN);
 }
@@ -59,14 +60,13 @@ th_send_op_abort(void* self, th_err err)
 }
 
 TH_PRIVATE(void)
-th_send_op_init(th_send_op* op, th_socket* socket, const void* addr, size_t len, bool exact, th_send_cb callback, void* user_data)
+th_send_op_init(th_send_op* op, th_socket* socket, const void* addr, size_t len, th_send_cb callback, void* user_data)
 {
     th_op_init(&op->base, TH_OP_WRITE, th_send_op_fn, NULL, th_send_op_abort);
     op->socket = socket;
     op->addr = addr;
     op->len = len;
     op->pos = 0;
-    op->exact = exact;
     op->callback = callback;
     op->user_data = user_data;
     op->err = TH_ERR_OK;

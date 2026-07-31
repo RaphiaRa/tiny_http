@@ -5,7 +5,7 @@ TH_LOCAL(bool)
 th_sendvec_op_is_retryable(th_err err)
 {
     return err == TH_ERR_SYSTEM(TH_EAGAIN)
-        || err == TH_ERR_SYSTEM(TH_EWOULDBLOCK);
+           || err == TH_ERR_SYSTEM(TH_EWOULDBLOCK);
 }
 
 TH_LOCAL(void)
@@ -25,6 +25,7 @@ th_sendvec_op_complete(th_sendvec_op* op, th_err err)
 TH_LOCAL(th_err)
 th_sendvec_op_perform(th_sendvec_op* op)
 {
+    th_op_clear_flags(&op->base, TH_OP_IMMEDIATE);
     size_t result = 0;
     th_err err = th_socket_sendvec(op->socket, op->iov, op->iovcnt, &result);
     if (err != TH_ERR_OK)

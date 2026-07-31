@@ -24,27 +24,17 @@ else()
     message(FATAL_ERROR "gperf not found")
 endif()
 
-SET(TH_CORE_SRC 
+SET(TH_CORE_SRC
     src/th_server.c
     src/th_listener.c
     src/th_router.c
     src/th_mime.c
     src/th_method.c
-    src/th_acceptor_legacy.c
-    src/th_runner.c
-    src/th_io_task.c
-    src/th_io_composite.c
-    src/th_io_op_posix.c
-    src/th_io_op_bsd.c
-    src/th_io_op_linux.c
     src/th_allocator.c
     src/th_task.c
-    src/th_kqueue_service.c
-    src/th_poll_service.c
     src/th_poll.c
     src/th_loop.c
     src/th_error.c
-    src/th_socket_legacy.c
     src/th_socket.c
     src/th_recv.c
     src/th_send.c
@@ -52,11 +42,10 @@ SET(TH_CORE_SRC
     src/th_sendfile.c
     src/th_acceptor.c
     src/th_accept.c
-    src/th_tcp_socket.c
+    src/th_tcp_conn.c
     src/th_request_parser.c
     src/th_request.c
     src/th_response.c
-    src/th_context.c
     src/th_conn.c
     src/th_header_id.c
     src/th_file.c
@@ -69,24 +58,20 @@ SET(TH_CORE_SRC
     src/th_http.c
     src/th_fmt.c
     src/th_date.c
-    src/th_io_op.c
     src/th_clock.c
     src/th_timer.c
     src/th_conn_tracker.c
     src/th_url_decode.c
     src/th_path.c
     src/th_upload.c
-#   SSL
+#   SSL (compiled out via TH_WITH_SSL=0 until SSL is ported onto th_conn/th_socket)
     src/th_ssl_smem_bio.c
     src/th_ssl_context.c
-    src/th_ssl_socket.c
     src/th_ssl_error.c
 )
 
 SET(TH_TEST_SRC
-    src/th_mock_service.c
     src/th_mock_syscall.c
-    src/th_io_op_mock.c
     src/th_test.c
 )
 
@@ -204,7 +189,6 @@ if (NOT TH_DISABLE_TESTS)
     set(CMAKE_TESTDRIVER_AFTER_TESTMAIN "th_test_teardown();")
 
     set(TH_TESTS
-        src/th_io_task_test.c
         src/th_task_test.c
         src/th_timer_test.c
         src/th_loop_test.c
@@ -216,6 +200,8 @@ if (NOT TH_DISABLE_TESTS)
         src/th_sendfile_test.c
         src/th_acceptor_test.c
         src/th_accept_test.c
+        src/th_conn_test.c
+        src/th_tcp_conn_test.c
         src/th_router_test.c
         src/th_allocator_test.c
         src/th_request_parser_test.c
@@ -225,7 +211,6 @@ if (NOT TH_DISABLE_TESTS)
         src/th_str_test.c
         src/th_list_test.c
         src/th_dir_mgr_test.c
-        src/th_tcp_socket_test.c
         src/th_string_test.c
     )
 

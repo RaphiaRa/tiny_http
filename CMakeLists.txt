@@ -41,6 +41,8 @@ SET(TH_CORE_SRC
     src/th_task.c
     src/th_kqueue_service.c
     src/th_poll_service.c
+    src/th_poll.c
+    src/th_loop.c
     src/th_error.c
     src/th_socket.c
     src/th_tcp_socket.c
@@ -179,7 +181,11 @@ if (NOT TH_DISABLE_TESTS)
         target_link_options(tiny_http_test PUBLIC --coverage)
     endif()
 
-    target_compile_definitions(tiny_http_test PRIVATE TH_CONFIG_OS_MOCK=1)
+    # PUBLIC: th_test links against tiny_http_test and must see the same
+    # TH_CONFIG_OS_MOCK-dependent macro definitions (e.g. th_system_error.h's
+    # TH_E* constants), or the two targets can disagree on what a shared
+    # macro expands to.
+    target_compile_definitions(tiny_http_test PUBLIC TH_CONFIG_OS_MOCK=1)
     target_compile_definitions(tiny_http_test PRIVATE TH_LOG_LEVEL=${TH_LOG_LEVEL})
     target_compile_definitions(tiny_http_test PRIVATE TH_WITH_SSL=${TH_WITH_SSL})
     target_include_directories(tiny_http_test 
@@ -194,6 +200,8 @@ if (NOT TH_DISABLE_TESTS)
         src/th_io_task_test.c
         src/th_task_test.c
         src/th_timer_test.c
+        src/th_loop_test.c
+        src/th_poll_test.c
         src/th_router_test.c
         src/th_allocator_test.c
         src/th_request_parser_test.c

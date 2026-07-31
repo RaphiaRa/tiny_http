@@ -31,11 +31,8 @@ void th_test_teardown(void);
  */
 int th_test_allocator_outstanding(void);
 
-/* Each test case is re-run from a fresh TH_TEST_BEGIN scope: the outer loop
- * re-executes the whole function body once per case (skipping every case
- * but the one selected by th_target), so variables declared in shared setup
- * are reconstructed for every case instead of being shared/mutated across
- * cases. */
+/* Re-runs the whole function once per case, skipping all but the selected
+ * one, so shared setup is fresh for every case. */
 #define TH_TEST_BEGIN(name)                         \
     int src_th_##name##_test(int argc, char** argv) \
     {                                               \
@@ -45,11 +42,19 @@ int th_test_allocator_outstanding(void);
             size_t th_index = 0;                    \
             bool th_ran = false;
 
-#define TH_TEST_END         \
-    if (!th_ran)            \
-        break;              \
-    }                       \
-    return TH_TEST_SUCCESS; \
+/* Leak check runs once per iteration, not in TH_TEST_CASE_END, so shared
+ * fixture state isn't flagged as a leak mid-case. */
+#define TH_TEST_END                                                        \
+    if (!th_ran)                                                           \
+        break;                                                             \
+    int th_outstanding = th_test_allocator_outstanding();                  \
+    if (th_outstanding != 0) {                                             \
+        printf(" Memory leak detected: %d allocations\n", th_outstanding); \
+        return TH_TEST_FAILURE;                                            \
+    }                                                                      \
+    printf(" passed\n");                                                   \
+    }                                                                      \
+    return TH_TEST_SUCCESS;                                                \
     }
 
 #define TH_TEST_CASE_BEGIN(name)   \
@@ -57,13 +62,7 @@ int th_test_allocator_outstanding(void);
         th_ran = true;             \
         printf("Running test-case: %40s", #name);
 
-#define TH_TEST_CASE_END                                                \
-    int outstanding = th_test_allocator_outstanding();                  \
-    if (outstanding != 0) {                                             \
-        printf(" Memory leak detected: %d allocations\n", outstanding); \
-        return TH_TEST_FAILURE;                                         \
-    }                                                                   \
-    printf(" passed\n");                                                \
+#define TH_TEST_CASE_END \
     }
 
 #endif

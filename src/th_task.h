@@ -1,6 +1,8 @@
 #ifndef TH_TASK_H
 #define TH_TASK_H
 
+#include <th.h>
+
 #include <stdbool.h>
 #include <stdlib.h>
 

@@ -2,8 +2,6 @@
 #include "th_tcp_socket.h"
 #include "th_test.h"
 
-#include <errno.h>
-
 static th_err last_err = TH_ERR_OK;
 static size_t last_result = 0;
 static void read_handler(void* data, size_t len, th_err err)
@@ -104,7 +102,7 @@ TH_TEST_BEGIN(tcp_socket)
             if (th_context_poll(&context, -1) != TH_ERR_OK)
                 break;
         }
-        TH_EXPECT(last_err == TH_ERR_SYSTEM(EIO));
+        TH_EXPECT(last_err == TH_ERR_SYSTEM(TH_EIO));
         th_tcp_socket_deinit(&socket);
         th_context_deinit(&context);
     }
@@ -146,7 +144,7 @@ TH_TEST_BEGIN(tcp_socket)
             if (th_context_poll(&context, -1) != TH_ERR_OK)
                 break;
         }
-        TH_EXPECT(last_err == TH_ERR_SYSTEM(EIO));
+        TH_EXPECT(last_err == TH_ERR_SYSTEM(TH_EIO));
         th_tcp_socket_deinit(&socket);
         th_context_deinit(&context);
     }

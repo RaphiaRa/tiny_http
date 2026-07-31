@@ -30,7 +30,7 @@ SET(TH_CORE_SRC
     src/th_router.c
     src/th_mime.c
     src/th_method.c
-    src/th_acceptor.c
+    src/th_acceptor_legacy.c
     src/th_runner.c
     src/th_io_task.c
     src/th_io_composite.c
@@ -50,6 +50,8 @@ SET(TH_CORE_SRC
     src/th_send.c
     src/th_sendvec.c
     src/th_sendfile.c
+    src/th_acceptor.c
+    src/th_accept.c
     src/th_tcp_socket.c
     src/th_request_parser.c
     src/th_request.c
@@ -212,6 +214,8 @@ if (NOT TH_DISABLE_TESTS)
         src/th_send_test.c
         src/th_sendvec_test.c
         src/th_sendfile_test.c
+        src/th_acceptor_test.c
+        src/th_accept_test.c
         src/th_router_test.c
         src/th_allocator_test.c
         src/th_request_parser_test.c

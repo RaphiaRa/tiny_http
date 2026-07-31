@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "th_acceptor.h"
+#include "th_acceptor_legacy.h"
 #include "th_allocator.h"
 #include "th_listener.h"
 #include "th_log.h"
@@ -42,7 +42,7 @@ th_listener_init(th_listener* listener, th_context* context,
     listener->ssl_enabled = 0;
     listener->allocator = allocator ? allocator : th_default_allocator_get();
     th_err err = TH_ERR_OK;
-    if ((err = th_acceptor_init(&listener->acceptor, context, allocator, host, port)) != TH_ERR_OK)
+    if ((err = th_acceptor_legacy_init(&listener->acceptor, context, allocator, host, port)) != TH_ERR_OK)
         return err;
     if (opt && opt->key_file && opt->cert_file) {
         if ((err = th_listener_enable_ssl(listener, opt->key_file, opt->cert_file)) != TH_ERR_OK)
@@ -53,7 +53,7 @@ th_listener_init(th_listener* listener, th_context* context,
     TH_LOG_INFO("Created listener on %s:%s", host, port);
     return TH_ERR_OK;
 cleanup_acceptor:
-    th_acceptor_deinit(&listener->acceptor);
+    th_acceptor_legacy_deinit(&listener->acceptor);
     return err;
 }
 
@@ -103,9 +103,9 @@ th_listener_async_accept(th_listener* listener)
         return TH_ERR_NOSUPPORT;
 #endif
     }
-    th_acceptor_async_accept(&listener->acceptor,
-                             th_conn_get_address(listener->conn),
-                             &listener->accept_handler.base);
+    th_acceptor_legacy_async_accept(&listener->acceptor,
+                                    th_conn_get_address(listener->conn),
+                                    &listener->accept_handler.base);
     return TH_ERR_OK;
 }
 
@@ -163,14 +163,14 @@ TH_PRIVATE(void)
 th_listener_stop(th_listener* listener)
 {
     listener->running = 0;
-    th_acceptor_cancel(&listener->acceptor);
+    th_acceptor_legacy_cancel(&listener->acceptor);
     th_conn_tracker_cancel_all(&listener->conn_tracker);
 }
 
 TH_LOCAL(void)
 th_listener_deinit(th_listener* listener)
 {
-    th_acceptor_deinit(&listener->acceptor);
+    th_acceptor_legacy_deinit(&listener->acceptor);
     th_conn_tracker_deinit(&listener->conn_tracker);
 #if TH_WITH_SSL
     if (listener->ssl_enabled) {

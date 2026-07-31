@@ -11,31 +11,28 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
-#elif defined(TH_CONFIG_OS_WIN)
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#elif defined(TH_CONFIG_OS_MOCK)
-#include "th_mock_syscall.h"
-#endif
 
-TH_PRIVATE(th_err)
-th_acceptor_init(th_acceptor* acceptor, th_context* context,
-                 th_allocator* allocator,
-                 const char* addr, const char* port)
+TH_LOCAL(th_err)
+th_acceptor_ops_os_set_nonblocking(int fd)
 {
-    acceptor->handle = NULL;
-    acceptor->context = context;
-    acceptor->allocator = allocator;
-#if defined(TH_CONFIG_OS_POSIX)
-    th_err err = TH_ERR_OK;
+    if (fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_NONBLOCK) < 0)
+        return TH_ERR_SYSTEM(errno);
+    return TH_ERR_OK;
+}
+
+TH_LOCAL(th_err)
+th_acceptor_ops_os_open(void* self, const char* addr, const char* port, int* out_fd)
+{
+    (void)self;
     struct addrinfo hints = {0};
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_flags = AI_PASSIVE;
     struct addrinfo* res = NULL;
-    if (getaddrinfo(addr, port, &hints, &res) != 0) {
+    if (getaddrinfo(addr, port, &hints, &res) != 0)
         return TH_ERR_SYSTEM(errno);
-    }
+
+    th_err err = TH_ERR_OK;
     int fd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
     if (fd < 0) {
         err = TH_ERR_SYSTEM(errno);
@@ -65,11 +62,8 @@ th_acceptor_init(th_acceptor* acceptor, th_context* context,
 #endif
     }
 #endif
-    // Set the socket to non-blocking mode
-    if (fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_NONBLOCK) < 0) {
-        err = TH_ERR_SYSTEM(errno);
+    if ((err = th_acceptor_ops_os_set_nonblocking(fd)) != TH_ERR_OK)
         goto cleanup_fd;
-    }
     if (bind(fd, res->ai_addr, res->ai_addrlen) < 0) {
         err = TH_ERR_SYSTEM(errno);
         goto cleanup_fd;
@@ -78,105 +72,82 @@ th_acceptor_init(th_acceptor* acceptor, th_context* context,
         err = TH_ERR_SYSTEM(errno);
         goto cleanup_fd;
     }
-    if ((err = th_context_create_handle(context, &acceptor->handle, fd)) != TH_ERR_OK)
-        goto cleanup_fd;
     freeaddrinfo(res);
+    *out_fd = fd;
     return TH_ERR_OK;
 cleanup_fd:
     close(fd);
 cleanup_addrinfo:
     freeaddrinfo(res);
     return err;
-#elif defined(TH_CONFIG_OS_WIN)
-    th_err err = TH_ERR_OK;
-    const ADDRINFOA hints = {0};
-    hints.ai_family = AF_UNSPEC;
-    hints.ai_socktype = SOCK_STREAM;
-    hints.ai_flags = AI_PASSIVE;
-    ADDRINFOA* res = NULL;
-    if (getaddrinfo(addr, port, &hints, &res) != 0) {
-        return TH_ERR_SYSTEM(WSAGetLastError());
+}
+
+TH_LOCAL(th_err)
+th_acceptor_ops_os_accept(void* self, int fd, th_address* addr, int* out_fd)
+{
+    (void)self;
+    int conn_fd = accept(fd, (struct sockaddr*)&addr->addr, &addr->addrlen);
+    if (conn_fd < 0)
+        return TH_ERR_SYSTEM(errno);
+    th_err err = th_acceptor_ops_os_set_nonblocking(conn_fd);
+    if (err != TH_ERR_OK) {
+        close(conn_fd);
+        return err;
     }
-    int fd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
-    if (fd == INVALID_SOCKET) {
-        err = TH_ERR_SYSTEM(WSAGetLastError());
-        goto cleanup_addrinfo;
-    }
-#if TH_CONFIG_REUSE_ADDR
-    {
-        int optval = 1;
-        if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (const char*)&optval, sizeof(optval)) == SOCKET_ERROR) {
-            err = TH_ERR_SYSTEM(WSAGetLastError());
-            goto cleanup_fd;
-        }
-    }
-#endif
-#if TH_CONFIG_REUSE_PORT
-    {
-        TH_LOG_FATAL("SO_REUSEPORT is not supported on this platform");
-        err = TH_ERR_NOSUPPORT;
-        goto cleanup_fd;
-    }
-#endif
-    // Set the socket to non-blocking mode
-    u_long mode = 1;
-    if (ioctlsocket(fd, FIONBIO, &mode) == SOCKET_ERROR) {
-        err = TH_ERR_SYSTEM(WSAGetLastError());
-        goto cleanup_fd;
-    }
-    if (bind(fd, res->ai_addr, (int)res->ai_addrlen) == SOCKET_ERROR) {
-        err = TH_ERR_SYSTEM(WSAGetLastError());
-        goto cleanup_fd;
-    }
-    if (listen(fd, 1024) == SOCKET_ERROR) {
-        err = TH_ERR_SYSTEM(WSAGetLastError());
-        goto cleanup_fd;
-    }
-    if ((err = th_context_create_handle(context, &acceptor->handle, fd)) != TH_ERR_OK)
-        goto cleanup_fd;
-    freeaddrinfo(res);
+    *out_fd = conn_fd;
     return TH_ERR_OK;
-cleanup_fd:
-    closesocket(fd);
-cleanup_addrinfo:
-    freeaddrinfo(res);
-    return err;
-#elif defined(TH_CONFIG_OS_MOCK)
-    (void)addr;
-    (void)port;
-    int fd = th_mock_open();
-    if (fd < 0)
-        return TH_ERR_SYSTEM(-fd);
-    th_err err = TH_ERR_OK;
-    if ((err = th_context_create_handle(context, &acceptor->handle, fd)) != TH_ERR_OK)
-        th_mock_close();
-    return err;
+}
+
+TH_PRIVATE(th_acceptor_ops*)
+th_acceptor_ops_os(void)
+{
+    static th_acceptor_ops ops = {
+        .open = th_acceptor_ops_os_open,
+        .accept = th_acceptor_ops_os_accept,
+    };
+    return &ops;
+}
+
+#endif /* TH_CONFIG_OS_POSIX */
+
+TH_PRIVATE(void)
+th_acceptor_init(th_acceptor* acceptor, th_loop* loop, th_acceptor_ops* ops)
+{
+    acceptor->loop = loop;
+    acceptor->handle = NULL;
+    acceptor->ops = ops;
+}
+
+TH_PRIVATE(th_err)
+th_acceptor_open(th_acceptor* acceptor, const char* addr, const char* port)
+{
+    int fd = -1;
+    th_err err = acceptor->ops->open(acceptor->ops, addr, port, &fd);
+    if (err != TH_ERR_OK)
+        return err;
+    th_acceptor_close(acceptor);
+    err = th_reactor_create_handle(acceptor->loop->reactor, &acceptor->handle, fd);
+    if (err != TH_ERR_OK) {
+#if defined(TH_CONFIG_OS_POSIX)
+        close(fd);
 #endif
-}
-
-TH_PRIVATE(void)
-th_acceptor_async_accept(th_acceptor* acceptor, th_address* addr, th_io_handler* on_complete)
-{
-    th_address_init(addr);
-    th_io_task* iot = th_io_task_create(acceptor->allocator);
-    if (!iot) {
-        th_context_dispatch_handler(acceptor->context, on_complete, 0, TH_ERR_BAD_ALLOC);
-        return;
+        return err;
     }
-    th_io_task_prepare_accept(iot, th_io_handle_get_fd(acceptor->handle), &addr->addr, &addr->addrlen, on_complete);
-    th_io_handle_submit(acceptor->handle, iot);
+    th_handle_enable_timeout(acceptor->handle, false);
+    return TH_ERR_OK;
 }
 
 TH_PRIVATE(void)
-th_acceptor_cancel(th_acceptor* acceptor)
+th_acceptor_close(th_acceptor* acceptor)
 {
-    th_io_handle_cancel(acceptor->handle);
+    if (acceptor->handle) {
+        th_handle_destroy(acceptor->handle);
+        acceptor->handle = NULL;
+    }
 }
 
 TH_PRIVATE(void)
 th_acceptor_deinit(th_acceptor* acceptor)
 {
-    th_io_handle_destroy(acceptor->handle);
+    th_acceptor_close(acceptor);
 }
-
-/* th_acceptor functions end */

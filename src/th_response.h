@@ -9,7 +9,7 @@
 #include "th_config.h"
 #include "th_fcache.h"
 #include "th_header_id.h"
-#include "th_socket.h"
+#include "th_socket_legacy.h"
 #include "th_string.h"
 /* th_response begin */
 
@@ -52,6 +52,6 @@ th_response_deinit(th_response* response);
 /* th_response end */
 
 TH_PRIVATE(void)
-th_response_async_write(th_response* response, th_socket* socket, th_io_handler* handler);
+th_response_async_write(th_response* response, th_socket_legacy* socket, th_io_handler* handler);
 
 #endif

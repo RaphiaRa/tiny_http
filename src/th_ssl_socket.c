@@ -32,24 +32,24 @@ TH_LOCAL(th_context*)
 th_ssl_socket_get_context_impl(void* self);
 
 TH_LOCAL(void)
-th_ssl_socket_async_write_impl(void* self, void* addr, size_t len, th_socket_handler* on_complete);
+th_ssl_socket_async_write_impl(void* self, void* addr, size_t len, th_socket_legacy_handler* on_complete);
 
 TH_LOCAL(void)
-th_ssl_socket_async_writev_impl(void* self, th_iov* addr, size_t len, th_socket_handler* on_complete);
+th_ssl_socket_async_writev_impl(void* self, th_iov* addr, size_t len, th_socket_legacy_handler* on_complete);
 
 TH_LOCAL(void)
-th_ssl_socket_async_read_impl(void* self, void* addr, size_t len, th_socket_handler* on_complete);
+th_ssl_socket_async_read_impl(void* self, void* addr, size_t len, th_socket_legacy_handler* on_complete);
 
 TH_LOCAL(void)
-th_ssl_socket_async_readv_impl(void* self, th_iov* iov, size_t len, th_socket_handler* on_complete);
+th_ssl_socket_async_readv_impl(void* self, th_iov* iov, size_t len, th_socket_legacy_handler* on_complete);
 
 TH_LOCAL(void)
-th_ssl_socket_async_sendfile_impl(void* self, th_iov* iov, size_t iovcnt, th_file* stream, size_t offset, size_t len, th_socket_handler* on_complete);
+th_ssl_socket_async_sendfile_impl(void* self, th_iov* iov, size_t iovcnt, th_file* stream, size_t offset, size_t len, th_socket_legacy_handler* on_complete);
 
 TH_PRIVATE(th_err)
 th_ssl_socket_init(th_ssl_socket* socket, th_context* context, th_ssl_context* ssl_context, th_allocator* allocator)
 {
-    static const th_socket_methods methods = {
+    static const th_socket_legacy_methods methods = {
         .set_fd = th_ssl_socket_set_fd_impl,
         .cancel = th_ssl_socket_cancel_impl,
         .get_allocator = th_ssl_socket_get_allocator_impl,
@@ -79,8 +79,8 @@ th_ssl_socket_init(th_ssl_socket* socket, th_context* context, th_ssl_context* s
         err = TH_ERR_SSL(SSL_ERROR_SSL);
         goto cleanup_wbio;
     }
-    th_smem_bio_setup_buf(socket->wbio, th_socket_get_allocator(&socket->base), TH_CONFIG_MAX_SSL_WRITE_BUF_LEN);
-    th_smem_bio_setup_buf(socket->rbio, th_socket_get_allocator(&socket->base), TH_CONFIG_MAX_SSL_READ_BUF_LEN);
+    th_smem_bio_setup_buf(socket->wbio, th_socket_legacy_get_allocator(&socket->base), TH_CONFIG_MAX_SSL_WRITE_BUF_LEN);
+    th_smem_bio_setup_buf(socket->rbio, th_socket_legacy_get_allocator(&socket->base), TH_CONFIG_MAX_SSL_READ_BUF_LEN);
     SSL_set_bio(socket->ssl, socket->rbio, socket->wbio);
     SSL_set_mode(socket->ssl, SSL_MODE_ENABLE_PARTIAL_WRITE);
     return TH_ERR_OK;
@@ -251,7 +251,7 @@ th_ssl_socket_io_handler_complete(th_ssl_socket_io_handler* handler, size_t resu
     if (handler->depth > 0) {
         th_io_composite_complete((th_io_composite*)handler, result, err);
     } else {
-        th_context_dispatch_composite_completion(th_socket_get_context((th_socket*)handler->socket), (th_io_composite*)handler, result, err);
+        th_context_dispatch_composite_completion(th_socket_legacy_get_context((th_socket_legacy*)handler->socket), (th_io_composite*)handler, result, err);
         th_ssl_socket_io_handler_destroy(handler);
     }
 }
@@ -307,7 +307,7 @@ th_ssl_socket_io_handler_fn(void* self, size_t result, th_err err)
 TH_LOCAL(void)
 th_ssl_socket_io_handler_init(th_ssl_socket_io_handler* handler, th_ssl_socket* socket,
                               void (*handle_result)(void* self, size_t len),
-                              th_socket_handler* on_complete, th_allocator* allocator)
+                              th_socket_legacy_handler* on_complete, th_allocator* allocator)
 {
     th_io_composite_init(&handler->base, th_ssl_socket_io_handler_fn, th_ssl_socket_io_handler_destroy, on_complete);
     handler->allocator = allocator;
@@ -333,7 +333,7 @@ th_ssl_socket_io_handler_writev_with_file(th_ssl_socket_io_handler* handler, th_
             handler->state = TH_SSL_IO_STATE_READ;
             th_smem_bio_get_wbuf(socket->rbio, &handler->buffer);
             th_tcp_socket_async_read(&socket->tcp_socket, handler->buffer.base, handler->buffer.len,
-                                     (th_socket_handler*)th_io_composite_forward(&handler->base, type));
+                                     (th_socket_legacy_handler*)th_io_composite_forward(&handler->base, type));
         } else {
             th_ssl_socket_io_handler_complete(handler, result, err);
         }
@@ -342,8 +342,8 @@ th_ssl_socket_io_handler_writev_with_file(th_ssl_socket_io_handler* handler, th_
         handler->result = result;
         handler->state = TH_SSL_IO_STATE_WRITE;
         th_smem_bio_get_rdata(socket->wbio, &handler->buffer);
-        th_socket_async_write_exact(&socket->tcp_socket.base, handler->buffer.base, handler->buffer.len,
-                                    (th_socket_handler*)th_io_composite_forward(&handler->base, type));
+        th_socket_legacy_async_write_exact(&socket->tcp_socket.base, handler->buffer.base, handler->buffer.len,
+                                    (th_socket_legacy_handler*)th_io_composite_forward(&handler->base, type));
     }
 }
 
@@ -362,14 +362,14 @@ th_ssl_socket_io_handler_readv(th_ssl_socket_io_handler* handler, th_iov* iov, s
             handler->state = TH_SSL_IO_STATE_WRITE;
             if (result > 0)
                 handler->result = result;
-            th_socket_async_write_exact(&socket->tcp_socket.base, handler->buffer.base, handler->buffer.len,
-                                        (th_socket_handler*)th_io_composite_forward(&handler->base, type));
+            th_socket_legacy_async_write_exact(&socket->tcp_socket.base, handler->buffer.base, handler->buffer.len,
+                                        (th_socket_legacy_handler*)th_io_composite_forward(&handler->base, type));
         } else if (TH_ERR_CODE(err) == SSL_ERROR_WANT_READ) {
             TH_LOG_TRACE("SSL_read wants read, switching to async read");
             handler->state = TH_SSL_IO_STATE_READ;
             th_smem_bio_get_wbuf(socket->rbio, &handler->buffer);
             th_tcp_socket_async_read(&socket->tcp_socket, handler->buffer.base, handler->buffer.len,
-                                     (th_socket_handler*)th_io_composite_forward(&handler->base, type));
+                                     (th_socket_legacy_handler*)th_io_composite_forward(&handler->base, type));
         } else if (TH_ERR_CODE(err) == SSL_ERROR_ZERO_RETURN) {
             TH_LOG_TRACE("SSL_read zero return");
             th_ssl_socket_io_handler_complete(handler, 0, TH_ERR_EOF);
@@ -396,14 +396,14 @@ th_ssl_socket_io_handler_handshake(th_ssl_socket_io_handler* handler,
             th_smem_bio_get_rdata(socket->wbio, &handler->buffer);
             TH_LOG_TRACE("SSL_handshake wants write, switching to async write");
             handler->state = TH_SSL_IO_STATE_WRITE;
-            th_socket_async_write_exact(&socket->tcp_socket.base, handler->buffer.base, handler->buffer.len,
-                                        (th_socket_handler*)th_io_composite_forward(&handler->base, type));
+            th_socket_legacy_async_write_exact(&socket->tcp_socket.base, handler->buffer.base, handler->buffer.len,
+                                        (th_socket_legacy_handler*)th_io_composite_forward(&handler->base, type));
         } else if (TH_ERR_CODE(err) == SSL_ERROR_WANT_READ) {
             TH_LOG_TRACE("SSL_handshake wants read, switching to async read");
             handler->state = TH_SSL_IO_STATE_READ;
             th_smem_bio_get_wbuf(socket->rbio, &handler->buffer);
             th_tcp_socket_async_read(&socket->tcp_socket, handler->buffer.base, handler->buffer.len,
-                                     (th_socket_handler*)th_io_composite_forward(&handler->base, type));
+                                     (th_socket_legacy_handler*)th_io_composite_forward(&handler->base, type));
         } else if (TH_ERR_CODE(err) == SSL_ERROR_ZERO_RETURN) {
             TH_LOG_TRACE("SSL_handshake zero return");
             th_ssl_socket_io_handler_complete(handler, 0, TH_ERR_EOF);
@@ -420,13 +420,13 @@ th_ssl_socket_io_handler_handshake(th_ssl_socket_io_handler* handler,
 /* th_ssl_socket_async_write begin */
 
 TH_LOCAL(void)
-th_ssl_socket_async_write_impl(void* self, void* addr, size_t len, th_socket_handler* on_complete)
+th_ssl_socket_async_write_impl(void* self, void* addr, size_t len, th_socket_legacy_handler* on_complete)
 {
-    th_socket* socket = self;
+    th_socket_legacy* socket = self;
     (void)addr;
     (void)len;
     TH_LOG_ERROR("th_ssl_socket_async_write not implemented");
-    th_context_dispatch_handler(th_socket_get_context(socket), on_complete, 0, TH_ERR_NOSUPPORT);
+    th_context_dispatch_handler(th_socket_legacy_get_context(socket), on_complete, 0, TH_ERR_NOSUPPORT);
 }
 
 /* th_ssl_socket_async_write end */
@@ -450,9 +450,9 @@ th_ssl_socket_writev_handler_fn(void* self, size_t result)
 }
 
 TH_LOCAL(th_err)
-th_ssl_socket_writev_handler_create(th_ssl_socket_writev_handler** out, th_ssl_socket* socket, th_socket_handler* on_complete)
+th_ssl_socket_writev_handler_create(th_ssl_socket_writev_handler** out, th_ssl_socket* socket, th_socket_legacy_handler* on_complete)
 {
-    th_allocator* allocator = th_socket_get_allocator((th_socket*)socket);
+    th_allocator* allocator = th_socket_legacy_get_allocator((th_socket_legacy*)socket);
     th_ssl_socket_writev_handler* handler = th_allocator_alloc(allocator, sizeof(th_ssl_socket_writev_handler));
     if (!handler) {
         return TH_ERR_BAD_ALLOC;
@@ -466,7 +466,7 @@ th_ssl_socket_writev_handler_create(th_ssl_socket_writev_handler** out, th_ssl_s
 }
 
 TH_LOCAL(void)
-th_ssl_socket_async_writev_impl(void* self, th_iov* addr, size_t len, th_socket_handler* on_complete)
+th_ssl_socket_async_writev_impl(void* self, th_iov* addr, size_t len, th_socket_legacy_handler* on_complete)
 {
     TH_ASSERT(self);
     TH_ASSERT(addr);
@@ -475,7 +475,7 @@ th_ssl_socket_async_writev_impl(void* self, th_iov* addr, size_t len, th_socket_
     th_ssl_socket* socket = self;
     th_ssl_socket_writev_handler* handler = NULL;
     if ((err = th_ssl_socket_writev_handler_create(&handler, socket, on_complete)) != TH_ERR_OK) {
-        th_context_dispatch_handler(th_socket_get_context(&socket->base), on_complete, 0, err);
+        th_context_dispatch_handler(th_socket_legacy_get_context(&socket->base), on_complete, 0, err);
         return;
     }
     handler->addr = addr;
@@ -504,9 +504,9 @@ th_ssl_socket_read_handler_fn(void* self, size_t result)
 
 TH_LOCAL(th_err)
 th_ssl_socket_read_handler_create(th_ssl_socket_read_handler** out, th_ssl_socket* socket,
-                                  th_socket_handler* on_complete)
+                                  th_socket_legacy_handler* on_complete)
 {
-    th_allocator* allocator = th_socket_get_allocator((th_socket*)socket);
+    th_allocator* allocator = th_socket_legacy_get_allocator((th_socket_legacy*)socket);
     th_ssl_socket_read_handler* handler = th_allocator_alloc(allocator, sizeof(th_ssl_socket_read_handler));
     if (!handler) {
         return TH_ERR_BAD_ALLOC;
@@ -518,7 +518,7 @@ th_ssl_socket_read_handler_create(th_ssl_socket_read_handler** out, th_ssl_socke
 }
 
 TH_LOCAL(void)
-th_ssl_socket_async_read_impl(void* self, void* addr, size_t len, th_socket_handler* on_complete)
+th_ssl_socket_async_read_impl(void* self, void* addr, size_t len, th_socket_legacy_handler* on_complete)
 {
     TH_ASSERT(self);
     TH_ASSERT(addr);
@@ -527,7 +527,7 @@ th_ssl_socket_async_read_impl(void* self, void* addr, size_t len, th_socket_hand
     th_ssl_socket* socket = self;
     th_ssl_socket_read_handler* handler = NULL;
     if ((err = th_ssl_socket_read_handler_create(&handler, socket, on_complete)) != TH_ERR_OK) {
-        th_context_dispatch_handler(th_socket_get_context(&socket->base), on_complete, 0, err);
+        th_context_dispatch_handler(th_socket_legacy_get_context(&socket->base), on_complete, 0, err);
         return;
     }
     handler->iov = (th_iov){.base = addr, .len = len};
@@ -538,7 +538,7 @@ th_ssl_socket_async_read_impl(void* self, void* addr, size_t len, th_socket_hand
 /* th_ssl_socket_async_readv begin */
 
 TH_LOCAL(void)
-th_ssl_socket_async_readv_impl(void* self, th_iov* iov, size_t len, th_socket_handler* on_complete)
+th_ssl_socket_async_readv_impl(void* self, th_iov* iov, size_t len, th_socket_legacy_handler* on_complete)
 {
     (void)self;
     (void)iov;
@@ -574,9 +574,9 @@ th_ssl_socket_sendfile_handler_fn(void* self, size_t result)
 
 TH_LOCAL(th_err)
 th_ssl_socket_sendfile_handler_create(th_ssl_socket_sendfile_handler** out, th_ssl_socket* socket,
-                                      th_socket_handler* on_complete)
+                                      th_socket_legacy_handler* on_complete)
 {
-    th_allocator* allocator = th_socket_get_allocator((th_socket*)socket);
+    th_allocator* allocator = th_socket_legacy_get_allocator((th_socket_legacy*)socket);
     th_ssl_socket_sendfile_handler* handler = th_allocator_alloc(allocator, sizeof(th_ssl_socket_sendfile_handler));
     if (!handler)
         return TH_ERR_BAD_ALLOC;
@@ -590,13 +590,13 @@ th_ssl_socket_sendfile_handler_create(th_ssl_socket_sendfile_handler** out, th_s
 }
 
 TH_LOCAL(void)
-th_ssl_socket_async_sendfile_impl(void* self, th_iov* iov, size_t iovcnt, th_file* stream, size_t offset, size_t len, th_socket_handler* on_complete)
+th_ssl_socket_async_sendfile_impl(void* self, th_iov* iov, size_t iovcnt, th_file* stream, size_t offset, size_t len, th_socket_legacy_handler* on_complete)
 {
     th_err err = TH_ERR_OK;
     th_ssl_socket* sock = self;
     th_ssl_socket_sendfile_handler* handler = NULL;
     if ((err = th_ssl_socket_sendfile_handler_create(&handler, sock, on_complete)) != TH_ERR_OK) {
-        th_context_dispatch_handler(th_socket_get_context(self), on_complete, 0, err);
+        th_context_dispatch_handler(th_socket_legacy_get_context(self), on_complete, 0, err);
         return;
     }
     handler->headers = iov;
@@ -625,9 +625,9 @@ th_ssl_socket_handshake_handler_fn(void* self, size_t result)
 }
 
 TH_LOCAL(th_err)
-th_ssl_socket_handshake_handler_create(th_ssl_socket_handshake_handler** out, th_ssl_socket* socket, th_socket_handler* on_complete)
+th_ssl_socket_handshake_handler_create(th_ssl_socket_handshake_handler** out, th_ssl_socket* socket, th_socket_legacy_handler* on_complete)
 {
-    th_allocator* allocator = th_socket_get_allocator((th_socket*)socket);
+    th_allocator* allocator = th_socket_legacy_get_allocator((th_socket_legacy*)socket);
     th_ssl_socket_handshake_handler* handler = th_allocator_alloc(allocator, sizeof(th_ssl_socket_handshake_handler));
     if (!handler) {
         return TH_ERR_BAD_ALLOC;
@@ -638,12 +638,12 @@ th_ssl_socket_handshake_handler_create(th_ssl_socket_handshake_handler** out, th
 }
 
 TH_PRIVATE(void)
-th_ssl_socket_async_handshake(th_ssl_socket* socket, th_socket_handler* on_complete)
+th_ssl_socket_async_handshake(th_ssl_socket* socket, th_socket_legacy_handler* on_complete)
 {
     th_err err = TH_ERR_OK;
     th_ssl_socket_handshake_handler* handler = NULL;
     if ((err = th_ssl_socket_handshake_handler_create(&handler, socket, on_complete)) != TH_ERR_OK) {
-        th_context_dispatch_handler(th_socket_get_context(&socket->base), on_complete, 0, err);
+        th_context_dispatch_handler(th_socket_legacy_get_context(&socket->base), on_complete, 0, err);
         return;
     }
     th_smem_ensure_buf_size(socket->rbio, TH_CONFIG_SMALL_SSL_BUF_LEN);
@@ -654,7 +654,7 @@ th_ssl_socket_async_handshake(th_ssl_socket* socket, th_socket_handler* on_compl
 /* th_ssl_socket_async_shutdown begin */
 
 TH_PRIVATE(void)
-th_ssl_socket_async_shutdown(th_ssl_socket* socket, th_socket_handler* on_complete)
+th_ssl_socket_async_shutdown(th_ssl_socket* socket, th_socket_legacy_handler* on_complete)
 {
     (void)socket;
     (void)on_complete;

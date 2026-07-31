@@ -44,7 +44,12 @@ SET(TH_CORE_SRC
     src/th_poll.c
     src/th_loop.c
     src/th_error.c
+    src/th_socket_legacy.c
     src/th_socket.c
+    src/th_recv.c
+    src/th_send.c
+    src/th_sendvec.c
+    src/th_sendfile.c
     src/th_tcp_socket.c
     src/th_request_parser.c
     src/th_request.c
@@ -202,6 +207,11 @@ if (NOT TH_DISABLE_TESTS)
         src/th_timer_test.c
         src/th_loop_test.c
         src/th_poll_test.c
+        src/th_socket_test.c
+        src/th_recv_test.c
+        src/th_send_test.c
+        src/th_sendvec_test.c
+        src/th_sendfile_test.c
         src/th_router_test.c
         src/th_allocator_test.c
         src/th_request_parser_test.c

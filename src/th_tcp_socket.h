@@ -1,12 +1,12 @@
 #ifndef TH_TCP_SOCKET_H
 #define TH_TCP_SOCKET_H
 
-#include "th_socket.h"
+#include "th_socket_legacy.h"
 
 /* th_tcp_socket begin */
 
 typedef struct th_tcp_socket {
-    th_socket base;
+    th_socket_legacy base;
     th_context* context;
     th_allocator* allocator;
     th_io_handle* handle;
@@ -15,7 +15,7 @@ typedef struct th_tcp_socket {
 TH_PRIVATE(void)
 th_tcp_socket_init(th_tcp_socket* socket, th_context* context, th_allocator* allocator);
 
-/** th_socket_close
+/** th_socket_legacy_close
  * @brief Closes the underlying file descriptor of the socket.
  * while the socket object is still valid and can be reused.
  */

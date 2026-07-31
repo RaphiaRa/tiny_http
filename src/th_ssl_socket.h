@@ -5,7 +5,7 @@
 
 #if TH_WITH_SSL
 
-#include "th_socket.h"
+#include "th_socket_legacy.h"
 #include "th_ssl_context.h"
 #include "th_tcp_socket.h"
 
@@ -14,7 +14,7 @@
 /* th_ssl_socket begin */
 
 typedef struct th_ssl_socket {
-    th_socket base;
+    th_socket_legacy base;
     th_tcp_socket tcp_socket;
     SSL* ssl;
     BIO* wbio; // ssl output buffer
@@ -35,12 +35,12 @@ TH_PRIVATE(void)
 th_ssl_socket_set_mode(th_ssl_socket* socket, th_ssl_socket_mode mode);
 
 TH_PRIVATE(void)
-th_ssl_socket_async_handshake(th_ssl_socket* socket, th_socket_handler* handler);
+th_ssl_socket_async_handshake(th_ssl_socket* socket, th_socket_legacy_handler* handler);
 
 TH_PRIVATE(void)
-th_ssl_socket_async_shutdown(th_ssl_socket* socket, th_socket_handler* handler);
+th_ssl_socket_async_shutdown(th_ssl_socket* socket, th_socket_legacy_handler* handler);
 
-/** th_socket_close
+/** th_socket_legacy_close
  * @brief Closes the underlying file descriptor of the socket.
  * while the socket object is still valid and can be reused.
  */

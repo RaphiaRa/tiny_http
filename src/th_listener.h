@@ -8,7 +8,7 @@
 #include "th_http.h"
 #include "th_io_service.h"
 #include "th_router.h"
-#include "th_socket.h"
+#include "th_socket_legacy.h"
 #include "th_string.h"
 
 typedef struct th_listener th_listener;

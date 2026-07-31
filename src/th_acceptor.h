@@ -6,7 +6,7 @@
 #include "th_allocator.h"
 #include "th_config.h"
 #include "th_context.h"
-#include "th_socket.h"
+#include "th_socket_legacy.h"
 
 typedef struct th_acceptor {
     th_context* context;

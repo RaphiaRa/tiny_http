@@ -9,7 +9,7 @@
 #include "th_allocator.h"
 #include "th_log.h"
 #include "th_router.h"
-#include "th_socket.h"
+#include "th_socket_legacy.h"
 
 /* th_conn_observable begin */
 
@@ -23,7 +23,7 @@ th_conn_observable_destroy(void* self)
 
 TH_LOCAL(void)
 th_conn_observable_init(th_conn_observable* observable,
-                        th_socket* (*get_socket)(void* self),
+                        th_socket_legacy* (*get_socket)(void* self),
                         th_address* (*get_address)(void* self),
                         void (*start)(void* self),
                         void (*destroy)(void* self),
@@ -41,7 +41,7 @@ th_conn_observable_init(th_conn_observable* observable,
 #undef TH_LOG_TAG
 #define TH_LOG_TAG "tcp_conn"
 
-TH_LOCAL(th_socket*)
+TH_LOCAL(th_socket_legacy*)
 th_tcp_conn_get_socket(void* self);
 
 TH_LOCAL(th_address*)
@@ -82,7 +82,7 @@ th_tcp_conn_create(th_conn** out, th_context* context,
     return TH_ERR_OK;
 }
 
-TH_LOCAL(th_socket*)
+TH_LOCAL(th_socket_legacy*)
 th_tcp_conn_get_socket(void* self)
 {
     th_tcp_conn* conn = (th_tcp_conn*)self;
@@ -121,7 +121,7 @@ th_tcp_conn_destroy(void* self)
 #undef TH_LOG_TAG
 #define TH_LOG_TAG "ssl_conn"
 
-TH_LOCAL(th_socket*)
+TH_LOCAL(th_socket_legacy*)
 th_ssl_conn_get_socket(void* self);
 
 TH_LOCAL(th_address*)
@@ -207,11 +207,11 @@ th_ssl_conn_create(th_conn** out, th_context* context, th_ssl_context* ssl_conte
     return TH_ERR_OK;
 }
 
-TH_LOCAL(th_socket*)
+TH_LOCAL(th_socket_legacy*)
 th_ssl_conn_get_socket(void* self)
 {
     th_ssl_conn* conn = (th_ssl_conn*)self;
-    return (th_socket*)&conn->socket;
+    return (th_socket_legacy*)&conn->socket;
 }
 
 TH_LOCAL(th_address*)

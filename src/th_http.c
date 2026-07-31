@@ -31,7 +31,7 @@ th_http_restart(th_http* http)
     th_request_reset(&http->request);
     th_response_reset(&http->response);
     http->state = TH_HTTP_STATE_READ_REQUEST;
-    th_socket_async_read(th_conn_get_socket(http->conn), th_buf_vec_at(&http->buf, 0), th_buf_vec_size(&http->buf), &http->io_handler.base);
+    th_socket_legacy_async_read(th_conn_get_socket(http->conn), th_buf_vec_at(&http->buf, 0), th_buf_vec_size(&http->buf), &http->io_handler.base);
 }
 
 TH_LOCAL(void)
@@ -214,7 +214,7 @@ th_http_handle_read_request(th_http* http, size_t len, th_err err)
                 return;
             }
         }
-        th_socket_async_read(th_conn_get_socket(http->conn), th_buf_vec_at(&http->buf, http->read_bytes),
+        th_socket_legacy_async_read(th_conn_get_socket(http->conn), th_buf_vec_at(&http->buf, http->read_bytes),
                              th_buf_vec_size(&http->buf) - http->read_bytes, &http->io_handler.base);
     } else {
         if (th_conn_tracker_count(http->tracker) > TH_CONFIG_MAX_CONNECTIONS) {
@@ -238,7 +238,7 @@ th_http_handle_read_request(th_http* http, size_t len, th_err err)
                 th_buf_vec_resize(&http->buf, content_len);
             }
         }
-        th_socket_async_read_exact(th_conn_get_socket(http->conn), th_buf_vec_at(&http->buf, http->read_bytes),
+        th_socket_legacy_async_read_exact(th_conn_get_socket(http->conn), th_buf_vec_at(&http->buf, http->read_bytes),
                                    remaining, &http->io_handler.base);
     }
 }
@@ -289,7 +289,7 @@ th_http_start(void* self)
     th_http* http = self;
     TH_LOG_TRACE("%p: Starting", http);
     th_buf_vec_resize(&http->buf, TH_CONFIG_SMALL_HEADER_LEN);
-    th_socket_async_read(th_conn_get_socket(http->conn), th_buf_vec_at(&http->buf, 0), th_buf_vec_size(&http->buf), &http->io_handler.base);
+    th_socket_legacy_async_read(th_conn_get_socket(http->conn), th_buf_vec_at(&http->buf, 0), th_buf_vec_size(&http->buf), &http->io_handler.base);
 }
 
 TH_LOCAL(void)

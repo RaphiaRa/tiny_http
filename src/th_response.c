@@ -235,7 +235,7 @@ th_response_set_default_headers(th_response* response)
 }
 
 TH_PRIVATE(void)
-th_response_async_write(th_response* response, th_socket* socket, th_io_handler* handler)
+th_response_async_write(th_response* response, th_socket_legacy* socket, th_io_handler* handler)
 {
     th_err err = TH_ERR_OK;
     if (response->is_file) {
@@ -247,7 +247,7 @@ th_response_async_write(th_response* response, th_socket* socket, th_io_handler*
         goto cleanup;
     size_t iovcnt = 2; // start line + headers
     if (response->only_headers) {
-        th_socket_async_writev_exact(socket, response->iov, iovcnt, handler);
+        th_socket_legacy_async_writev_exact(socket, response->iov, iovcnt, handler);
         return;
     }
     if (response->is_file == 0) { // user provided body
@@ -256,13 +256,13 @@ th_response_async_write(th_response* response, th_socket* socket, th_io_handler*
             response->iov[iovcnt].len = th_string_len(&response->body);
             iovcnt++;
         }
-        th_socket_async_writev_exact(socket, response->iov, iovcnt, handler);
+        th_socket_legacy_async_writev_exact(socket, response->iov, iovcnt, handler);
     } else {
-        th_socket_async_sendfile_exact(socket, response->iov, iovcnt, &response->fcache_entry->stream, 0, (size_t)response->file_len, handler);
+        th_socket_legacy_async_sendfile_exact(socket, response->iov, iovcnt, &response->fcache_entry->stream, 0, (size_t)response->file_len, handler);
     }
     return;
 cleanup:
-    th_context_dispatch_handler(th_socket_get_context(socket), handler, 0, err);
+    th_context_dispatch_handler(th_socket_legacy_get_context(socket), handler, 0, err);
 }
 
 /* Public response API begin */

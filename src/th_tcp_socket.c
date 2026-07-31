@@ -155,7 +155,7 @@ th_tcp_socket_async_sendfile_impl(void* self, th_iov* iov, size_t iovcnt, th_fil
 TH_PRIVATE(void)
 th_tcp_socket_init(th_tcp_socket* sock, th_context* context, th_allocator* allocator)
 {
-    static const th_socket_methods methods = {
+    static const th_socket_legacy_methods methods = {
         .set_fd = th_tcp_socket_set_fd_impl,
         .cancel = th_tcp_socket_cancel_impl,
         .get_allocator = th_tcp_socket_get_allocator_impl,
@@ -188,4 +188,4 @@ th_tcp_socket_deinit(th_tcp_socket* sock)
         th_tcp_socket_close(sock);
 }
 
-/* th_socket functions end */
+/* th_socket_legacy functions end */

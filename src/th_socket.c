@@ -1,357 +1,192 @@
 #include "th_socket.h"
-#include "th_io_composite.h"
+#include "th_system_error.h"
+#include "th_utility.h"
 
+#if defined(TH_CONFIG_OS_POSIX)
 #include <errno.h>
-#include <netdb.h>
 #include <sys/socket.h>
+#include <sys/uio.h>
 #include <unistd.h>
+#elif defined(TH_CONFIG_OS_WIN)
+#include <winsock2.h>
+#endif
 
-/* th_address functions begin */
+#if defined(TH_CONFIG_OS_POSIX)
 
-TH_PRIVATE(void)
-th_address_init(th_address* addr)
+TH_LOCAL(th_err)
+th_socket_ops_os_send(void* self, int fd, const void* addr, size_t len, size_t* result)
 {
-    addr->addrlen = sizeof(addr->addr);
-}
-
-/* th_address functions end */
-/* generic socket functions begin */
-
-typedef struct th_socket_exact_task_handler {
-    th_io_composite base;
-    th_allocator* allocator;
-    th_socket* socket;
-    void* addr;
-    size_t remaining;
-    size_t len;
-} th_socket_exact_task_handler;
-
-TH_LOCAL(void)
-th_socket_exact_task_handler_destroy(void* self)
-{
-    th_socket_exact_task_handler* handler = self;
-    th_allocator_free(handler->allocator, handler);
-}
-
-TH_LOCAL(void)
-th_socket_exact_task_handler_complete(th_socket_exact_task_handler* handler, size_t len, th_err err)
-{
-    th_io_composite_complete(&handler->base, len, err);
-}
-
-/* th_socket_write_exact implementation begin */
-
-typedef th_socket_exact_task_handler th_socket_write_exact_handler;
-#define th_socket_write_exact_handler_complete th_socket_exact_task_handler_complete
-#define th_socket_write_exact_handler_destroy th_socket_exact_task_handler_destroy
-
-TH_LOCAL(void)
-th_socket_write_exact_handler_fn(void* self, size_t len, th_err err)
-{
-    th_socket_write_exact_handler* handler = self;
-    if (err != TH_ERR_OK) {
-        th_socket_write_exact_handler_complete(handler, handler->len - handler->remaining, err);
-        return;
-    }
-    handler->remaining -= len;
-    if (handler->remaining == 0) {
-        th_socket_write_exact_handler_complete(handler, handler->len, err);
-        return;
-    }
-    th_socket_async_write(handler->socket, (uint8_t*)handler->addr + handler->len - handler->remaining, handler->remaining, (th_io_handler*)th_io_composite_ref(&handler->base));
+    (void)self;
+    int flags = 0;
+#if defined(MSG_NOSIGNAL)
+    flags |= MSG_NOSIGNAL;
+#endif
+    ssize_t ret = send(fd, addr, len, flags);
+    if (ret < 0)
+        return TH_ERR_SYSTEM(errno);
+    *result = (size_t)ret;
+    return TH_ERR_OK;
 }
 
 TH_LOCAL(th_err)
-th_socket_write_exact_handler_create(th_socket_write_exact_handler** out, th_allocator* allocator,
-                                     th_socket* socket, void* addr, size_t len, th_socket_handler* on_complete)
+th_socket_ops_os_sendvec(void* self, int fd, const th_iov* iov, size_t iovcnt, size_t* result)
 {
-    th_socket_write_exact_handler* handler = th_allocator_alloc(allocator, sizeof(th_socket_write_exact_handler));
-    if (!handler) {
-        return TH_ERR_BAD_ALLOC;
+    (void)self;
+    int flags = 0;
+#if defined(MSG_NOSIGNAL)
+    flags |= MSG_NOSIGNAL;
+#endif
+    struct msghdr msg = {0};
+    msg.msg_iov = (struct iovec*)iov;
+    msg.msg_iovlen = iovcnt;
+    ssize_t ret = sendmsg(fd, &msg, flags);
+    if (ret < 0)
+        return TH_ERR_SYSTEM(errno);
+    *result = (size_t)ret;
+    return TH_ERR_OK;
+}
+
+TH_LOCAL(th_err)
+th_socket_ops_os_recv(void* self, int fd, void* addr, size_t len, size_t* result)
+{
+    (void)self;
+    ssize_t ret = recv(fd, addr, len, 0);
+    if (ret < 0)
+        return TH_ERR_SYSTEM(errno);
+    if (ret == 0)
+        return TH_ERR_EOF;
+    *result = (size_t)ret;
+    return TH_ERR_OK;
+}
+
+/* Builds header iov + one trailing iov (extra) into vec, capped at
+ * TH_SOCKET_SENDFILE_MAX_IOV entries; returns the combined iovec count. */
+#define TH_SOCKET_SENDFILE_MAX_IOV 64
+
+TH_LOCAL(size_t)
+th_socket_build_sendfile_iov(struct iovec* vec, const th_iov* iov, size_t iovcnt, void* extra_base, size_t extra_len)
+{
+    size_t veclen = 0;
+    for (size_t i = 0; i < iovcnt && veclen < TH_SOCKET_SENDFILE_MAX_IOV - 1; ++i, ++veclen) {
+        vec[veclen].iov_base = iov[i].base;
+        vec[veclen].iov_len = iov[i].len;
     }
-    th_io_composite_init(&handler->base, th_socket_write_exact_handler_fn, th_socket_write_exact_handler_destroy, on_complete);
-    handler->allocator = allocator;
-    handler->socket = socket;
-    handler->addr = addr;
-    handler->remaining = len;
-    handler->len = len;
-    *out = handler;
+    vec[veclen].iov_base = extra_base;
+    vec[veclen].iov_len = extra_len;
+    ++veclen;
+    return veclen;
+}
+
+#define TH_SOCKET_SENDFILE_BUFFERED_MAX (8 * 1024)
+
+/* Small transfers: read the file chunk into a stack buffer, then send
+ * header + buffer in one sendmsg. Avoids the mmap setup cost. */
+TH_LOCAL(th_err)
+th_socket_ops_os_sendfile_buffered(int fd, const th_iov* iov, size_t iovcnt, th_file* file, size_t offset, size_t len, size_t* result)
+{
+    uint8_t buffer[TH_SOCKET_SENDFILE_BUFFERED_MAX];
+    size_t toread = TH_MIN(sizeof(buffer), len);
+    ssize_t readlen = pread(file->fd, buffer, toread, (off_t)offset);
+    if (readlen < 0)
+        return TH_ERR_SYSTEM(errno);
+
+    struct iovec vec[TH_SOCKET_SENDFILE_MAX_IOV];
+    size_t veclen = th_socket_build_sendfile_iov(vec, iov, iovcnt, buffer, (size_t)readlen);
+
+    int flags = 0;
+#if defined(MSG_NOSIGNAL)
+    flags |= MSG_NOSIGNAL;
+#endif
+    struct msghdr msg = {0};
+    msg.msg_iov = vec;
+    msg.msg_iovlen = veclen;
+    ssize_t ret = sendmsg(fd, &msg, flags);
+    if (ret < 0)
+        return TH_ERR_SYSTEM(errno);
+    *result = (size_t)ret;
+    return TH_ERR_OK;
+}
+
+/* Large transfers: map the file chunk and send header + mapped view in
+ * one sendmsg, avoiding the extra copy into a buffer. */
+TH_LOCAL(th_err)
+th_socket_ops_os_sendfile_mmap(int fd, const th_iov* iov, size_t iovcnt, th_file* file, size_t offset, size_t len, size_t* result)
+{
+    th_fileview view;
+    th_err err = th_file_get_view(file, &view, offset, len);
+    if (err != TH_ERR_OK)
+        return err;
+
+    struct iovec vec[TH_SOCKET_SENDFILE_MAX_IOV];
+    size_t veclen = th_socket_build_sendfile_iov(vec, iov, iovcnt, view.ptr, view.len);
+
+    int flags = 0;
+#if defined(MSG_NOSIGNAL)
+    flags |= MSG_NOSIGNAL;
+#endif
+    struct msghdr msg = {0};
+    msg.msg_iov = vec;
+    msg.msg_iovlen = veclen;
+    ssize_t ret = sendmsg(fd, &msg, flags);
+    if (ret < 0)
+        return TH_ERR_SYSTEM(errno);
+    *result = (size_t)ret;
+    return TH_ERR_OK;
+}
+
+TH_LOCAL(th_err)
+th_socket_ops_os_sendfile(void* self, int fd, const th_iov* iov, size_t iovcnt, th_file* file, size_t offset, size_t len, size_t* result)
+{
+    (void)self;
+    if (len < TH_SOCKET_SENDFILE_BUFFERED_MAX)
+        return th_socket_ops_os_sendfile_buffered(fd, iov, iovcnt, file, offset, len, result);
+    return th_socket_ops_os_sendfile_mmap(fd, iov, iovcnt, file, offset, len, result);
+}
+
+TH_PRIVATE(th_socket_ops*)
+th_socket_ops_os(void)
+{
+    static th_socket_ops ops = {
+        .send = th_socket_ops_os_send,
+        .sendvec = th_socket_ops_os_sendvec,
+        .recv = th_socket_ops_os_recv,
+        .sendfile = th_socket_ops_os_sendfile,
+    };
+    return &ops;
+}
+
+#endif /* TH_CONFIG_OS_POSIX */
+
+TH_PRIVATE(void)
+th_socket_init(th_socket* socket, th_loop* loop, th_socket_ops* ops)
+{
+    socket->loop = loop;
+    socket->handle = NULL;
+    socket->ops = ops;
+}
+
+TH_PRIVATE(th_err)
+th_socket_set_fd(th_socket* socket, int fd)
+{
+    th_socket_close(socket);
+    th_err err = th_reactor_create_handle(socket->loop->reactor, &socket->handle, fd);
+    if (err != TH_ERR_OK)
+        return err;
+    th_handle_enable_timeout(socket->handle, true);
     return TH_ERR_OK;
 }
 
 TH_PRIVATE(void)
-th_socket_async_write_exact(th_socket* sock, void* addr, size_t len, th_socket_handler* on_complete)
+th_socket_close(th_socket* socket)
 {
-    th_err err = TH_ERR_OK;
-    th_socket_write_exact_handler* handler = NULL;
-    if ((err = th_socket_write_exact_handler_create(&handler, th_socket_get_allocator(sock),
-                                                    sock, addr, len, on_complete))
-        != TH_ERR_OK) {
-        th_context_dispatch_handler(th_socket_get_context(sock), on_complete, 0, err);
-        return;
+    if (socket->handle) {
+        th_handle_destroy(socket->handle);
+        socket->handle = NULL;
     }
-    th_socket_async_write(sock, addr, len, (th_io_handler*)handler);
-}
-
-/* th_socket_write_exact implementation end */
-/* th_socket_writev_exact implementation begin */
-
-typedef th_socket_exact_task_handler th_socket_writev_exact_handler;
-#define th_socket_writev_exact_handler_complete th_socket_exact_task_handler_complete
-#define th_socket_writev_exact_handler_destroy th_socket_exact_task_handler_destroy
-
-/** th_socket_writev_exact_handler_fn
- * @brief For each write, shifts the iov array and increases the len by the number of bytes written.
- * The remaining parameter is decremented by the number of buffers consumed.
- */
-TH_LOCAL(void)
-th_socket_writev_exact_handler_fn(void* self, size_t len, th_err err)
-{
-    th_socket_exact_task_handler* handler = self;
-    if (err != TH_ERR_OK) {
-        th_socket_exact_task_handler_complete(handler, handler->len, err);
-        return;
-    }
-    handler->len += len;
-    th_iov* iov = handler->addr;
-    th_iov_consume(&iov, &handler->remaining, len);
-    if (handler->remaining == 0) {
-        th_socket_exact_task_handler_complete(handler, handler->len, err);
-        return;
-    }
-    handler->addr = iov;
-    th_socket_async_writev(handler->socket, handler->addr, handler->remaining, (th_io_handler*)th_io_composite_ref(&handler->base));
-}
-
-TH_LOCAL(th_err)
-th_socket_writev_exact_handler_create(th_socket_writev_exact_handler** out, th_allocator* allocator,
-                                      th_socket* socket, th_iov* iov, size_t len, th_socket_handler* on_complete)
-{
-    th_socket_writev_exact_handler* handler = th_allocator_alloc(allocator, sizeof(th_socket_writev_exact_handler));
-    if (!handler) {
-        return TH_ERR_BAD_ALLOC;
-    }
-    th_io_composite_init(&handler->base, th_socket_writev_exact_handler_fn, th_socket_writev_exact_handler_destroy, on_complete);
-    handler->allocator = allocator;
-    handler->socket = socket;
-    handler->addr = iov;
-    handler->remaining = len;
-    handler->len = 0;
-    *out = handler;
-    return TH_ERR_OK;
 }
 
 TH_PRIVATE(void)
-th_socket_async_writev_exact(th_socket* sock, th_iov* iov, size_t len, th_socket_handler* on_complete)
+th_socket_deinit(th_socket* socket)
 {
-    th_err err = TH_ERR_OK;
-    th_socket_writev_exact_handler* handler = NULL;
-    if ((err = th_socket_writev_exact_handler_create(&handler, th_socket_get_allocator(sock), sock, iov, len, on_complete))
-        != TH_ERR_OK) {
-        th_context_dispatch_handler(th_socket_get_context(sock), on_complete, 0, err);
-        return;
-    }
-    th_socket_async_writev(sock, iov, len, (th_io_handler*)handler);
+    th_socket_close(socket);
 }
-
-/* th_socket_writev_exact implementation end */
-/* th_socket_read_exact implementation begin */
-
-typedef th_socket_exact_task_handler th_socket_read_exact_handler;
-#define th_socket_read_exact_handler_complete th_socket_exact_task_handler_complete
-#define th_socket_read_exact_handler_destroy th_socket_exact_task_handler_destroy
-
-TH_LOCAL(void)
-th_socket_read_exact_handler_fn(void* self, size_t len, th_err err)
-{
-    th_socket_exact_task_handler* handler = self;
-    if (err != TH_ERR_OK) {
-        th_socket_read_exact_handler_complete(handler, handler->len - handler->remaining, err);
-        return;
-    }
-    handler->remaining -= len;
-    if (handler->remaining == 0) {
-        th_socket_read_exact_handler_complete(handler, handler->len, err);
-        return;
-    }
-    th_socket_async_read(handler->socket, (uint8_t*)handler->addr + handler->len - handler->remaining, handler->remaining, (th_io_handler*)th_io_composite_ref(&handler->base));
-}
-
-TH_LOCAL(th_err)
-th_socket_read_exact_handler_create(th_socket_read_exact_handler** out, th_allocator* allocator,
-                                    th_socket* socket, void* addr, size_t len, th_socket_handler* on_complete)
-{
-    th_socket_read_exact_handler* handler = th_allocator_alloc(allocator, sizeof(th_socket_read_exact_handler));
-    if (!handler) {
-        return TH_ERR_BAD_ALLOC;
-    }
-    th_io_composite_init(&handler->base, th_socket_read_exact_handler_fn, th_socket_read_exact_handler_destroy, on_complete);
-    handler->allocator = allocator;
-    handler->socket = socket;
-    handler->addr = addr;
-    handler->remaining = len;
-    handler->len = len;
-    *out = handler;
-    return TH_ERR_OK;
-}
-
-TH_PRIVATE(void)
-th_socket_async_read_exact(th_socket* sock, void* addr, size_t len, th_socket_handler* on_complete)
-{
-    th_err err = TH_ERR_OK;
-    th_socket_read_exact_handler* handler = NULL;
-    if ((err = th_socket_read_exact_handler_create(&handler, th_socket_get_allocator(sock), sock, addr, len, on_complete))
-        != TH_ERR_OK) {
-        th_context_dispatch_handler(th_socket_get_context(sock), on_complete, 0, err);
-        return;
-    }
-    th_socket_async_read(sock, addr, len, (th_io_handler*)handler);
-}
-
-/* th_socket_read_exact implementation end */
-/* th_socket_readv_exact implementation begin */
-
-typedef th_socket_exact_task_handler th_socket_readv_exact_handler;
-#define th_socket_readv_exact_handler_complete th_socket_exact_task_handler_complete
-#define th_socket_readv_exact_handler_destroy th_socket_exact_task_handler_destroy
-
-TH_LOCAL(void)
-th_socket_readv_exact_handler_fn(void* self, size_t len, th_err err)
-{
-    th_socket_exact_task_handler* handler = self;
-    if (err != TH_ERR_OK) {
-        th_socket_readv_exact_handler_complete(handler, handler->len, err);
-        return;
-    }
-    handler->len += len;
-    th_iov* iov = handler->addr;
-    th_iov_consume(&iov, &handler->remaining, len);
-    if (handler->remaining == 0) {
-        th_socket_readv_exact_handler_complete(handler, handler->len, err);
-        return;
-    }
-    handler->addr = iov;
-    th_socket_async_readv(handler->socket, handler->addr, handler->remaining, (th_io_handler*)th_io_composite_ref(&handler->base));
-}
-
-TH_LOCAL(th_err)
-th_socket_readv_exact_handler_create(th_socket_readv_exact_handler** out, th_allocator* allocator,
-                                     th_socket* socket, th_iov* iov, size_t len, th_socket_handler* on_complete)
-{
-    th_socket_readv_exact_handler* handler = th_allocator_alloc(allocator, sizeof(th_socket_readv_exact_handler));
-    if (!handler) {
-        return TH_ERR_BAD_ALLOC;
-    }
-    th_io_composite_init(&handler->base, th_socket_readv_exact_handler_fn, th_socket_readv_exact_handler_destroy, on_complete);
-    handler->allocator = allocator;
-    handler->socket = socket;
-    handler->addr = iov;
-    handler->remaining = len;
-    handler->len = 0;
-    *out = handler;
-    return TH_ERR_OK;
-}
-
-TH_PRIVATE(void)
-th_socket_async_readv_exact(th_socket* sock, th_iov* iov, size_t len, th_socket_handler* on_complete)
-{
-    th_err err = TH_ERR_OK;
-    th_socket_readv_exact_handler* handler = NULL;
-    if ((err = th_socket_readv_exact_handler_create(&handler, th_socket_get_allocator(sock), sock, iov, len, on_complete))
-        != TH_ERR_OK) {
-        th_context_dispatch_handler(th_socket_get_context(sock), on_complete, 0, err);
-        return;
-    }
-    th_socket_async_readv(sock, iov, len, (th_io_handler*)handler);
-}
-
-/* th_socket_readv_exact implementation end */
-/* th_socket_sendfile_exact implementation begin */
-
-typedef struct th_socket_sendfile_exact_handler {
-    th_io_composite base;
-    th_socket* socket;
-    th_file* fstream;
-    th_iov* iov;
-    size_t iovcnt;
-    size_t offset;
-    size_t slen;
-    size_t vlen;
-    size_t relative_offset;
-} th_socket_sendfile_exact_handler;
-
-TH_LOCAL(void)
-th_socket_sendfile_exact_handler_complete(th_socket_sendfile_exact_handler* handler, size_t len, th_err err)
-{
-    th_io_composite_complete(&handler->base, len, err);
-}
-
-TH_LOCAL(void)
-th_socket_sendfile_exact_handler_fn(void* self, size_t len, th_err err)
-{
-    th_socket_sendfile_exact_handler* handler = self;
-    if (err != TH_ERR_OK) {
-        th_socket_sendfile_exact_handler_complete(handler, 0, err);
-        return;
-    }
-    if (handler->iovcnt > 0) {
-        handler->relative_offset += th_iov_consume(&handler->iov, (size_t*)&handler->iovcnt, len);
-    } else {
-        handler->relative_offset += len;
-    }
-    if (handler->relative_offset == handler->slen) {
-        th_socket_sendfile_exact_handler_complete(handler, handler->relative_offset + handler->vlen, err);
-        return;
-    }
-    size_t remaining = handler->slen - handler->relative_offset;
-    size_t chunk = remaining > TH_CONFIG_SENDFILE_CHUNK_LEN ? TH_CONFIG_SENDFILE_CHUNK_LEN : remaining;
-    th_socket_async_sendfile(handler->socket, handler->iov, handler->iovcnt, handler->fstream,
-                             handler->offset + handler->relative_offset, chunk, (th_io_handler*)th_io_composite_ref(&handler->base));
-}
-
-TH_LOCAL(void)
-th_socket_sendfile_exact_handler_destroy(void* self)
-{
-    th_socket_sendfile_exact_handler* handler = self;
-    th_allocator_free(th_socket_get_allocator(handler->socket), handler);
-}
-
-TH_LOCAL(th_err)
-th_socket_sendfile_exact_handler_create(th_socket_sendfile_exact_handler** out, th_allocator* allocator,
-                                        th_socket* socket, th_iov* iov, size_t iovcnt, th_file* stream,
-                                        size_t offset, size_t slen, size_t vlen, th_socket_handler* on_complete)
-{
-    th_socket_sendfile_exact_handler* handler = th_allocator_alloc(allocator, sizeof(th_socket_sendfile_exact_handler));
-    if (!handler) {
-        return TH_ERR_BAD_ALLOC;
-    }
-    th_io_composite_init(&handler->base, th_socket_sendfile_exact_handler_fn, th_socket_sendfile_exact_handler_destroy, on_complete);
-    handler->socket = socket;
-    handler->iov = iov;
-    handler->iovcnt = iovcnt;
-    handler->fstream = stream;
-    handler->offset = offset;
-    handler->slen = slen;
-    handler->vlen = vlen;
-    handler->relative_offset = 0;
-    *out = handler;
-    return TH_ERR_OK;
-}
-
-TH_PRIVATE(void)
-th_socket_async_sendfile_exact(th_socket* sock, th_iov* iov, size_t iovcnt, th_file* stream, size_t offset, size_t slen, th_socket_handler* on_complete)
-{
-    size_t vlen = th_iov_bytes(iov, iovcnt);
-    th_err err = TH_ERR_OK;
-    th_socket_sendfile_exact_handler* handler = NULL;
-    if ((err = th_socket_sendfile_exact_handler_create(&handler, th_socket_get_allocator(sock), sock, iov, iovcnt, stream, offset, slen, vlen, on_complete))
-        != TH_ERR_OK) {
-        th_context_dispatch_handler(th_socket_get_context(sock), on_complete, 0, err);
-        return;
-    }
-    size_t chunk = slen > TH_CONFIG_SENDFILE_CHUNK_LEN ? TH_CONFIG_SENDFILE_CHUNK_LEN : slen;
-    th_socket_async_sendfile(sock, iov, iovcnt, stream, offset, chunk, (th_io_handler*)handler);
-}
-
-/* th_socket_sendfile_exact implementation end */
-/* generic socket functions end */

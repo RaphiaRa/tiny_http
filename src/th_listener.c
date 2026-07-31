@@ -131,7 +131,7 @@ th_listener_accept_handler_fn(void* self, size_t result, th_err err)
         TH_LOG_ERROR("Accept failed: %s", th_strerror(err));
         th_conn_destroy(TH_MOVE_PTR(listener->conn));
     } else if (err == TH_ERR_OK) {
-        th_socket_set_fd(th_conn_get_socket(listener->conn), (int)result);
+        th_socket_legacy_set_fd(th_conn_get_socket(listener->conn), (int)result);
         th_conn_start(listener->conn);
     }
     if (!listener->running) {

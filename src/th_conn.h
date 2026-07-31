@@ -17,7 +17,7 @@
 /* th_conn interface begin */
 typedef struct th_conn th_conn;
 struct th_conn {
-    th_socket* (*get_socket)(void* self);
+    th_socket_legacy* (*get_socket)(void* self);
     th_address* (*get_address)(void* self);
     void (*start)(void* self);
     void (*destroy)(void* self);
@@ -29,7 +29,7 @@ struct th_conn {
  */
 TH_INLINE(void)
 th_conn_init(th_conn* client,
-             th_socket* (*get_socket)(void* self),
+             th_socket_legacy* (*get_socket)(void* self),
              th_address* (*get_address)(void* self),
              void (*start)(void* self),
              void (*destroy)(void* self))
@@ -40,7 +40,7 @@ th_conn_init(th_conn* client,
     client->destroy = destroy;
 }
 
-TH_INLINE(th_socket*)
+TH_INLINE(th_socket_legacy*)
 th_conn_get_socket(th_conn* client)
 {
     return client->get_socket(client);

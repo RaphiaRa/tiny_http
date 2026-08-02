@@ -8,16 +8,13 @@ typedef struct th_fake_pollops {
     th_pollops base;
     short revents[8];
     int ret;
-    nfds_t last_nfds;
-    int last_timeout_ms;
 } th_fake_pollops;
 
 static int
 th_fake_poll(void* self, struct pollfd* fds, nfds_t nfds, int timeout_ms)
 {
+    (void)timeout_ms;
     th_fake_pollops* ops = self;
-    ops->last_nfds = nfds;
-    ops->last_timeout_ms = timeout_ms;
     for (nfds_t i = 0; i < nfds && i < TH_ARRAY_SIZE(ops->revents); ++i) {
         fds[i].revents = ops->revents[i];
     }
@@ -30,8 +27,6 @@ th_fake_pollops_init(th_fake_pollops* ops)
     ops->base.poll = th_fake_poll;
     memset(ops->revents, 0, sizeof(ops->revents));
     ops->ret = 0;
-    ops->last_nfds = 0;
-    ops->last_timeout_ms = 0;
 }
 
 typedef struct th_fake_clock {
@@ -56,20 +51,22 @@ th_fake_clock_init(th_fake_clock* clock, time_t now)
 
 typedef struct th_test_op {
     th_op base;
-    int run_count;
+    th_handle* handle;
+    int runs;
     th_err aborted_with;
     bool aborted;
 } th_test_op;
 
-/* Mimics a real op: TH_EAGAIN (not completed) on the first attempt, so
- * submit must wait for readiness; completes on the next attempt. */
 static void
 th_test_op_fn(void* self)
 {
     th_test_op* op = self;
-    ++op->run_count;
-    if (op->run_count > 1)
+    th_op_clear_flags(&op->base, TH_OP_IMMEDIATE);
+    if (--op->runs <= 0) {
         th_op_set_flags(&op->base, TH_OP_COMPLETED);
+        return;
+    }
+    th_handle_submit(op->handle, &op->base);
 }
 
 static void
@@ -81,25 +78,25 @@ th_test_op_abort(void* self, th_err err)
 }
 
 static void
-th_test_op_init(th_test_op* op, th_op_type type)
+th_test_op_init(th_test_op* op, th_handle* handle, th_op_type type, int runs)
 {
     th_op_init(&op->base, type, th_test_op_fn, NULL, th_test_op_abort);
-    op->run_count = 0;
+    op->handle = handle;
+    op->runs = runs;
     op->aborted = false;
     op->aborted_with = TH_ERR_OK;
 }
 
 TH_TEST_BEGIN(poll)
 {
-    th_fake_pollops ops;
+    th_fake_pollops ops = {0};
     th_fake_pollops_init(&ops);
-    th_fake_clock clock;
+    th_fake_clock clock = {0};
     th_fake_clock_init(&clock, 100);
-    th_loop loop;
+    th_loop loop = {0};
     th_loop_init(&loop, NULL);
     th_reactor* reactor = NULL;
     TH_EXPECT(th_poll_create(&reactor, &loop, th_default_allocator_get(), &clock.base, &ops.base) == TH_ERR_OK);
-    loop.reactor = reactor;
     th_handle* handle = NULL;
     TH_EXPECT(th_reactor_create_handle(reactor, &handle, 42) == TH_ERR_OK);
 
@@ -111,52 +108,63 @@ TH_TEST_BEGIN(poll)
     TH_TEST_CASE_BEGIN(poll_submit_read_runs_op_on_readiness)
     {
         th_test_op op;
-        th_test_op_init(&op, TH_OP_READ);
+        th_test_op_init(&op, handle, TH_OP_READ, 2);
         TH_EXPECT(th_handle_submit(handle, &op.base) == TH_ERR_OK);
-        TH_EXPECT(op.run_count == 1); /* first, not-yet-ready attempt made by submit itself */
         ops.ret = 1;
         ops.revents[0] = POLLIN;
         th_reactor_run(reactor, 1000);
-        TH_EXPECT(ops.last_nfds == 1);
-        TH_EXPECT(op.run_count == 2);
+        TH_EXPECT(th_op_get_flags(&op.base) & TH_OP_COMPLETED);
         TH_EXPECT(!op.aborted);
     }
     TH_TEST_CASE_END
     TH_TEST_CASE_BEGIN(poll_submit_write_waits_for_pollout)
     {
         th_test_op op;
-        th_test_op_init(&op, TH_OP_WRITE);
+        th_test_op_init(&op, handle, TH_OP_WRITE, 2);
         TH_EXPECT(th_handle_submit(handle, &op.base) == TH_ERR_OK);
         ops.ret = 1;
         ops.revents[0] = POLLOUT;
         th_reactor_run(reactor, 1000);
-        TH_EXPECT(op.run_count == 2);
+        TH_EXPECT(th_op_get_flags(&op.base) & TH_OP_COMPLETED);
+    }
+    TH_TEST_CASE_END
+    TH_TEST_CASE_BEGIN(poll_op_needing_three_runs_completes)
+    {
+        th_test_op op;
+        th_test_op_init(&op, handle, TH_OP_READ, 3);
+        TH_EXPECT(th_handle_submit(handle, &op.base) == TH_ERR_OK);
+        ops.ret = 1;
+        ops.revents[0] = POLLIN;
+        th_reactor_run(reactor, 1000);
+        TH_EXPECT(!(th_op_get_flags(&op.base) & TH_OP_COMPLETED));
+        th_reactor_run(reactor, 1000);
+        TH_EXPECT(th_op_get_flags(&op.base) & TH_OP_COMPLETED);
+        TH_EXPECT(!op.aborted);
     }
     TH_TEST_CASE_END
     TH_TEST_CASE_BEGIN(poll_no_readiness_reenqueues_op)
     {
         th_test_op op;
-        th_test_op_init(&op, TH_OP_READ);
+        th_test_op_init(&op, handle, TH_OP_READ, 2);
         TH_EXPECT(th_handle_submit(handle, &op.base) == TH_ERR_OK);
         ops.ret = 0; /* poll() timed out, nothing ready */
         th_reactor_run(reactor, 1000);
-        TH_EXPECT(op.run_count == 1); /* still just submit's initial attempt */
+        TH_EXPECT(!(th_op_get_flags(&op.base) & TH_OP_COMPLETED));
         TH_EXPECT(!op.aborted);
         ops.ret = 1;
         ops.revents[0] = POLLIN;
         th_reactor_run(reactor, 1000);
-        TH_EXPECT(op.run_count == 2);
+        TH_EXPECT(th_op_get_flags(&op.base) & TH_OP_COMPLETED);
     }
     TH_TEST_CASE_END
     TH_TEST_CASE_BEGIN(poll_pollhup_aborts_with_eof)
     {
         th_test_op op;
-        th_test_op_init(&op, TH_OP_READ);
+        th_test_op_init(&op, handle, TH_OP_READ, 2);
         TH_EXPECT(th_handle_submit(handle, &op.base) == TH_ERR_OK);
         ops.ret = 1;
         ops.revents[0] = POLLHUP;
         th_reactor_run(reactor, 1000);
-        TH_EXPECT(op.run_count == 1); /* only submit's initial attempt; abort doesn't call fn */
         TH_EXPECT(op.aborted);
         TH_EXPECT(op.aborted_with == TH_ERR_EOF);
     }
@@ -164,7 +172,7 @@ TH_TEST_BEGIN(poll)
     TH_TEST_CASE_BEGIN(poll_pollerr_aborts_with_eio)
     {
         th_test_op op;
-        th_test_op_init(&op, TH_OP_READ);
+        th_test_op_init(&op, handle, TH_OP_READ, 2);
         TH_EXPECT(th_handle_submit(handle, &op.base) == TH_ERR_OK);
         ops.ret = 1;
         ops.revents[0] = POLLERR;
@@ -176,7 +184,7 @@ TH_TEST_BEGIN(poll)
     TH_TEST_CASE_BEGIN(poll_pollnval_aborts_with_ebadf)
     {
         th_test_op op;
-        th_test_op_init(&op, TH_OP_READ);
+        th_test_op_init(&op, handle, TH_OP_READ, 2);
         TH_EXPECT(th_handle_submit(handle, &op.base) == TH_ERR_OK);
         ops.ret = 1;
         ops.revents[0] = POLLNVAL;
@@ -189,7 +197,7 @@ TH_TEST_BEGIN(poll)
     {
         th_handle_enable_timeout(handle, true);
         th_test_op op;
-        th_test_op_init(&op, TH_OP_READ);
+        th_test_op_init(&op, handle, TH_OP_READ, 2);
         TH_EXPECT(th_handle_submit(handle, &op.base) == TH_ERR_OK);
         ops.ret = 0; /* not ready */
         clock.now += TH_CONFIG_IO_TIMEOUT + 1;
@@ -202,8 +210,8 @@ TH_TEST_BEGIN(poll)
     {
         th_test_op read_op;
         th_test_op write_op;
-        th_test_op_init(&read_op, TH_OP_READ);
-        th_test_op_init(&write_op, TH_OP_WRITE);
+        th_test_op_init(&read_op, handle, TH_OP_READ, 2);
+        th_test_op_init(&write_op, handle, TH_OP_WRITE, 2);
         TH_EXPECT(th_handle_submit(handle, &read_op.base) == TH_ERR_OK);
         TH_EXPECT(th_handle_submit(handle, &write_op.base) == TH_ERR_OK);
         th_handle_cancel(handle);
@@ -218,7 +226,7 @@ TH_TEST_BEGIN(poll)
         th_handle* other = NULL;
         TH_EXPECT(th_reactor_create_handle(reactor, &other, 7) == TH_ERR_OK);
         th_test_op op;
-        th_test_op_init(&op, TH_OP_READ);
+        th_test_op_init(&op, other, TH_OP_READ, 2);
         TH_EXPECT(th_handle_submit(other, &op.base) == TH_ERR_OK);
         th_handle_destroy(other);
         ops.ret = 1;

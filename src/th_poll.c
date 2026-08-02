@@ -179,8 +179,7 @@ th_poll_handle_submit(void* self, th_op* op)
     TH_ASSERT(handle->pending[op->type] == NULL && "Handle already has a pending op for this op type");
     if (th_op_get_flags(op) & TH_OP_IMMEDIATE) {
         th_op_perform(op);
-        if (th_op_get_flags(op) & TH_OP_COMPLETED)
-            return TH_ERR_OK;
+        return TH_ERR_OK;
     }
     handle->pending[op->type] = op;
     struct pollfd pfd = {.fd = handle->fd, .events = (op->type == TH_OP_READ) ? POLLIN : POLLOUT};
@@ -318,6 +317,15 @@ th_poll_reactor_run(void* self, int timeout_ms)
             }
         }
         // handles without a pending op were cancelled, don't reenqueue
+    }
+    /* th_op_perform above may have synchronously resubmitted an op,
+     * pushing a new pollfd past index nfds (the size we polled on).
+     * Those entries must survive the compaction below, not just the
+     * ones inside [0, nfds). */
+    size_t total = th_pollfd_vec_size(&reactor->fds);
+    for (size_t i = nfds; i < total; ++i, ++reenqueue) {
+        if (reenqueue < i)
+            *th_pollfd_vec_at(&reactor->fds, reenqueue) = *th_pollfd_vec_at(&reactor->fds, i);
     }
     th_pollfd_vec_resize(&reactor->fds, reenqueue);
 }

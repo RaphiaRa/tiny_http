@@ -33,7 +33,7 @@ th_listener_enable_ssl(th_listener* listener, const char* key_file, const char* 
 TH_LOCAL(th_err)
 th_listener_init(th_listener* listener, th_loop* loop,
                  const char* host, const char* port,
-                 th_router* router, th_fcache* fcache,
+                 th_router* router, th_dir_mgr* dir_mgr, th_fcache* fcache,
                  th_bind_opt* opt, th_allocator* allocator)
 {
     listener->loop = loop;
@@ -48,7 +48,7 @@ th_listener_init(th_listener* listener, th_loop* loop,
             goto cleanup_acceptor;
     }
     th_conn_tracker_init(&listener->conn_tracker);
-    th_http_upgrader_init(&listener->upgrader, &listener->conn_tracker, router, fcache, allocator);
+    th_http_upgrader_init(&listener->upgrader, &listener->conn_tracker, router, dir_mgr, fcache, allocator);
     TH_LOG_INFO("Created listener on %s:%s", host, port);
     return TH_ERR_OK;
 cleanup_acceptor:
@@ -59,14 +59,14 @@ cleanup_acceptor:
 TH_PRIVATE(th_err)
 th_listener_create(th_listener** out, th_loop* loop,
                    const char* host, const char* port,
-                   th_router* router, th_fcache* fcache,
+                   th_router* router, th_dir_mgr* dir_mgr, th_fcache* fcache,
                    th_bind_opt* opt, th_allocator* allocator)
 {
     th_listener* listener = th_allocator_alloc(allocator, sizeof(th_listener));
     if (!listener)
         return TH_ERR_BAD_ALLOC;
     th_err err = TH_ERR_OK;
-    if ((err = th_listener_init(listener, loop, host, port, router, fcache, opt, allocator)) != TH_ERR_OK)
+    if ((err = th_listener_init(listener, loop, host, port, router, dir_mgr, fcache, opt, allocator)) != TH_ERR_OK)
         goto cleanup;
     *out = listener;
     return TH_ERR_OK;

@@ -37,12 +37,9 @@ th_fcache_entry_init(th_fcache_entry* entry, th_fcache* cache, th_allocator* all
 }
 
 TH_LOCAL(th_err)
-th_fcache_entry_open(th_fcache_entry* entry, th_str root, th_str path)
+th_fcache_entry_open(th_fcache_entry* entry, th_dir* dir, th_str path)
 {
     th_err err = TH_ERR_OK;
-    th_dir* dir = th_dir_mgr_get(entry->cache->dir_mgr, root);
-    if (!dir)
-        return TH_ERR_INVALID_ARG;
     th_open_opt opt = {.read = true};
     if ((err = th_file_openat(&entry->stream, dir, path, opt)) != TH_ERR_OK) {
         TH_LOG_INFO("Failed to open file at %.*s: %s", (int)path.len, path.ptr, th_strerror(err));
@@ -75,10 +72,9 @@ th_fcache_entry_unref(th_fcache_entry* entry)
 }
 
 TH_PRIVATE(void)
-th_fcache_init(th_fcache* cache, th_dir_mgr* dir_mgr, th_allocator* allocator)
+th_fcache_init(th_fcache* cache, th_allocator* allocator)
 {
     cache->allocator = allocator ? allocator : th_default_allocator_get();
-    cache->dir_mgr = dir_mgr;
     th_fcache_map_init(&cache->map, cache->allocator);
     cache->list = (th_fcache_list){NULL, NULL};
     cache->num_cached = 0;
@@ -94,11 +90,8 @@ th_fcache_erase(th_fcache* cache, th_fcache_entry* entry)
 }
 
 TH_LOCAL(th_fcache_entry*)
-th_fcache_try_get(th_fcache* cache, th_str root, th_str path)
+th_fcache_try_get(th_fcache* cache, th_dir* dir, th_str path)
 {
-    th_dir* dir = th_dir_mgr_get(cache->dir_mgr, root);
-    if (!dir)
-        return NULL;
     th_fcache_entry** v = th_fcache_map_try_get(&cache->map, (th_fcache_id){path, dir});
     if (!v)
         return NULL;
@@ -114,12 +107,6 @@ th_fcache_try_get(th_fcache* cache, th_str root, th_str path)
     th_fcache_list_erase(&cache->list, entry);
     th_fcache_list_push_back(&cache->list, entry);
     return th_fcache_entry_ref(entry);
-}
-
-TH_PRIVATE(th_dir*)
-th_fcache_find_dir(th_fcache* cache, th_str label)
-{
-    return th_dir_mgr_get(cache->dir_mgr, label);
 }
 
 TH_LOCAL(th_err)
@@ -141,9 +128,9 @@ th_fcache_insert(th_fcache* cache, th_fcache_entry* entry)
 }
 
 TH_PRIVATE(th_err)
-th_fcache_get(th_fcache* cache, th_str root, th_str path, th_fcache_entry** out)
+th_fcache_get(th_fcache* cache, th_dir* dir, th_str path, th_fcache_entry** out)
 {
-    th_fcache_entry* entry = th_fcache_try_get(cache, root, path);
+    th_fcache_entry* entry = th_fcache_try_get(cache, dir, path);
     if (entry) {
         *out = entry;
         return TH_ERR_OK;
@@ -153,7 +140,7 @@ th_fcache_get(th_fcache* cache, th_str root, th_str path, th_fcache_entry** out)
         return TH_ERR_BAD_ALLOC;
     th_fcache_entry_init(entry, cache, cache->allocator);
     th_err err = TH_ERR_OK;
-    if ((err = th_fcache_entry_open(entry, root, path)) != TH_ERR_OK) {
+    if ((err = th_fcache_entry_open(entry, dir, path)) != TH_ERR_OK) {
         th_allocator_free(cache->allocator, entry);
         return err;
     }

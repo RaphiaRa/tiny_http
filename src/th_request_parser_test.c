@@ -9,7 +9,7 @@ TH_TEST_BEGIN(request_parser)
     TH_TEST_CASE_BEGIN(parse_path_and_header)
     {
         th_request request;
-        th_request_init(&request, NULL, NULL);
+        th_request_init(&request, NULL, NULL, NULL);
         th_request_parser parser;
         th_request_parser_init(&parser);
         th_str data = TH_STR("GET /test HTTP/1.1\r\nHost: example.com\r\n\r\n");
@@ -26,7 +26,7 @@ TH_TEST_BEGIN(request_parser)
     TH_TEST_CASE_BEGIN(parse_path_and_query)
     {
         th_request request;
-        th_request_init(&request, NULL, NULL);
+        th_request_init(&request, NULL, NULL, NULL);
         th_request_parser parser;
         th_request_parser_init(&parser);
         th_str data = TH_STR("GET /test?key1=value1&key2=value2 HTTP/1.1\r\nHost: example.com\r\n\r\n");
@@ -44,7 +44,7 @@ TH_TEST_BEGIN(request_parser)
     TH_TEST_CASE_BEGIN(parse_path_and_body)
     {
         th_request request;
-        th_request_init(&request, NULL, NULL);
+        th_request_init(&request, NULL, NULL, NULL);
         th_request_parser parser;
         th_request_parser_init(&parser);
         th_str data = TH_STR("POST /test HTTP/1.1\r\nHost: example.com\r\nContent-Length: 11\r\n\r\nHello World");
@@ -61,7 +61,7 @@ TH_TEST_BEGIN(request_parser)
     TH_TEST_CASE_BEGIN(parse_bad_content)
     {
         th_request request;
-        th_request_init(&request, NULL, NULL);
+        th_request_init(&request, NULL, NULL, NULL);
         th_request_parser parser;
         th_request_parser_init(&parser);
         th_str data = TH_STR("GET /index.php?variable=..%2F..%2F..%2F..%2F..%2F..%2F..%2F%2Fetc HTTP/1.1\r\n"
@@ -84,7 +84,7 @@ TH_TEST_BEGIN(request_parser)
     TH_TEST_CASE_BEGIN(parse_bad_query_encoding)
     {
         th_request request;
-        th_request_init(&request, NULL, NULL);
+        th_request_init(&request, NULL, NULL, NULL);
         th_request_parser parser;
         th_request_parser_init(&parser);
         th_str data = TH_STR("GET /index.php?variable=h%2411%7C%7B%7D+W_%26%26%21rld%7E%7E%7E%7Eh%2411%7C%7B%7D+W_%26%26%21rld%7E%7E%7E%rr HTTP/1.1\r\n"
@@ -103,7 +103,7 @@ TH_TEST_BEGIN(request_parser)
     TH_TEST_CASE_BEGIN(parse_empty_query_key)
     {
         th_request request;
-        th_request_init(&request, NULL, NULL);
+        th_request_init(&request, NULL, NULL, NULL);
         th_request_parser parser;
         th_request_parser_init(&parser);
         th_str data = TH_STR("GET /index.php?=qwertqwertqwertqwertqwertqwertqwertqwertqwertqwertqwetqwert HTTP/1.1\r\nHost: localhost\r\nConnection: Keep-Alive\r\n\r\n");
@@ -120,7 +120,7 @@ TH_TEST_BEGIN(request_parser)
     TH_TEST_CASE_BEGIN(request_parser_empty_header)
     {
         th_request request;
-        th_request_init(&request, NULL, NULL);
+        th_request_init(&request, NULL, NULL, NULL);
         th_request_parser parser;
         th_request_parser_init(&parser);
         th_str data = TH_STR("POST / HTTP/1.1\r\n: 0080\r\nUser-Agent:81.0\r\nAccept: */*\r\nContent-Length: 0\r\nContent-Type: application/x-www-form-urlencoded\r\n\r\n");
@@ -132,7 +132,7 @@ TH_TEST_BEGIN(request_parser)
     TH_TEST_CASE_BEGIN(parse_bad_form_encoding)
     {
         th_request request;
-        th_request_init(&request, NULL, NULL);
+        th_request_init(&request, NULL, NULL, NULL);
         th_request_parser parser;
         th_request_parser_init(&parser);
         char buffer[] = "POST / HTTP/1.1\r\nContent-Length: 3\r\nContent-Type: application/x-www-form-urlencoded\r\n\r\n=n";
@@ -145,7 +145,7 @@ TH_TEST_BEGIN(request_parser)
     TH_TEST_CASE_BEGIN(parse_multipart_form_data)
     {
         th_request request;
-        th_request_init(&request, NULL, NULL);
+        th_request_init(&request, NULL, NULL, NULL);
         th_request_parser parser;
         th_request_parser_init(&parser);
         th_str data = TH_STR("POST / HTTP/1.1\r\nContent-Length: 472\r\n"

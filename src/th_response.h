@@ -8,6 +8,7 @@
 #include "th_allocator.h"
 #include "th_config.h"
 #include "th_conn.h"
+#include "th_dir_mgr.h"
 #include "th_fcache.h"
 #include "th_header_id.h"
 #include "th_string.h"
@@ -21,6 +22,7 @@ struct th_response {
     th_string body;
     th_iov iov[TH_RESPONSE_MAX_CHUNK_NUM];
     th_allocator* allocator;
+    th_dir_mgr* dir_mgr;
     th_fcache* fcache;
     th_fcache_entry* fcache_entry;
     size_t file_len;
@@ -32,7 +34,7 @@ struct th_response {
 };
 
 TH_PRIVATE(void)
-th_response_init(th_response* response, th_fcache* fcache, th_allocator* allocator);
+th_response_init(th_response* response, th_dir_mgr* dir_mgr, th_fcache* fcache, th_allocator* allocator);
 
 TH_PRIVATE(void)
 th_response_reset(th_response* response);

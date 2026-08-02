@@ -15,105 +15,20 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#elif defined(TH_CONFIG_OS_MOCK)
-#include "th_mock_syscall.h"
 #endif
 
 #undef TH_LOG_TAG
 #define TH_LOG_TAG "file"
 
-/* th_file_view implmentation begin */
+/* th_file_ops implementation begin */
 
 #if defined(TH_CONFIG_OS_POSIX)
 TH_LOCAL(th_err)
-th_file_mmap_mmap_posix(th_file_mmap* view, th_file* file, size_t offset, size_t len)
+th_file_ops_os_openat(void* self, th_dir* dir, th_str path, th_open_opt opt, int* fd, size_t* size)
 {
-    size_t page_size = (size_t)sysconf(_SC_PAGESIZE);
-    size_t moffset = TH_ALIGNDOWN(offset, page_size);
-    void* addr = mmap(NULL, len, PROT_READ, MAP_PRIVATE, file->fd, (off_t)moffset);
-    if (addr == MAP_FAILED) {
-        return TH_ERR_SYSTEM(errno);
-    }
-    view->addr = addr;
-    view->offset = moffset;
-    view->len = len;
-    return TH_ERR_OK;
-}
-
-TH_LOCAL(void)
-th_file_mmap_munmap_posix(th_file_mmap* view)
-{
-    munmap(view->addr, view->len);
-    view->addr = 0;
-    view->len = 0;
-    view->offset = 0;
-}
-#endif
-
-TH_LOCAL(th_err)
-th_file_mmap_mmap(th_file_mmap* view, th_file* file, size_t offset, size_t len)
-{
-#if defined(TH_CONFIG_OS_POSIX)
-    return th_file_mmap_mmap_posix(view, file, offset, len);
-#else
-    (void)view;
-    (void)file;
-    (void)offset;
-    (void)len;
-    return TH_ERR_NOSUPPORT;
-#endif
-}
-
-TH_LOCAL(void)
-th_file_mmap_munmap(th_file_mmap* view)
-{
-#if defined(TH_CONFIG_OS_POSIX)
-    th_file_mmap_munmap_posix(view);
-#else
-    (void)view;
-#endif
-}
-
-TH_LOCAL(void)
-th_file_mmap_init(th_file_mmap* view)
-{
-    view->addr = 0;
-    view->offset = 0;
-    view->len = 0;
-}
-
-TH_LOCAL(th_err)
-th_file_mmap_map(th_file_mmap* view, th_file* file, size_t offset, size_t len)
-{
-    if (view->addr)
-        th_file_mmap_munmap(view);
-    len = TH_MIN(len, file->size - offset);
-    return th_file_mmap_mmap(view, file, offset, len);
-}
-
-TH_LOCAL(void)
-th_file_mmap_deinit(th_file_mmap* view)
-{
-    if (view->addr)
-        th_file_mmap_munmap(view);
-}
-
-/* th_file_mmap_map implementation end */
-/* th_file implementation begin */
-
-TH_PRIVATE(void)
-th_file_init(th_file* stream)
-{
-    stream->fd = -1;
-    th_file_mmap_init(&stream->view);
-}
-
-TH_PRIVATE(th_err)
-th_file_openat(th_file* stream, th_dir* dir, th_str path, th_open_opt opt)
-{
+    (void)self;
     if (path.len > TH_CONFIG_MAX_PATH_LEN)
         return TH_ERR_INVALID_ARG;
-#if defined(TH_CONFIG_OS_POSIX)
     char path_buf[TH_CONFIG_MAX_PATH_LEN + 1] = {0};
     memcpy(path_buf, path.ptr, path.len);
     path_buf[path.len] = '\0';
@@ -128,90 +43,68 @@ th_file_openat(th_file* stream, th_dir* dir, th_str path, th_open_opt opt)
         flags |= O_CREAT;
     if (opt.truncate)
         flags |= O_TRUNC;
-    int fd = openat(dir->fd, path_buf, flags, 0644);
-    if (fd == -1)
+    int ret = openat(dir->fd, path_buf, flags, 0644);
+    if (ret == -1)
         return TH_ERR_SYSTEM(errno);
-    off_t pos = lseek(fd, 0, SEEK_END);
+    off_t pos = lseek(ret, 0, SEEK_END);
     if (pos == -1)
-        goto cleanup_socket;
-    if (lseek(fd, 0, SEEK_SET) == -1)
-        goto cleanup_socket;
-    stream->fd = fd;
-    stream->size = (size_t)pos;
+        goto cleanup;
+    if (lseek(ret, 0, SEEK_SET) == -1)
+        goto cleanup;
+    *fd = ret;
+    *size = (size_t)pos;
     return TH_ERR_OK;
-cleanup_socket:
-    close(fd);
+cleanup:
+    close(ret);
     return TH_ERR_SYSTEM(errno);
-#elif defined(TH_CONFIG_OS_MOCK)
-    (void)dir;
-    (void)opt;
-    (void)path;
-    int fd = th_mock_open();
-    if (fd < 0)
-        return TH_ERR_SYSTEM(-fd);
-    stream->fd = fd;
-    return TH_ERR_OK;
-#endif
 }
 
-TH_PRIVATE(th_err)
-th_file_read(th_file* stream, void* addr, size_t len, size_t offset, size_t* read)
+TH_LOCAL(th_err)
+th_file_ops_os_read(void* self, int fd, void* addr, size_t len, size_t offset, size_t* read)
 {
-#if defined(TH_CONFIG_OS_POSIX)
-    off_t ret = pread(stream->fd, addr, len, (off_t)offset);
+    (void)self;
+    off_t ret = pread(fd, addr, len, (off_t)offset);
     if (ret == -1) {
         *read = 0;
         return TH_ERR_SYSTEM(errno);
     }
     *read = (size_t)ret;
     return TH_ERR_OK;
-#elif defined(TH_CONFIG_OS_MOCK)
-    (void)stream;
-    (void)offset;
-    int ret = th_mock_read(addr, len);
-    if (ret < 0)
-        return TH_ERR_SYSTEM(-ret);
-    *read = (size_t)ret;
-    return TH_ERR_OK;
-#endif
 }
 
-TH_PRIVATE(th_err)
-th_file_write(th_file* stream, const void* addr, size_t len, size_t offset, size_t* written)
+TH_LOCAL(th_err)
+th_file_ops_os_write(void* self, int fd, const void* addr, size_t len, size_t offset, size_t* written)
 {
-#if defined(TH_CONFIG_OS_POSIX)
-    off_t ret = pwrite(stream->fd, addr, len, (off_t)offset);
+    (void)self;
+    off_t ret = pwrite(fd, addr, len, (off_t)offset);
     if (ret == -1) {
         *written = 0;
         return TH_ERR_SYSTEM(errno);
     }
     *written = (size_t)ret;
     return TH_ERR_OK;
-#elif defined(TH_CONFIG_OS_MOCK)
-    (void)stream;
-    (void)addr;
-    (void)offset;
-    int ret = th_mock_write(len);
-    if (ret < 0)
-        return TH_ERR_SYSTEM(-ret);
-    *written = (size_t)ret;
-    return TH_ERR_OK;
-#endif
 }
 
-TH_PRIVATE(th_err)
-th_file_get_view(th_file* stream, th_fileview* view, size_t offset, size_t len)
+TH_LOCAL(th_err)
+th_file_ops_os_mmap(void* self, int fd, size_t offset, size_t len, void** addr, size_t* mapped_offset, size_t* mapped_len)
 {
-    th_err err = TH_ERR_OK;
-    if (stream->view.addr == NULL
-        || stream->view.offset > offset
-        || stream->view.offset + stream->view.len < offset + 8 * 1024) {
-        if ((err = th_file_mmap_map(&stream->view, stream, offset, len)) != TH_ERR_OK)
-            return err;
-    }
-    view->ptr = (uint8_t*)stream->view.addr + (offset - stream->view.offset);
-    view->len = stream->view.len - (offset - stream->view.offset);
+    (void)self;
+    size_t page_size = (size_t)sysconf(_SC_PAGESIZE);
+    size_t moffset = TH_ALIGNDOWN(offset, page_size);
+    void* ret = mmap(NULL, len, PROT_READ, MAP_PRIVATE, fd, (off_t)moffset);
+    if (ret == MAP_FAILED)
+        return TH_ERR_SYSTEM(errno);
+    *addr = ret;
+    *mapped_offset = moffset;
+    *mapped_len = len;
     return TH_ERR_OK;
+}
+
+TH_LOCAL(void)
+th_file_ops_os_munmap(void* self, void* addr, size_t len)
+{
+    (void)self;
+    munmap(addr, len);
 }
 
 /**
@@ -221,12 +114,12 @@ th_file_get_view(th_file* stream, th_fileview* view, size_t offset, size_t len)
 #define FSTAT_HASH_INIT 5381
 #define FSTAT_HASH_NEXT(hash, val) ((hash << 5) + hash + val)
 
-#if defined(TH_CONFIG_OS_POSIX)
 TH_LOCAL(uint32_t)
-th_file_stat_hash_posix(th_file* stream)
+th_file_ops_os_stat_hash(void* self, int fd)
 {
+    (void)self;
     struct stat st = {0};
-    if (fstat(stream->fd, &st) == -1) {
+    if (fstat(fd, &st) == -1) {
         TH_LOG_ERROR("fstat failed: %s, can't calculate hash", strerror(errno));
         TH_ASSERT(0 && "fstat failed");
         return 0;
@@ -247,50 +140,140 @@ th_file_stat_hash_posix(th_file* stream)
     hash = FSTAT_HASH_NEXT(hash, (uint32_t)(st.st_nlink != 0));
     return hash;
 }
-#elif defined(TH_CONFIG_OS_WIN)
-#error "Not implemented"
-TH_LOCAL(uint32_t)
-th_file_stat_hash_win(th_file* stream)
-{
-    (void)stream;
-    return 0;
-}
-#elif defined(TH_CONFIG_OS_MOCK)
-TH_LOCAL(uint32_t)
-th_file_stat_hash_mock(th_file* stream)
-{
-    (void)stream;
-    return 0;
-}
-#endif
 #undef FSTAT_HASH_INIT
 #undef FSTAT_HASH_NEXT
+
+TH_LOCAL(void)
+th_file_ops_os_close(void* self, int fd)
+{
+    (void)self;
+    close(fd);
+}
+
+TH_PRIVATE(th_file_ops*)
+th_file_ops_os(void)
+{
+    static th_file_ops ops = {
+        .openat = th_file_ops_os_openat,
+        .read = th_file_ops_os_read,
+        .write = th_file_ops_os_write,
+        .mmap = th_file_ops_os_mmap,
+        .munmap = th_file_ops_os_munmap,
+        .stat_hash = th_file_ops_os_stat_hash,
+        .close = th_file_ops_os_close,
+    };
+    return &ops;
+}
+#endif
+
+/* th_file_ops implementation end */
+/* th_file_mmap implementation begin */
+
+TH_LOCAL(void)
+th_file_mmap_init(th_file_mmap* view)
+{
+    view->addr = 0;
+    view->offset = 0;
+    view->len = 0;
+}
+
+TH_LOCAL(void)
+th_file_mmap_munmap(th_file* file, th_file_mmap* view)
+{
+    file->ops->munmap(file->ops, view->addr, view->len);
+    view->addr = 0;
+    view->len = 0;
+    view->offset = 0;
+}
+
+TH_LOCAL(th_err)
+th_file_mmap_map(th_file* file, th_file_mmap* view, size_t offset, size_t len)
+{
+    if (view->addr)
+        th_file_mmap_munmap(file, view);
+    len = TH_MIN(len, file->size - offset);
+    void* addr = NULL;
+    size_t mapped_offset = 0;
+    size_t mapped_len = 0;
+    th_err err = file->ops->mmap(file->ops, file->fd, offset, len, &addr, &mapped_offset, &mapped_len);
+    if (err != TH_ERR_OK)
+        return err;
+    view->addr = addr;
+    view->offset = mapped_offset;
+    view->len = mapped_len;
+    return TH_ERR_OK;
+}
+
+TH_LOCAL(void)
+th_file_mmap_deinit(th_file* file, th_file_mmap* view)
+{
+    if (view->addr)
+        th_file_mmap_munmap(file, view);
+}
+
+/* th_file_mmap implementation end */
+/* th_file implementation begin */
+
+TH_PRIVATE(void)
+th_file_init(th_file* stream, th_file_ops* ops)
+{
+    stream->ops = ops;
+    stream->fd = -1;
+    th_file_mmap_init(&stream->view);
+}
+
+TH_PRIVATE(th_err)
+th_file_openat(th_file* stream, th_dir* dir, th_str path, th_open_opt opt)
+{
+    int fd = -1;
+    size_t size = 0;
+    th_err err = stream->ops->openat(stream->ops, dir, path, opt, &fd, &size);
+    if (err != TH_ERR_OK)
+        return err;
+    stream->fd = fd;
+    stream->size = size;
+    return TH_ERR_OK;
+}
+
+TH_PRIVATE(th_err)
+th_file_read(th_file* stream, void* addr, size_t len, size_t offset, size_t* read)
+{
+    return stream->ops->read(stream->ops, stream->fd, addr, len, offset, read);
+}
+
+TH_PRIVATE(th_err)
+th_file_write(th_file* stream, const void* addr, size_t len, size_t offset, size_t* written)
+{
+    return stream->ops->write(stream->ops, stream->fd, addr, len, offset, written);
+}
+
+TH_PRIVATE(th_err)
+th_file_get_view(th_file* stream, th_fileview* view, size_t offset, size_t len)
+{
+    th_err err = TH_ERR_OK;
+    if (stream->view.addr == NULL
+        || stream->view.offset > offset
+        || stream->view.offset + stream->view.len < offset + 8 * 1024) {
+        if ((err = th_file_mmap_map(stream, &stream->view, offset, len)) != TH_ERR_OK)
+            return err;
+    }
+    view->ptr = (uint8_t*)stream->view.addr + (offset - stream->view.offset);
+    view->len = stream->view.len - (offset - stream->view.offset);
+    return TH_ERR_OK;
+}
 
 TH_PRIVATE(uint32_t)
 th_file_stat_hash(th_file* stream)
 {
-#if defined(TH_CONFIG_OS_POSIX)
-    return th_file_stat_hash_posix(stream);
-#elif defined(TH_CONFIG_OS_WIN)
-    return th_file_stat_hash_win(stream);
-#elif defined(TH_CONFIG_OS_MOCK)
-    return th_file_stat_hash_mock(stream);
-#else
-    return 0;
-#endif
+    return stream->ops->stat_hash(stream->ops, stream->fd);
 }
 
 TH_PRIVATE(void)
 th_file_close(th_file* stream)
 {
-    th_file_mmap_deinit(&stream->view);
-#if defined(TH_CONFIG_OS_POSIX)
+    th_file_mmap_deinit(stream, &stream->view);
     if (stream->fd != -1)
-        close(stream->fd);
-#elif defined(TH_CONFIG_OS_MOCK)
-    if (stream->fd != -1)
-        th_mock_close();
-#endif
+        stream->ops->close(stream->ops, stream->fd);
     stream->fd = -1;
 }
 

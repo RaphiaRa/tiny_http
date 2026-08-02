@@ -22,9 +22,6 @@ th_system_strerror(int errc)
     static char buf[256];
     FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, NULL, errc, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), buf, sizeof(buf), NULL);
     return buf;
-#elif defined(TH_CONFIG_OS_MOCK)
-    (void)errc;
-    return "mock error";
 #endif
 }
 
@@ -53,18 +50,6 @@ th_system_strerror(int errc)
 #define TH_ENOSYS ERROR_NOT_SUPPORTED
 #define TH_ETIMEDOUT ERROR_TIMEOUT
 #define TH_ECANCELED ERROR_CANCELLED
-#elif defined(TH_CONFIG_OS_MOCK)
-#define TH_ENOENT 1
-#define TH_EINTR 2
-#define TH_EIO 3
-#define TH_EBUSY 4
-#define TH_EAGAIN 5
-#define TH_EWOULDBLOCK 6
-#define TH_ENOMEM 7
-#define TH_ENOSYS 8
-#define TH_ETIMEDOUT 9
-#define TH_ECANCELED 10
-#define TH_EBADF 11
 #endif
 
 #endif

@@ -5,7 +5,6 @@
 
 #include "th_config.h"
 #include "th_str.h"
-#include "th_string.h"
 
 /** th_dir_ops
  * @brief The raw open/close syscalls a th_dir performs. Injected at
@@ -22,20 +21,15 @@ TH_PRIVATE(th_dir_ops*)
 th_dir_ops_os(void);
 
 typedef struct th_dir {
-    th_allocator* allocator;
     th_dir_ops* ops;
-    th_string path;
     int fd;
 } th_dir;
 
 TH_PRIVATE(void)
-th_dir_init(th_dir* dir, th_dir_ops* ops, th_allocator* allocator);
+th_dir_init(th_dir* dir, th_dir_ops* ops);
 
 TH_PRIVATE(th_err)
 th_dir_open(th_dir* dir, th_str path);
-
-TH_PRIVATE(th_str)
-th_dir_get_path(th_dir* dir);
 
 TH_PRIVATE(void)
 th_dir_deinit(th_dir* dir);

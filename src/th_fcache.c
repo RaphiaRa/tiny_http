@@ -29,7 +29,7 @@ th_fcache_entry_init(th_fcache_entry* entry, th_fcache* cache, th_allocator* all
 {
     entry->allocator = allocator ? allocator : th_default_allocator_get();
     th_refcounted_init(&entry->base, th_fcache_entry_actual_destroy);
-    th_file_init(&entry->stream);
+    th_file_init(&entry->stream, cache->file_ops);
     th_string_init(&entry->path, entry->allocator);
     entry->cache = cache;
     entry->next = NULL;
@@ -72,9 +72,10 @@ th_fcache_entry_unref(th_fcache_entry* entry)
 }
 
 TH_PRIVATE(void)
-th_fcache_init(th_fcache* cache, th_allocator* allocator)
+th_fcache_init(th_fcache* cache, th_file_ops* file_ops, th_allocator* allocator)
 {
     cache->allocator = allocator ? allocator : th_default_allocator_get();
+    cache->file_ops = file_ops;
     th_fcache_map_init(&cache->map, cache->allocator);
     cache->list = (th_fcache_list){NULL, NULL};
     cache->num_cached = 0;

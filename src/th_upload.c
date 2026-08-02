@@ -65,6 +65,7 @@ th_upload_save(const th_upload* upload, const char* dir_label, const char* filep
     th_err err = TH_ERR_OK;
     th_open_opt opt = {.create = true, .write = true, .truncate = true};
     th_file file;
+    th_file_init(&file, upload->fcache->file_ops);
     if ((err = th_file_openat(&file, dir, th_str_from_cstr(filepath), opt)) != TH_ERR_OK)
         return err;
     size_t total_written = 0;

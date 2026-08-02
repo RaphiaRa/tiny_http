@@ -134,7 +134,7 @@ th_server_init(th_server* server, th_allocator* allocator)
         goto cleanup_router;
     server->loop.reactor = server->reactor;
     th_dir_mgr_init(&server->dir_mgr, allocator);
-    th_fcache_init(&server->fcache, allocator);
+    th_fcache_init(&server->fcache, th_file_ops_os(), allocator);
     th_main_allocator_init(&server->pool, allocator);
     server->listeners = NULL;
     server->allocator = allocator;
@@ -202,7 +202,7 @@ TH_LOCAL(th_err)
 th_server_add_dir(th_server* server, const char* name, const char* path)
 {
     th_dir dir;
-    th_dir_init(&dir, th_dir_ops_os(), server->allocator);
+    th_dir_init(&dir, th_dir_ops_os());
     th_err err = TH_ERR_OK;
     if ((err = th_dir_open(&dir, th_str_from_cstr(path))) != TH_ERR_OK) {
         th_dir_deinit(&dir);

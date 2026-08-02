@@ -117,6 +117,7 @@ struct th_server {
     th_reactor* reactor;
     th_loop loop;
     th_router router;
+    th_dir_mgr dir_mgr;
     th_fcache fcache;
     th_listener* listeners;
     th_allocator* allocator;
@@ -132,7 +133,8 @@ th_server_init(th_server* server, th_allocator* allocator)
     if ((err = th_poll_create(&server->reactor, &server->loop, allocator, th_clock_os(), th_pollops_os())) != TH_ERR_OK)
         goto cleanup_router;
     server->loop.reactor = server->reactor;
-    th_fcache_init(&server->fcache, allocator);
+    th_dir_mgr_init(&server->dir_mgr, allocator);
+    th_fcache_init(&server->fcache, &server->dir_mgr, allocator);
     th_main_allocator_init(&server->pool, allocator);
     server->listeners = NULL;
     server->allocator = allocator;
@@ -165,6 +167,7 @@ th_server_deinit(th_server* server)
     th_reactor_destroy(server->reactor);
     th_router_deinit(&server->router);
     th_fcache_deinit(&server->fcache);
+    th_dir_mgr_deinit(&server->dir_mgr);
     th_main_allocator_deinit(&server->pool);
 }
 
@@ -198,7 +201,14 @@ th_server_route(th_server* server, th_method method, const char* path, th_handle
 TH_LOCAL(th_err)
 th_server_add_dir(th_server* server, const char* name, const char* path)
 {
-    return th_fcache_add_dir(&server->fcache, th_str_from_cstr(name), th_str_from_cstr(path));
+    th_dir dir;
+    th_dir_init(&dir, th_dir_ops_os(), server->allocator);
+    th_err err = TH_ERR_OK;
+    if ((err = th_dir_open(&dir, th_str_from_cstr(path))) != TH_ERR_OK) {
+        th_dir_deinit(&dir);
+        return err;
+    }
+    return th_dir_mgr_add(&server->dir_mgr, th_str_from_cstr(name), dir);
 }
 
 TH_LOCAL(th_err)

@@ -20,8 +20,13 @@ typedef struct th_dir_mgr {
 TH_PRIVATE(void)
 th_dir_mgr_init(th_dir_mgr* mgr, th_allocator* allocator);
 
+/** th_dir_mgr_add
+ * @brief Registers dir under label. dir must already be open (see
+ * th_dir_open); ownership always moves into this call, so the caller must
+ * not touch or deinit dir afterwards, whether or not it succeeds.
+ */
 TH_PRIVATE(th_err)
-th_dir_mgr_add(th_dir_mgr* mgr, th_str label, th_str path);
+th_dir_mgr_add(th_dir_mgr* mgr, th_str label, th_dir dir);
 
 TH_PRIVATE(th_dir*)
 th_dir_mgr_get(th_dir_mgr* mgr, th_str label);

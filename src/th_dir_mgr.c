@@ -43,25 +43,23 @@ th_dir_mgr_remove_last_string(th_dir_mgr* mgr)
 }
 
 TH_PRIVATE(th_err)
-th_dir_mgr_add(th_dir_mgr* mgr, th_str label, th_str path)
+th_dir_mgr_add(th_dir_mgr* mgr, th_str label, th_dir dir)
 {
     th_err err = TH_ERR_OK;
-    if (th_dir_mgr_label_exists(mgr, label))
+    if (th_dir_mgr_label_exists(mgr, label)) {
+        th_dir_deinit(&dir);
         return TH_ERR_INVALID_ARG;
-    th_dir dir = {0};
-    th_dir_init(&dir, mgr->allocator);
-    if ((err = th_dir_open(&dir, path)) != TH_ERR_OK)
-        goto cleanup_dir;
-    if ((err = th_dir_mgr_store_string(mgr, label)) != TH_ERR_OK)
-        goto cleanup_dir;
-    if ((err = th_dir_map_set(&mgr->map, th_dir_mgr_get_last_string(mgr), dir)) != TH_ERR_OK)
-        goto cleanup_string;
+    }
+    if ((err = th_dir_mgr_store_string(mgr, label)) != TH_ERR_OK) {
+        th_dir_deinit(&dir);
+        return err;
+    }
+    if ((err = th_dir_map_set(&mgr->map, th_dir_mgr_get_last_string(mgr), dir)) != TH_ERR_OK) {
+        th_dir_mgr_remove_last_string(mgr);
+        th_dir_deinit(&dir);
+        return err;
+    }
     return TH_ERR_OK;
-cleanup_string:
-    th_dir_mgr_remove_last_string(mgr);
-cleanup_dir:
-    th_dir_deinit(&dir);
-    return err;
 }
 
 TH_PRIVATE(th_dir*)

@@ -1,12 +1,13 @@
 #include "th_upload.h"
 
 TH_PRIVATE(void)
-th_upload_init(th_upload* upload, th_str buffer, th_fcache* fcache, th_allocator* allocator)
+th_upload_init(th_upload* upload, th_str buffer, th_dir_mgr* dir_mgr, th_fcache* fcache, th_allocator* allocator)
 {
     th_string_init(&upload->name, allocator);
     th_string_init(&upload->filename, allocator);
     th_string_init(&upload->content_type, allocator);
     upload->data = buffer;
+    upload->dir_mgr = dir_mgr;
     upload->fcache = fcache;
 }
 
@@ -58,7 +59,7 @@ th_upload_get_data(const th_upload* upload)
 TH_PUBLIC(th_err)
 th_upload_save(const th_upload* upload, const char* dir_label, const char* filepath)
 {
-    th_dir* dir = th_fcache_find_dir(upload->fcache, th_str_from_cstr(dir_label));
+    th_dir* dir = th_dir_mgr_get(upload->dir_mgr, th_str_from_cstr(dir_label));
     if (!dir)
         return TH_ERR_HTTP(TH_CODE_NOT_FOUND);
     th_err err = TH_ERR_OK;

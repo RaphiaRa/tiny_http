@@ -20,7 +20,7 @@
 /* th_response implementation begin */
 
 TH_PRIVATE(void)
-th_response_init(th_response* response, th_fcache* fcache, th_allocator* allocator)
+th_response_init(th_response* response, th_dir_mgr* dir_mgr, th_fcache* fcache, th_allocator* allocator)
 {
     allocator = allocator ? allocator : th_default_allocator_get();
     th_string_init(&response->headers, allocator);
@@ -29,6 +29,7 @@ th_response_init(th_response* response, th_fcache* fcache, th_allocator* allocat
     response->iov[1] = (th_iov){0};
     response->iov[2] = (th_iov){0};
     response->allocator = allocator;
+    response->dir_mgr = dir_mgr;
     response->fcache = fcache;
     response->fcache_entry = NULL;
     response->file_len = 0;
@@ -126,8 +127,11 @@ th_response_get_mime_type(th_str filename)
 TH_LOCAL(th_err)
 th_response_set_body_from_file(th_response* response, th_str root, th_str path)
 {
+    th_dir* dir = th_dir_mgr_get(response->dir_mgr, root);
+    if (!dir)
+        return TH_ERR_INVALID_ARG;
     th_err err = TH_ERR_OK;
-    if ((err = th_fcache_get(response->fcache, root, path, &response->fcache_entry)) != TH_ERR_OK) {
+    if ((err = th_fcache_get(response->fcache, dir, path, &response->fcache_entry)) != TH_ERR_OK) {
         return err;
     }
     // Set the content type, if not already set

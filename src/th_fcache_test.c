@@ -42,30 +42,27 @@ TH_TEST_BEGIN(fcache)
 {
     th_fake_dir_ops dir_ops;
     th_fake_dir_ops_init(&dir_ops);
-    th_dir_mgr dir_mgr;
-    th_dir_mgr_init(&dir_mgr, NULL);
     th_dir dir;
     th_dir_init(&dir, &dir_ops.base, NULL);
     TH_EXPECT(th_dir_open(&dir, TH_STR("/")) == TH_ERR_OK);
-    TH_EXPECT(th_dir_mgr_add(&dir_mgr, TH_STR("/"), dir) == TH_ERR_OK);
 
     TH_TEST_CASE_BEGIN(fcache_init)
     {
         th_fcache cache = {0};
-        th_fcache_init(&cache, &dir_mgr, NULL);
+        th_fcache_init(&cache, NULL);
         th_fcache_deinit(&cache);
     }
     TH_TEST_CASE_END
     TH_TEST_CASE_BEGIN(fcache_open)
     {
         th_fcache cache = {0};
-        th_fcache_init(&cache, &dir_mgr, NULL);
+        th_fcache_init(&cache, NULL);
         th_fcache_entry* entry1 = NULL;
         th_fcache_entry* entry2 = NULL;
         th_fcache_entry* entry3 = NULL;
-        TH_EXPECT(th_fcache_get(&cache, TH_STR("/"), TH_STR("test"), &entry1) == TH_ERR_OK);
-        TH_EXPECT(th_fcache_get(&cache, TH_STR("/"), TH_STR("test"), &entry2) == TH_ERR_OK);
-        TH_EXPECT(th_fcache_get(&cache, TH_STR("/"), TH_STR("test"), &entry3) == TH_ERR_OK);
+        TH_EXPECT(th_fcache_get(&cache, &dir, TH_STR("test"), &entry1) == TH_ERR_OK);
+        TH_EXPECT(th_fcache_get(&cache, &dir, TH_STR("test"), &entry2) == TH_ERR_OK);
+        TH_EXPECT(th_fcache_get(&cache, &dir, TH_STR("test"), &entry3) == TH_ERR_OK);
         TH_EXPECT(entry1->stream.fd == entry2->stream.fd);
         TH_EXPECT(entry2->stream.fd == entry3->stream.fd);
         th_fcache_entry_unref(entry1);
@@ -77,15 +74,15 @@ TH_TEST_BEGIN(fcache)
     TH_TEST_CASE_BEGIN(fcache_open_bad)
     {
         th_fcache cache = {0};
-        th_fcache_init(&cache, &dir_mgr, NULL);
+        th_fcache_init(&cache, NULL);
         th_mock_syscall_get()->open = th_mock_open_bad;
         th_fcache_entry* entry = NULL;
-        TH_EXPECT(th_fcache_get(&cache, TH_STR("/"), TH_STR("test"), &entry) != TH_ERR_OK);
+        TH_EXPECT(th_fcache_get(&cache, &dir, TH_STR("test"), &entry) != TH_ERR_OK);
         th_fcache_deinit(&cache);
         th_mock_syscall_reset();
     }
     TH_TEST_CASE_END
 
-    th_dir_mgr_deinit(&dir_mgr);
+    th_dir_deinit(&dir);
 }
 TH_TEST_END

@@ -40,7 +40,7 @@ TH_TEST_BEGIN(router){
         th_router router;
 th_router_init(&router, NULL);
 th_request request = {0};
-th_request_init(&request, NULL, NULL);
+th_request_init(&request, NULL, NULL, NULL);
 request.method = TH_METHOD_GET;
 th_string_set(&request.uri_path, TH_STR("/test"));
 th_response response = {0};
@@ -64,7 +64,7 @@ ROUTER_TEST_CASE_BEGIN(router_handle)
     th_err err = th_router_add_route(&router, TH_METHOD_GET, TH_STR("/test"), mock_handler, NULL);
     TH_EXPECT(err == TH_ERR_OK);
     th_request request = {0};
-    th_request_init(&request, NULL, NULL);
+    th_request_init(&request, NULL, NULL, NULL);
     request.method = TH_METHOD_GET;
     th_string_set(&request.uri_path, TH_STR("/test"));
     th_response response = {0};
@@ -79,7 +79,7 @@ ROUTER_TEST_CASE_BEGIN(router_handle_empty)
     TH_EXPECT(th_router_add_route(&router, TH_METHOD_GET, TH_STR("/"), mock_handler, NULL) == TH_ERR_OK);
     {
         th_request request = {0};
-        th_request_init(&request, NULL, NULL);
+        th_request_init(&request, NULL, NULL, NULL);
         request.method = TH_METHOD_GET;
         th_string_set(&request.uri_path, TH_STR("/"));
         th_response response = {0};
@@ -88,7 +88,7 @@ ROUTER_TEST_CASE_BEGIN(router_handle_empty)
     }
     {
         th_request request = {0};
-        th_request_init(&request, NULL, NULL);
+        th_request_init(&request, NULL, NULL, NULL);
         request.method = TH_METHOD_GET;
         th_string_set(&request.uri_path, TH_STR("/test"));
         th_response response = {0};
@@ -106,7 +106,7 @@ ROUTER_TEST_CASE_BEGIN(router_handle_path_capture)
     TH_EXPECT(err == TH_ERR_OK);
     {
         th_request request = {0};
-        th_request_init(&request, NULL, NULL);
+        th_request_init(&request, NULL, NULL, NULL);
         request.method = TH_METHOD_GET;
         th_string_set(&request.uri_path, TH_STR("/test/abc"));
         th_response response = {0};
@@ -120,7 +120,7 @@ ROUTER_TEST_CASE_BEGIN(router_handle_path_capture)
     }
     {
         th_request request = {0};
-        th_request_init(&request, NULL, NULL);
+        th_request_init(&request, NULL, NULL, NULL);
         request.method = TH_METHOD_GET;
         th_string_set(&request.uri_path, TH_STR("/test/abc/def"));
         th_response response = {0};
@@ -143,7 +143,7 @@ ROUTER_TEST_CASE_BEGIN(router_handle_capture_default)
     TH_EXPECT(err == TH_ERR_OK);
     {
         th_request request = {0};
-        th_request_init(&request, NULL, NULL);
+        th_request_init(&request, NULL, NULL, NULL);
         request.method = TH_METHOD_GET;
         th_string_set(&request.uri_path, TH_STR("/test/abc/test2/def"));
         th_response response = {0};
@@ -167,7 +167,7 @@ ROUTER_TEST_CASE_BEGIN(router_handle_capture_int)
     TH_EXPECT(err == TH_ERR_OK);
     {
         th_request request = {0};
-        th_request_init(&request, NULL, NULL);
+        th_request_init(&request, NULL, NULL, NULL);
         request.method = TH_METHOD_GET;
         th_string_set(&request.uri_path, TH_STR("/test/123"));
         th_response response = {0};
@@ -181,7 +181,7 @@ ROUTER_TEST_CASE_BEGIN(router_handle_capture_int)
     }
     {
         th_request request = {0};
-        th_request_init(&request, NULL, NULL);
+        th_request_init(&request, NULL, NULL, NULL);
         request.method = TH_METHOD_GET;
         th_string_set(&request.uri_path, TH_STR("/test/abc"));
         th_response response = {0};
@@ -210,7 +210,7 @@ ROUTER_TEST_CASE_BEGIN(router_handle_multiple_simple_routes)
     }
     for (size_t i = 0; i < sizeof(routes) / sizeof(routes[0]); i++) {
         th_request request = {0};
-        th_request_init(&request, NULL, NULL);
+        th_request_init(&request, NULL, NULL, NULL);
         request.method = TH_METHOD_GET;
         th_string_set(&request.uri_path, th_str_from_cstr(routes[i]));
         th_response response = {0};
@@ -267,7 +267,7 @@ ROUTER_TEST_CASE_BEGIN(router_handle_multiple_complex_routes)
     }
     for (size_t i = 0; i < sizeof(routes) / sizeof(routes[0]); i++) {
         th_request request = {0};
-        th_request_init(&request, NULL, NULL);
+        th_request_init(&request, NULL, NULL, NULL);
         request.method = TH_METHOD_GET;
         th_string_set(&request.uri_path, th_str_from_cstr(routes[i][1]));
         th_response response = {0};

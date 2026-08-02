@@ -6,6 +6,7 @@
 #include "th_config.h"
 #include "th_conn.h"
 #include "th_conn_tracker.h"
+#include "th_dir_mgr.h"
 #include "th_fcache.h"
 #include "th_request.h"
 #include "th_request_parser.h"
@@ -22,6 +23,7 @@ struct th_http {
     th_buf_vec buf;
     th_conn* conn;
     th_router* router;
+    th_dir_mgr* dir_mgr;
     th_fcache* fcache;
     th_allocator* allocator;
     size_t read_bytes;
@@ -35,12 +37,13 @@ typedef struct th_http_upgrader {
     th_conn_upgrader base;
     const th_conn_tracker* tracker;
     th_router* router;
+    th_dir_mgr* dir_mgr;
     th_fcache* fcache;
     th_allocator* allocator;
 } th_http_upgrader;
 
 TH_PRIVATE(void)
 th_http_upgrader_init(th_http_upgrader* upgrader, const th_conn_tracker* tracker, th_router* router,
-                      th_fcache* fcache, th_allocator* allocator);
+                      th_dir_mgr* dir_mgr, th_fcache* fcache, th_allocator* allocator);
 
 #endif

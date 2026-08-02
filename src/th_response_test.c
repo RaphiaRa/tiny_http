@@ -116,9 +116,9 @@ TH_TEST_BEGIN(response)
     th_dir_mgr dir_mgr;
     th_dir_mgr_init(&dir_mgr, th_default_allocator_get());
     th_fcache fcache;
-    th_fcache_init(&fcache, &dir_mgr, th_default_allocator_get());
+    th_fcache_init(&fcache, th_default_allocator_get());
     th_response response;
-    th_response_init(&response, &fcache, th_default_allocator_get());
+    th_response_init(&response, &dir_mgr, &fcache, th_default_allocator_get());
     th_fake_conn conn;
     th_fake_conn_init(&conn);
 

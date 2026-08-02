@@ -134,7 +134,7 @@ th_server_init(th_server* server, th_allocator* allocator)
         goto cleanup_router;
     server->loop.reactor = server->reactor;
     th_dir_mgr_init(&server->dir_mgr, allocator);
-    th_fcache_init(&server->fcache, &server->dir_mgr, allocator);
+    th_fcache_init(&server->fcache, allocator);
     th_main_allocator_init(&server->pool, allocator);
     server->listeners = NULL;
     server->allocator = allocator;
@@ -178,7 +178,7 @@ th_server_bind(th_server* server, const char* host, const char* port, th_bind_op
     th_err err = TH_ERR_OK;
     if ((err = th_listener_create(&listener, &server->loop,
                                   host, port,
-                                  &server->router, &server->fcache,
+                                  &server->router, &server->dir_mgr, &server->fcache,
                                   opt, &server->pool.base))
         != TH_ERR_OK) {
         return err;

@@ -5,6 +5,7 @@
 #include "th_acceptor.h"
 #include "th_conn.h"
 #include "th_conn_tracker.h"
+#include "th_dir_mgr.h"
 #include "th_fcache.h"
 #include "th_http.h"
 #include "th_loop.h"
@@ -50,7 +51,7 @@ struct th_listener {
 TH_PRIVATE(th_err)
 th_listener_create(th_listener** out, th_loop* loop,
                    const char* host, const char* port,
-                   th_router* router, th_fcache* fcache,
+                   th_router* router, th_dir_mgr* dir_mgr, th_fcache* fcache,
                    th_bind_opt* opt, th_allocator* allocator);
 
 TH_PRIVATE(th_err)

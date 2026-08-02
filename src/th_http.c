@@ -273,16 +273,17 @@ th_http_start(void* self)
 
 TH_LOCAL(void)
 th_http_init(th_http* http, const th_conn_tracker* tracker, th_conn* conn,
-             th_router* router, th_fcache* fcache, th_allocator* allocator)
+             th_router* router, th_dir_mgr* dir_mgr, th_fcache* fcache, th_allocator* allocator)
 {
     allocator = allocator ? allocator : th_default_allocator_get();
     th_request_parser_init(&http->parser);
-    th_request_init(&http->request, fcache, allocator);
-    th_response_init(&http->response, fcache, allocator);
+    th_request_init(&http->request, dir_mgr, fcache, allocator);
+    th_response_init(&http->response, dir_mgr, fcache, allocator);
     th_buf_vec_init(&http->buf, allocator);
     http->tracker = tracker;
     http->conn = conn;
     http->router = router;
+    http->dir_mgr = dir_mgr;
     http->fcache = fcache;
     http->allocator = allocator;
     http->read_bytes = 0;
@@ -292,12 +293,12 @@ th_http_init(th_http* http, const th_conn_tracker* tracker, th_conn* conn,
 
 TH_LOCAL(th_err)
 th_http_create(th_http** out, const th_conn_tracker* tracker, th_conn* conn,
-               th_router* router, th_fcache* fcache, th_allocator* allocator)
+               th_router* router, th_dir_mgr* dir_mgr, th_fcache* fcache, th_allocator* allocator)
 {
     th_http* http = th_allocator_alloc(allocator, sizeof(th_http));
     if (!http)
         return TH_ERR_BAD_ALLOC;
-    th_http_init(http, tracker, conn, router, fcache, allocator);
+    th_http_init(http, tracker, conn, router, dir_mgr, fcache, allocator);
     *out = http;
     return TH_ERR_OK;
 }
@@ -308,7 +309,7 @@ th_http_upgrader_upgrade(void* self, th_conn* conn)
     th_http_upgrader* upgrader = self;
     th_http* http = NULL;
     th_err err = TH_ERR_OK;
-    if ((err = th_http_create(&http, upgrader->tracker, conn, upgrader->router, upgrader->fcache, upgrader->allocator)) != TH_ERR_OK) {
+    if ((err = th_http_create(&http, upgrader->tracker, conn, upgrader->router, upgrader->dir_mgr, upgrader->fcache, upgrader->allocator)) != TH_ERR_OK) {
         TH_LOG_ERROR("Failed to create http instance: %s", th_strerror(err));
         th_conn_destroy(conn);
         return;
@@ -318,11 +319,12 @@ th_http_upgrader_upgrade(void* self, th_conn* conn)
 
 TH_PRIVATE(void)
 th_http_upgrader_init(th_http_upgrader* upgrader, const th_conn_tracker* tracker, th_router* router,
-                      th_fcache* fcache, th_allocator* allocator)
+                      th_dir_mgr* dir_mgr, th_fcache* fcache, th_allocator* allocator)
 {
     th_conn_upgrader_init(&upgrader->base, th_http_upgrader_upgrade);
     upgrader->tracker = tracker;
     upgrader->router = router;
+    upgrader->dir_mgr = dir_mgr;
     upgrader->fcache = fcache;
     upgrader->allocator = allocator;
 }

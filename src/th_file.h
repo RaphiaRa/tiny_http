@@ -22,8 +22,6 @@ typedef struct th_file_ops {
     th_err (*openat)(void* self, th_dir* dir, th_str path, th_open_opt opt, int* fd, size_t* size);
     th_err (*read)(void* self, int fd, void* addr, size_t len, size_t offset, size_t* read);
     th_err (*write)(void* self, int fd, const void* addr, size_t len, size_t offset, size_t* written);
-    th_err (*mmap)(void* self, int fd, size_t offset, size_t len, void** addr, size_t* mapped_offset, size_t* mapped_len);
-    void (*munmap)(void* self, void* addr, size_t len);
     uint32_t (*stat_hash)(void* self, int fd);
     void (*close)(void* self, int fd);
 } th_file_ops;
@@ -31,17 +29,10 @@ typedef struct th_file_ops {
 TH_PRIVATE(th_file_ops*)
 th_file_ops_os(void);
 
-typedef struct th_file_mmap {
-    void* addr;
-    size_t offset;
-    size_t len;
-} th_file_mmap;
-
 typedef struct th_file {
     th_file_ops* ops;
     int fd;
     size_t size;
-    th_file_mmap view;
 } th_file;
 
 TH_PRIVATE(void)
@@ -55,14 +46,6 @@ th_file_read(th_file* stream, void* addr, size_t len, size_t offset, size_t* rea
 
 TH_PRIVATE(th_err)
 th_file_write(th_file* stream, const void* addr, size_t len, size_t offset, size_t* written) TH_MAYBE_UNUSED;
-
-typedef struct th_fileview {
-    void* ptr;
-    size_t len;
-} th_fileview;
-
-TH_PRIVATE(th_err)
-th_file_get_view(th_file* stream, th_fileview* view, size_t offset, size_t len);
 
 TH_PRIVATE(uint32_t)
 th_file_stat_hash(th_file* stream);

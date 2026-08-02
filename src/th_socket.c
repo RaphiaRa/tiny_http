@@ -79,11 +79,14 @@ th_socket_build_sendfile_iov(struct iovec* vec, const th_iov* iov, size_t iovcnt
 
 #define TH_SOCKET_SENDFILE_BUFFERED_MAX (8 * 1024)
 
-/* Small transfers: read the file chunk into a stack buffer, then send
- * header + buffer in one sendmsg. Avoids the mmap setup cost. */
+/* Read a chunk of the file into a stack buffer, then send header +
+ * buffer in one sendmsg. The chunk is capped at
+ * TH_SOCKET_SENDFILE_BUFFERED_MAX regardless of len - th_sendfile_op
+ * drives further chunks via its own retry loop. */
 TH_LOCAL(th_err)
-th_socket_ops_os_sendfile_buffered(int fd, const th_iov* iov, size_t iovcnt, th_file* file, size_t offset, size_t len, size_t* result)
+th_socket_ops_os_sendfile(void* self, int fd, const th_iov* iov, size_t iovcnt, th_file* file, size_t offset, size_t len, size_t* result)
 {
+    (void)self;
     uint8_t buffer[TH_SOCKET_SENDFILE_BUFFERED_MAX];
     size_t toread = TH_MIN(sizeof(buffer), len);
     ssize_t readlen = pread(file->fd, buffer, toread, (off_t)offset);
@@ -105,42 +108,6 @@ th_socket_ops_os_sendfile_buffered(int fd, const th_iov* iov, size_t iovcnt, th_
         return TH_ERR_SYSTEM(errno);
     *result = (size_t)ret;
     return TH_ERR_OK;
-}
-
-/* Large transfers: map the file chunk and send header + mapped view in
- * one sendmsg, avoiding the extra copy into a buffer. */
-TH_LOCAL(th_err)
-th_socket_ops_os_sendfile_mmap(int fd, const th_iov* iov, size_t iovcnt, th_file* file, size_t offset, size_t len, size_t* result)
-{
-    th_fileview view;
-    th_err err = th_file_get_view(file, &view, offset, len);
-    if (err != TH_ERR_OK)
-        return err;
-
-    struct iovec vec[TH_SOCKET_SENDFILE_MAX_IOV];
-    size_t veclen = th_socket_build_sendfile_iov(vec, iov, iovcnt, view.ptr, view.len);
-
-    int flags = 0;
-#if defined(MSG_NOSIGNAL)
-    flags |= MSG_NOSIGNAL;
-#endif
-    struct msghdr msg = {0};
-    msg.msg_iov = vec;
-    msg.msg_iovlen = veclen;
-    ssize_t ret = sendmsg(fd, &msg, flags);
-    if (ret < 0)
-        return TH_ERR_SYSTEM(errno);
-    *result = (size_t)ret;
-    return TH_ERR_OK;
-}
-
-TH_LOCAL(th_err)
-th_socket_ops_os_sendfile(void* self, int fd, const th_iov* iov, size_t iovcnt, th_file* file, size_t offset, size_t len, size_t* result)
-{
-    (void)self;
-    if (len < TH_SOCKET_SENDFILE_BUFFERED_MAX)
-        return th_socket_ops_os_sendfile_buffered(fd, iov, iovcnt, file, offset, len, result);
-    return th_socket_ops_os_sendfile_mmap(fd, iov, iovcnt, file, offset, len, result);
 }
 
 TH_PRIVATE(th_socket_ops*)

@@ -1,38 +1,70 @@
 #include "th_dir_mgr.h"
-#include "th_mock_syscall.h"
 #include "th_test.h"
 
-static int
-bad_open(void)
+typedef struct th_fake_dir_ops {
+    th_dir_ops base;
+    int next_fd;
+} th_fake_dir_ops;
+
+static th_err
+th_fake_dir_ops_open(void* self, const char* path, int* fd)
 {
-    return -TH_ENOENT;
+    (void)path;
+    th_fake_dir_ops* ops = self;
+    *fd = ops->next_fd++;
+    return TH_ERR_OK;
+}
+
+static void
+th_fake_dir_ops_close(void* self, int fd)
+{
+    (void)self;
+    (void)fd;
+}
+
+static void
+th_fake_dir_ops_init(th_fake_dir_ops* ops)
+{
+    ops->base.open = th_fake_dir_ops_open;
+    ops->base.close = th_fake_dir_ops_close;
+    ops->next_fd = 3;
 }
 
 TH_TEST_BEGIN(dir_mgr)
 {
+    th_fake_dir_ops ops;
+    th_fake_dir_ops_init(&ops);
+    th_dir_mgr mgr = {0};
+    th_dir_mgr_init(&mgr, NULL);
+
     TH_TEST_CASE_BEGIN(dir_mgr_init)
     {
-        th_dir_mgr mgr = {0};
-        th_dir_mgr_init(&mgr, NULL);
         th_dir_mgr_deinit(&mgr);
     }
     TH_TEST_CASE_END
     TH_TEST_CASE_BEGIN(dir_mgr_add)
     {
-        th_dir_mgr mgr = {0};
-        th_dir_mgr_init(&mgr, NULL);
-        TH_EXPECT(th_dir_mgr_add(&mgr, TH_STR("test"), TH_STR("/")) == TH_ERR_OK);
+        th_dir dir;
+        th_dir_init(&dir, &ops.base, NULL);
+        TH_EXPECT(th_dir_open(&dir, TH_STR("/")) == TH_ERR_OK);
+
+        TH_EXPECT(th_dir_mgr_add(&mgr, TH_STR("test"), dir) == TH_ERR_OK);
         TH_EXPECT(th_dir_mgr_get(&mgr, TH_STR("test")) != NULL);
         th_dir_mgr_deinit(&mgr);
     }
     TH_TEST_CASE_END
-    TH_TEST_CASE_BEGIN(dir_mgr_add_bad_open)
+    TH_TEST_CASE_BEGIN(dir_mgr_add_duplicate_label)
     {
-        th_mock_syscall_get()->open = bad_open;
-        th_dir_mgr mgr = {0};
-        th_dir_mgr_init(&mgr, NULL);
-        TH_EXPECT(th_dir_mgr_add(&mgr, TH_STR("test"), TH_STR("/")) == TH_ERR_SYSTEM(TH_ENOENT));
-        TH_EXPECT(th_dir_mgr_get(&mgr, TH_STR("test")) == NULL);
+        th_dir dir1;
+        th_dir_init(&dir1, &ops.base, NULL);
+        TH_EXPECT(th_dir_open(&dir1, TH_STR("/")) == TH_ERR_OK);
+        TH_EXPECT(th_dir_mgr_add(&mgr, TH_STR("test"), dir1) == TH_ERR_OK);
+
+        th_dir dir2;
+        th_dir_init(&dir2, &ops.base, NULL);
+        TH_EXPECT(th_dir_open(&dir2, TH_STR("/")) == TH_ERR_OK);
+        TH_EXPECT(th_dir_mgr_add(&mgr, TH_STR("test"), dir2) == TH_ERR_INVALID_ARG);
+
         th_dir_mgr_deinit(&mgr);
     }
     TH_TEST_CASE_END

@@ -49,7 +49,7 @@ TH_DEFINE_LIST(th_fcache_list, th_fcache_entry, prev, next)
 
 struct th_fcache {
     th_allocator* allocator;
-    th_dir_mgr dir_mgr;
+    th_dir_mgr* dir_mgr;
     th_fcache_map map;
     th_fcache_list list;
     size_t num_cached;
@@ -64,13 +64,10 @@ th_fcache_entry_unref(th_fcache_entry* entry);
 // fcache functions
 
 TH_PRIVATE(void)
-th_fcache_init(th_fcache* cache, th_allocator* allocator);
+th_fcache_init(th_fcache* cache, th_dir_mgr* dir_mgr, th_allocator* allocator);
 
 TH_PRIVATE(th_err)
 th_fcache_get(th_fcache* cache, th_str root, th_str path, th_fcache_entry** out);
-
-TH_PRIVATE(th_err)
-th_fcache_add_dir(th_fcache* cache, th_str label, th_str path);
 
 TH_PRIVATE(th_dir*)
 th_fcache_find_dir(th_fcache* cache, th_str label);

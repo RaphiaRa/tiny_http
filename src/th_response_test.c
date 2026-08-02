@@ -113,8 +113,10 @@ th_recorded_result_init(th_recorded_result* result)
 
 TH_TEST_BEGIN(response)
 {
+    th_dir_mgr dir_mgr;
+    th_dir_mgr_init(&dir_mgr, th_default_allocator_get());
     th_fcache fcache;
-    th_fcache_init(&fcache, th_default_allocator_get());
+    th_fcache_init(&fcache, &dir_mgr, th_default_allocator_get());
     th_response response;
     th_response_init(&response, &fcache, th_default_allocator_get());
     th_fake_conn conn;
@@ -177,5 +179,6 @@ TH_TEST_BEGIN(response)
 
     th_response_deinit(&response);
     th_fcache_deinit(&fcache);
+    th_dir_mgr_deinit(&dir_mgr);
 }
 TH_TEST_END

@@ -40,7 +40,7 @@ TH_LOCAL(th_err)
 th_fcache_entry_open(th_fcache_entry* entry, th_str root, th_str path)
 {
     th_err err = TH_ERR_OK;
-    th_dir* dir = th_dir_mgr_get(&entry->cache->dir_mgr, root);
+    th_dir* dir = th_dir_mgr_get(entry->cache->dir_mgr, root);
     if (!dir)
         return TH_ERR_INVALID_ARG;
     th_open_opt opt = {.read = true};
@@ -75,10 +75,10 @@ th_fcache_entry_unref(th_fcache_entry* entry)
 }
 
 TH_PRIVATE(void)
-th_fcache_init(th_fcache* cache, th_allocator* allocator)
+th_fcache_init(th_fcache* cache, th_dir_mgr* dir_mgr, th_allocator* allocator)
 {
     cache->allocator = allocator ? allocator : th_default_allocator_get();
-    th_dir_mgr_init(&cache->dir_mgr, cache->allocator);
+    cache->dir_mgr = dir_mgr;
     th_fcache_map_init(&cache->map, cache->allocator);
     cache->list = (th_fcache_list){NULL, NULL};
     cache->num_cached = 0;
@@ -96,7 +96,7 @@ th_fcache_erase(th_fcache* cache, th_fcache_entry* entry)
 TH_LOCAL(th_fcache_entry*)
 th_fcache_try_get(th_fcache* cache, th_str root, th_str path)
 {
-    th_dir* dir = th_dir_mgr_get(&cache->dir_mgr, root);
+    th_dir* dir = th_dir_mgr_get(cache->dir_mgr, root);
     if (!dir)
         return NULL;
     th_fcache_entry** v = th_fcache_map_try_get(&cache->map, (th_fcache_id){path, dir});
@@ -116,16 +116,10 @@ th_fcache_try_get(th_fcache* cache, th_str root, th_str path)
     return th_fcache_entry_ref(entry);
 }
 
-TH_PRIVATE(th_err)
-th_fcache_add_dir(th_fcache* cache, th_str label, th_str path)
-{
-    return th_dir_mgr_add(&cache->dir_mgr, label, path);
-}
-
 TH_PRIVATE(th_dir*)
 th_fcache_find_dir(th_fcache* cache, th_str label)
 {
-    return th_dir_mgr_get(&cache->dir_mgr, label);
+    return th_dir_mgr_get(cache->dir_mgr, label);
 }
 
 TH_LOCAL(th_err)
@@ -180,5 +174,4 @@ th_fcache_deinit(th_fcache* cache)
         th_fcache_entry_unref(entry);
     }
     th_fcache_map_deinit(&cache->map);
-    th_dir_mgr_deinit(&cache->dir_mgr);
 }

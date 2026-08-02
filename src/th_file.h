@@ -5,6 +5,32 @@
 
 #include "th_dir.h"
 
+typedef struct th_open_opt {
+    bool read;
+    bool write;
+    bool create;
+    bool truncate;
+} th_open_opt;
+
+/** th_file_ops
+ * @brief The raw syscalls a th_file performs. Injected at construction time
+ * so tests can fake a file fd without touching the filesystem. Each method
+ * behaves like the underlying syscall: TH_ERR_OK (with any out-params set)
+ * on success, TH_ERR_SYSTEM(errno) on failure.
+ */
+typedef struct th_file_ops {
+    th_err (*openat)(void* self, th_dir* dir, th_str path, th_open_opt opt, int* fd, size_t* size);
+    th_err (*read)(void* self, int fd, void* addr, size_t len, size_t offset, size_t* read);
+    th_err (*write)(void* self, int fd, const void* addr, size_t len, size_t offset, size_t* written);
+    th_err (*mmap)(void* self, int fd, size_t offset, size_t len, void** addr, size_t* mapped_offset, size_t* mapped_len);
+    void (*munmap)(void* self, void* addr, size_t len);
+    uint32_t (*stat_hash)(void* self, int fd);
+    void (*close)(void* self, int fd);
+} th_file_ops;
+
+TH_PRIVATE(th_file_ops*)
+th_file_ops_os(void);
+
 typedef struct th_file_mmap {
     void* addr;
     size_t offset;
@@ -12,20 +38,14 @@ typedef struct th_file_mmap {
 } th_file_mmap;
 
 typedef struct th_file {
+    th_file_ops* ops;
     int fd;
     size_t size;
     th_file_mmap view;
 } th_file;
 
 TH_PRIVATE(void)
-th_file_init(th_file* stream);
-
-typedef struct th_open_opt {
-    bool read;
-    bool write;
-    bool create;
-    bool truncate;
-} th_open_opt;
+th_file_init(th_file* stream, th_file_ops* ops);
 
 TH_PRIVATE(th_err)
 th_file_openat(th_file* stream, th_dir* dir, th_str path, th_open_opt opt);

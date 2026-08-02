@@ -3,6 +3,11 @@
 
 #include <string.h>
 
+/* No test case here exercises th_set_body_from_file, so these ops are
+ * never actually invoked - th_fcache_init just needs a non-garbage
+ * pointer to store. */
+static th_file_ops th_unused_file_ops;
+
 typedef struct th_fake_conn {
     th_conn base;
     char written[1024];
@@ -116,7 +121,7 @@ TH_TEST_BEGIN(response)
     th_dir_mgr dir_mgr;
     th_dir_mgr_init(&dir_mgr, th_default_allocator_get());
     th_fcache fcache;
-    th_fcache_init(&fcache, th_default_allocator_get());
+    th_fcache_init(&fcache, &th_unused_file_ops, th_default_allocator_get());
     th_response response;
     th_response_init(&response, &dir_mgr, &fcache, th_default_allocator_get());
     th_fake_conn conn;

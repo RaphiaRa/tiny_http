@@ -32,7 +32,6 @@
 
 /* feature configuration end */
 
-#ifndef TH_CONFIG_OS_MOCK
 #if defined(__APPLE__)
 #define TH_CONFIG_OS_OSX 1
 #define TH_CONFIG_OS_POSIX 1
@@ -64,7 +63,6 @@
 
 #if defined(_WIN32)
 #define TH_CONFIG_OS_WIN 1
-#endif
 #endif
 
 /* IO service config begin */

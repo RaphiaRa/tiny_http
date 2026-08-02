@@ -62,7 +62,6 @@ SET(TH_CORE_SRC
     src/th_timer.c
     src/th_conn_tracker.c
     src/th_url_decode.c
-    src/th_path.c
     src/th_upload.c
 #   SSL (compiled out via TH_WITH_SSL=0 until SSL is ported onto th_conn/th_socket)
     src/th_ssl_smem_bio.c
@@ -71,7 +70,6 @@ SET(TH_CORE_SRC
 )
 
 SET(TH_TEST_SRC
-    src/th_mock_syscall.c
     src/th_test.c
 )
 
@@ -173,11 +171,6 @@ if (NOT TH_DISABLE_TESTS)
         target_link_options(tiny_http_test PUBLIC --coverage)
     endif()
 
-    # PUBLIC: th_test links against tiny_http_test and must see the same
-    # TH_CONFIG_OS_MOCK-dependent macro definitions (e.g. th_system_error.h's
-    # TH_E* constants), or the two targets can disagree on what a shared
-    # macro expands to.
-    target_compile_definitions(tiny_http_test PUBLIC TH_CONFIG_OS_MOCK=1)
     target_compile_definitions(tiny_http_test PRIVATE TH_LOG_LEVEL=${TH_LOG_LEVEL})
     target_compile_definitions(tiny_http_test PRIVATE TH_WITH_SSL=${TH_WITH_SSL})
     target_include_directories(tiny_http_test 
@@ -211,7 +204,6 @@ if (NOT TH_DISABLE_TESTS)
         src/th_str_test.c
         src/th_list_test.c
         src/th_dir_mgr_test.c
-        src/th_dir_test.c
         src/th_string_test.c
     )
 

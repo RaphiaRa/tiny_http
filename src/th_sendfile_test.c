@@ -81,6 +81,12 @@ th_fake_reactor_init(th_fake_reactor* reactor)
     reactor->base.methods = &th_fake_reactor_methods;
 }
 
+/* th_file's ops are never actually invoked in this test file: sendfile is
+ * faked at the socket level (th_fake_sendfile below), so th_file is only
+ * ever passed through as an opaque pointer. A fake ops table is still
+ * required so th_file_init has something non-garbage to store. */
+static th_file_ops th_unused_file_ops;
+
 typedef struct th_fake_socket_ops {
     th_socket_ops base;
     char written[64];
@@ -177,7 +183,7 @@ TH_TEST_BEGIN(sendfile)
     th_socket_init(&socket, &loop, &ops.base);
     th_socket_set_fd(&socket, 5);
     th_file file;
-    th_file_init(&file);
+    th_file_init(&file, &th_unused_file_ops);
 
     TH_TEST_CASE_BEGIN(sendfile_no_header_sends_whole_file_in_one_call)
     {

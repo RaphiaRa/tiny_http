@@ -45,7 +45,7 @@ TH_TEST_BEGIN(dir_mgr)
     TH_TEST_CASE_BEGIN(dir_mgr_add)
     {
         th_dir dir;
-        th_dir_init(&dir, &ops.base, NULL);
+        th_dir_init(&dir, &ops.base);
         TH_EXPECT(th_dir_open(&dir, TH_STR("/")) == TH_ERR_OK);
 
         TH_EXPECT(th_dir_mgr_add(&mgr, TH_STR("test"), dir) == TH_ERR_OK);
@@ -56,12 +56,12 @@ TH_TEST_BEGIN(dir_mgr)
     TH_TEST_CASE_BEGIN(dir_mgr_add_duplicate_label)
     {
         th_dir dir1;
-        th_dir_init(&dir1, &ops.base, NULL);
+        th_dir_init(&dir1, &ops.base);
         TH_EXPECT(th_dir_open(&dir1, TH_STR("/")) == TH_ERR_OK);
         TH_EXPECT(th_dir_mgr_add(&mgr, TH_STR("test"), dir1) == TH_ERR_OK);
 
         th_dir dir2;
-        th_dir_init(&dir2, &ops.base, NULL);
+        th_dir_init(&dir2, &ops.base);
         TH_EXPECT(th_dir_open(&dir2, TH_STR("/")) == TH_ERR_OK);
         TH_EXPECT(th_dir_mgr_add(&mgr, TH_STR("test"), dir2) == TH_ERR_INVALID_ARG);
 

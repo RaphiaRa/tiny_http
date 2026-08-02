@@ -1,5 +1,4 @@
 #include "th_file.h"
-#include "th_align.h"
 #include "th_allocator.h"
 #include "th_config.h"
 #include "th_fmt.h"
@@ -12,7 +11,6 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #endif
@@ -85,28 +83,6 @@ th_file_ops_os_write(void* self, int fd, const void* addr, size_t len, size_t of
     return TH_ERR_OK;
 }
 
-TH_LOCAL(th_err)
-th_file_ops_os_mmap(void* self, int fd, size_t offset, size_t len, void** addr, size_t* mapped_offset, size_t* mapped_len)
-{
-    (void)self;
-    size_t page_size = (size_t)sysconf(_SC_PAGESIZE);
-    size_t moffset = TH_ALIGNDOWN(offset, page_size);
-    void* ret = mmap(NULL, len, PROT_READ, MAP_PRIVATE, fd, (off_t)moffset);
-    if (ret == MAP_FAILED)
-        return TH_ERR_SYSTEM(errno);
-    *addr = ret;
-    *mapped_offset = moffset;
-    *mapped_len = len;
-    return TH_ERR_OK;
-}
-
-TH_LOCAL(void)
-th_file_ops_os_munmap(void* self, void* addr, size_t len)
-{
-    (void)self;
-    munmap(addr, len);
-}
-
 /**
  * We use DJB2 hash function, without multiplication,
  * as it's faster and good enough for our purposes.
@@ -157,8 +133,6 @@ th_file_ops_os(void)
         .openat = th_file_ops_os_openat,
         .read = th_file_ops_os_read,
         .write = th_file_ops_os_write,
-        .mmap = th_file_ops_os_mmap,
-        .munmap = th_file_ops_os_munmap,
         .stat_hash = th_file_ops_os_stat_hash,
         .close = th_file_ops_os_close,
     };
@@ -167,51 +141,6 @@ th_file_ops_os(void)
 #endif
 
 /* th_file_ops implementation end */
-/* th_file_mmap implementation begin */
-
-TH_LOCAL(void)
-th_file_mmap_init(th_file_mmap* view)
-{
-    view->addr = 0;
-    view->offset = 0;
-    view->len = 0;
-}
-
-TH_LOCAL(void)
-th_file_mmap_munmap(th_file* file, th_file_mmap* view)
-{
-    file->ops->munmap(file->ops, view->addr, view->len);
-    view->addr = 0;
-    view->len = 0;
-    view->offset = 0;
-}
-
-TH_LOCAL(th_err)
-th_file_mmap_map(th_file* file, th_file_mmap* view, size_t offset, size_t len)
-{
-    if (view->addr)
-        th_file_mmap_munmap(file, view);
-    len = TH_MIN(len, file->size - offset);
-    void* addr = NULL;
-    size_t mapped_offset = 0;
-    size_t mapped_len = 0;
-    th_err err = file->ops->mmap(file->ops, file->fd, offset, len, &addr, &mapped_offset, &mapped_len);
-    if (err != TH_ERR_OK)
-        return err;
-    view->addr = addr;
-    view->offset = mapped_offset;
-    view->len = mapped_len;
-    return TH_ERR_OK;
-}
-
-TH_LOCAL(void)
-th_file_mmap_deinit(th_file* file, th_file_mmap* view)
-{
-    if (view->addr)
-        th_file_mmap_munmap(file, view);
-}
-
-/* th_file_mmap implementation end */
 /* th_file implementation begin */
 
 TH_PRIVATE(void)
@@ -219,7 +148,6 @@ th_file_init(th_file* stream, th_file_ops* ops)
 {
     stream->ops = ops;
     stream->fd = -1;
-    th_file_mmap_init(&stream->view);
 }
 
 TH_PRIVATE(th_err)
@@ -247,21 +175,6 @@ th_file_write(th_file* stream, const void* addr, size_t len, size_t offset, size
     return stream->ops->write(stream->ops, stream->fd, addr, len, offset, written);
 }
 
-TH_PRIVATE(th_err)
-th_file_get_view(th_file* stream, th_fileview* view, size_t offset, size_t len)
-{
-    th_err err = TH_ERR_OK;
-    if (stream->view.addr == NULL
-        || stream->view.offset > offset
-        || stream->view.offset + stream->view.len < offset + 8 * 1024) {
-        if ((err = th_file_mmap_map(stream, &stream->view, offset, len)) != TH_ERR_OK)
-            return err;
-    }
-    view->ptr = (uint8_t*)stream->view.addr + (offset - stream->view.offset);
-    view->len = stream->view.len - (offset - stream->view.offset);
-    return TH_ERR_OK;
-}
-
 TH_PRIVATE(uint32_t)
 th_file_stat_hash(th_file* stream)
 {
@@ -271,7 +184,6 @@ th_file_stat_hash(th_file* stream)
 TH_PRIVATE(void)
 th_file_close(th_file* stream)
 {
-    th_file_mmap_deinit(stream, &stream->view);
     if (stream->fd != -1)
         stream->ops->close(stream->ops, stream->fd);
     stream->fd = -1;

@@ -74,27 +74,6 @@ th_fake_file_ops_write(void* self, int fd, const void* addr, size_t len, size_t 
     return TH_ERR_OK;
 }
 
-static th_err
-th_fake_file_ops_mmap(void* self, int fd, size_t offset, size_t len, void** addr, size_t* mapped_offset, size_t* mapped_len)
-{
-    (void)self;
-    (void)fd;
-    (void)offset;
-    (void)len;
-    *addr = NULL;
-    *mapped_offset = 0;
-    *mapped_len = 0;
-    return TH_ERR_NOSUPPORT;
-}
-
-static void
-th_fake_file_ops_munmap(void* self, void* addr, size_t len)
-{
-    (void)self;
-    (void)addr;
-    (void)len;
-}
-
 static uint32_t
 th_fake_file_ops_stat_hash(void* self, int fd)
 {
@@ -116,8 +95,6 @@ th_fake_file_ops_init(th_fake_file_ops* ops)
     ops->base.openat = th_fake_file_ops_openat;
     ops->base.read = th_fake_file_ops_read;
     ops->base.write = th_fake_file_ops_write;
-    ops->base.mmap = th_fake_file_ops_mmap;
-    ops->base.munmap = th_fake_file_ops_munmap;
     ops->base.stat_hash = th_fake_file_ops_stat_hash;
     ops->base.close = th_fake_file_ops_close;
     ops->next_fd = 3;

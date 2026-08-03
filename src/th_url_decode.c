@@ -5,7 +5,7 @@ th_url_decode_next(th_str str, size_t* pos, char* out, th_url_decode_type type)
 {
     size_t i = *pos;
     if (str.ptr[i] == '%') {
-        char c = 0;
+        int c = 0;
         for (size_t k = 0; k < 2; k++) {
             if (i + 1 + k >= str.len)
                 return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
@@ -20,7 +20,7 @@ th_url_decode_next(th_str str, size_t* pos, char* out, th_url_decode_type type)
                 return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
             }
         }
-        *out = c;
+        *out = (char)c;
         i += 3;
     } else if (type == TH_URL_DECODE_TYPE_QUERY && str.ptr[i] == '+') {
         *out = ' ';

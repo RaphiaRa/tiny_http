@@ -107,6 +107,33 @@ TH_TEST_BEGIN(request_parser)
         TH_EXPECT(th_request_parser_parse(&parser, &request, th_str_make(buffer, sizeof(buffer)), &parsed) == TH_ERR_HTTP(TH_CODE_BAD_REQUEST));
     }
     TH_TEST_CASE_END
+    TH_TEST_CASE_BEGIN(parse_cookies)
+    {
+        th_str data = TH_STR("GET /test HTTP/1.1\r\nHost: example.com\r\nCookie: name1=value1; name2=value2\r\n\r\n");
+        size_t parsed = 0;
+        TH_EXPECT(th_request_parser_parse(&parser, &request, data, &parsed) == TH_ERR_OK);
+        TH_EXPECT(parsed == data.len);
+        TH_EXPECT(strcmp(th_find_cookie(&request, "name1"), "value1") == 0);
+        TH_EXPECT(strcmp(th_find_cookie(&request, "name2"), "value2") == 0);
+        TH_EXPECT(th_find_cookie(&request, "nonexistent") == NULL);
+    }
+    TH_TEST_CASE_END
+    TH_TEST_CASE_BEGIN(parse_cookie_with_extra_whitespace)
+    {
+        th_str data = TH_STR("GET /test HTTP/1.1\r\nHost: example.com\r\nCookie:   name  =  value  \r\n\r\n");
+        size_t parsed = 0;
+        TH_EXPECT(th_request_parser_parse(&parser, &request, data, &parsed) == TH_ERR_OK);
+        TH_EXPECT(parsed == data.len);
+        TH_EXPECT(strcmp(th_find_cookie(&request, "name"), "value") == 0);
+    }
+    TH_TEST_CASE_END
+    TH_TEST_CASE_BEGIN(parse_bad_cookie_missing_equals)
+    {
+        th_str data = TH_STR("GET /test HTTP/1.1\r\nHost: example.com\r\nCookie: not_a_valid_cookie\r\n\r\n");
+        size_t parsed = 0;
+        TH_EXPECT(th_request_parser_parse(&parser, &request, data, &parsed) == TH_ERR_HTTP(TH_CODE_BAD_REQUEST));
+    }
+    TH_TEST_CASE_END
     TH_TEST_CASE_BEGIN(parse_multipart_form_data)
     {
         th_str data = TH_STR("POST / HTTP/1.1\r\nContent-Length: 472\r\n"

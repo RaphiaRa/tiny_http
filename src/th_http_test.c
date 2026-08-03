@@ -289,6 +289,33 @@ TH_TEST_BEGIN(http)
         TH_EXPECT(conn.destroyed);
     }
     TH_TEST_CASE_END
+    TH_TEST_CASE_BEGIN(http_handles_options_for_known_route)
+    {
+        th_fake_conn_set_request(&conn, TH_STR("OPTIONS /test HTTP/1.1\r\nHost: example.com\r\nConnection: close\r\n\r\n"));
+
+        th_conn_upgrader_upgrade(&upgrader.base, &conn.base);
+        while (!conn.destroyed && conn.callback != NULL)
+            th_fake_conn_run(&conn);
+
+        TH_EXPECT(th_buf_starts_with(conn.written, conn.written_len, "HTTP/1.1 200 OK\r\n"));
+        TH_EXPECT(th_buf_has_header(conn.written, conn.written_len, "Allow", "OPTIONS, GET, HEAD, POST"));
+        TH_EXPECT(th_buf_has_header(conn.written, conn.written_len, "Content-Type", "text/plain"));
+        TH_EXPECT(conn.destroyed);
+    }
+    TH_TEST_CASE_END
+    TH_TEST_CASE_BEGIN(http_handles_options_wildcard)
+    {
+        th_fake_conn_set_request(&conn, TH_STR("OPTIONS * HTTP/1.1\r\nHost: example.com\r\nConnection: close\r\n\r\n"));
+
+        th_conn_upgrader_upgrade(&upgrader.base, &conn.base);
+        while (!conn.destroyed && conn.callback != NULL)
+            th_fake_conn_run(&conn);
+
+        TH_EXPECT(th_buf_starts_with(conn.written, conn.written_len, "HTTP/1.1 200 OK\r\n"));
+        TH_EXPECT(th_buf_has_header(conn.written, conn.written_len, "Allow", "OPTIONS, GET, HEAD, POST, PUT, DELETE, PATCH"));
+        TH_EXPECT(conn.destroyed);
+    }
+    TH_TEST_CASE_END
 
     th_router_deinit(&router);
     th_conn_tracker_deinit(&tracker);

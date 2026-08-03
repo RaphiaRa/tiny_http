@@ -44,6 +44,7 @@ SET(TH_CORE_SRC
     src/th_accept.c
     src/th_tcp_conn.c
     src/th_request_parser.c
+    src/th_cookie_parser.c
     src/th_request.c
     src/th_response.c
     src/th_conn.c
@@ -198,6 +199,7 @@ if (NOT TH_DISABLE_TESTS)
         src/th_router_test.c
         src/th_allocator_test.c
         src/th_request_parser_test.c
+        src/th_cookie_parser_test.c
         src/th_response_test.c
         src/th_http_test.c
         src/th_fcache_test.c

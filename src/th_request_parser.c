@@ -1,5 +1,6 @@
 #include "th_request_parser.h"
 
+#include "th_cookie_parser.h"
 #include "th_header_id.h"
 
 #undef TH_LOG_TAG
@@ -28,34 +29,19 @@ th_request_parser_content_len(th_request_parser* parser)
 }
 
 TH_LOCAL(th_err)
-th_request_parser_do_cookie(th_request* request, th_str cookie)
-{
-    size_t eq = th_str_find_first(cookie, 0, '=');
-    if (eq == th_str_npos) {
-        return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
-    }
-    th_str key = th_str_trim(th_str_substr(cookie, 0, eq));
-    th_str value = th_str_trim(th_str_substr(cookie, eq + 1, cookie.len));
-    th_err err = TH_ERR_OK;
-    if ((err = th_request_add_cookie(request, key, value)) != TH_ERR_OK) {
-        return err;
-    }
-    return TH_ERR_OK;
-}
-
-TH_LOCAL(th_err)
 th_request_parser_do_cookie_list(th_request* request, th_str cookie_list)
 {
-    size_t start = 0;
-    size_t pos = 0;
-    while (pos != th_str_npos) {
-        pos = th_str_find_first(cookie_list, start, ';');
-        th_str cookie = th_str_trim(th_str_substr(cookie_list, start, pos - start));
-        th_err err = th_request_parser_do_cookie(request, cookie);
+    th_cookie_parser parser;
+    th_cookie_parser_init(&parser, cookie_list);
+    while (!th_cookie_parser_done(&parser)) {
+        th_str key, value;
+        th_err err = th_cookie_parser_next(&parser, &key, &value);
         if (err != TH_ERR_OK) {
             return err;
         }
-        start = pos + 1;
+        if ((err = th_request_add_cookie(request, key, value)) != TH_ERR_OK) {
+            return err;
+        }
     }
     return TH_ERR_OK;
 }

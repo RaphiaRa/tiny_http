@@ -5,7 +5,7 @@
 
 #include "th_config.h"
 #include "th_dir_mgr.h"
-#include "th_fcache.h"
+#include "th_file.h"
 #include "th_string.h"
 
 struct th_upload {
@@ -14,11 +14,11 @@ struct th_upload {
     th_string content_type;
     th_str data;
     th_dir_mgr* dir_mgr;
-    th_fcache* fcache;
+    th_file_ops* file_ops;
 };
 
 TH_PRIVATE(void)
-th_upload_init(th_upload* upload, th_str buffer, th_dir_mgr* dir_mgr, th_fcache* fcache, th_allocator* allocator);
+th_upload_init(th_upload* upload, th_str buffer, th_dir_mgr* dir_mgr, th_file_ops* file_ops, th_allocator* allocator);
 
 TH_PRIVATE(void)
 th_upload_deinit(th_upload* upload);

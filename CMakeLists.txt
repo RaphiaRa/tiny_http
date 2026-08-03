@@ -204,6 +204,7 @@ if (NOT TH_DISABLE_TESTS)
         src/th_str_test.c
         src/th_list_test.c
         src/th_dir_mgr_test.c
+        src/th_upload_test.c
         src/th_string_test.c
     )
 

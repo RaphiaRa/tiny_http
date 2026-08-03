@@ -127,6 +127,17 @@ TH_TEST_BEGIN(request_parser)
         TH_EXPECT(strcmp(th_find_cookie(&request, "name"), "value") == 0);
     }
     TH_TEST_CASE_END
+    TH_TEST_CASE_BEGIN(parse_quoted_cookie_value)
+    {
+        // RFC 6265: a cookie-value may be wrapped in a single pair of
+        // DQUOTEs, which are wire-format framing, not part of the value.
+        th_str data = TH_STR("GET /test HTTP/1.1\r\nHost: example.com\r\nCookie: name=\"quoted value\"\r\n\r\n");
+        size_t parsed = 0;
+        TH_EXPECT(th_request_parser_parse(&parser, &request, data, &parsed) == TH_ERR_OK);
+        TH_EXPECT(parsed == data.len);
+        TH_EXPECT(strcmp(th_find_cookie(&request, "name"), "quoted value") == 0);
+    }
+    TH_TEST_CASE_END
     TH_TEST_CASE_BEGIN(parse_bad_cookie_missing_equals)
     {
         th_str data = TH_STR("GET /test HTTP/1.1\r\nHost: example.com\r\nCookie: not_a_valid_cookie\r\n\r\n");

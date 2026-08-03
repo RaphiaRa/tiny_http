@@ -74,7 +74,7 @@ SET(TH_TEST_SRC
     src/th_test.c
 )
 
-add_library(tiny_http 
+add_library(tiny_http
     ${TH_CORE_SRC}
 )
 add_library(tiny_http::tiny_http ALIAS tiny_http)
@@ -84,6 +84,23 @@ if(CMAKE_C_COMPILER_ID MATCHES "Clang|GNU")
    SET(TH_WOPTIONS -Wall -Wextra -Wpedantic -Werror -Wstrict-prototypes -Wmissing-prototypes -Wshadow -Wconversion)
    message(STATUS "Using Clang/GNU compiler, enabling extra warnings: ${TH_WOPTIONS}")
    target_compile_options(tiny_http PRIVATE ${TH_WOPTIONS})
+endif()
+
+# Address sanitizer (off by default - opt in, e.g. for test builds)
+option(TH_ENABLE_ASAN "Build tiny_http with AddressSanitizer" OFF)
+if (TH_ENABLE_ASAN)
+    include(CMakePushCheckState)
+    include(CheckCCompilerFlag)
+    cmake_push_check_state(RESET)
+    set(CMAKE_REQUIRED_LINK_OPTIONS -fsanitize=address)
+    check_c_compiler_flag("-fsanitize=address" TH_HAVE_ASAN)
+    cmake_pop_check_state()
+    if (TH_HAVE_ASAN)
+        target_compile_options(tiny_http PUBLIC -fsanitize=address -fno-omit-frame-pointer)
+        target_link_options(tiny_http PUBLIC -fsanitize=address -fno-omit-frame-pointer)
+    else()
+        message(WARNING "TH_ENABLE_ASAN is on but AddressSanitizer is not supported by this compiler")
+    endif()
 endif()
 
 # Link time optimization
@@ -142,42 +159,15 @@ endif()
 # Tests
 
 if (NOT TH_DISABLE_TESTS)
-    include(CMakePushCheckState)
-    include(CheckCCompilerFlag)
-    cmake_push_check_state(RESET)
-    set(CMAKE_REQUIRED_LINK_OPTIONS -fsanitize=address)
-    check_c_compiler_flag("-fsanitize=address" TH_HAVE_ASAN)
-    cmake_pop_check_state()
-
-    add_library(tiny_http_test
-        ${TH_CORE_SRC}
-        ${TH_TEST_SRC}
-    )
-    if (OpenSSL_FOUND)
-        target_link_libraries(tiny_http_test PRIVATE OpenSSL::SSL OpenSSL::Crypto)
-    endif()
-    if (TH_HAVE_ASAN)
-        target_compile_options(tiny_http_test PUBLIC -fsanitize=address -fno-omit-frame-pointer)
-        target_link_options(tiny_http_test PUBLIC -fsanitize=address -fno-omit-frame-pointer)
-    else()
-        message(WARNING "Address sanitizer not found, tests will not be run with ASAN")
-    endif()
-
-    option(TH_ENABLE_COVERAGE "Instrument tiny_http_test with gcov coverage" OFF)
+    option(TH_ENABLE_COVERAGE "Instrument tiny_http with gcov coverage" OFF)
     if (TH_ENABLE_COVERAGE)
         if (NOT CMAKE_C_COMPILER_ID MATCHES "Clang|GNU")
             message(FATAL_ERROR "TH_ENABLE_COVERAGE requires Clang or GNU")
         endif()
-        target_compile_options(tiny_http_test PUBLIC --coverage -O0 -g)
-        target_link_options(tiny_http_test PUBLIC --coverage)
+        target_compile_options(tiny_http PUBLIC --coverage -O0 -g)
+        target_link_options(tiny_http PUBLIC --coverage)
     endif()
 
-    target_compile_definitions(tiny_http_test PRIVATE TH_LOG_LEVEL=${TH_LOG_LEVEL})
-    target_compile_definitions(tiny_http_test PRIVATE TH_WITH_SSL=${TH_WITH_SSL})
-    target_include_directories(tiny_http_test 
-        PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>/include
-        PRIVATE src
-    )
     enable_testing()
     set(CMAKE_TESTDRIVER_BEFORE_TESTMAIN "th_test_setup();")
     set(CMAKE_TESTDRIVER_AFTER_TESTMAIN "th_test_teardown();")
@@ -216,11 +206,12 @@ if (NOT TH_DISABLE_TESTS)
         EXTRA_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/src/th_test.h
     )
 
-    add_executable(th_test ${TH_TEST_SRC_LIST})
+    add_executable(th_test ${TH_TEST_SRC_LIST} ${TH_TEST_SRC})
 
-    target_link_libraries(th_test PUBLIC 
-        tiny_http_test
+    target_link_libraries(th_test PUBLIC
+        tiny_http::tiny_http
     )
+    target_include_directories(th_test PRIVATE src)
 
     foreach (test_src ${TH_TESTS})
         get_filename_component(test_name ${test_src} NAME_WE)

@@ -1,14 +1,14 @@
 #include "th_upload.h"
 
 TH_PRIVATE(void)
-th_upload_init(th_upload* upload, th_str buffer, th_dir_mgr* dir_mgr, th_fcache* fcache, th_allocator* allocator)
+th_upload_init(th_upload* upload, th_str buffer, th_dir_mgr* dir_mgr, th_file_ops* file_ops, th_allocator* allocator)
 {
     th_string_init(&upload->name, allocator);
     th_string_init(&upload->filename, allocator);
     th_string_init(&upload->content_type, allocator);
     upload->data = buffer;
     upload->dir_mgr = dir_mgr;
-    upload->fcache = fcache;
+    upload->file_ops = file_ops;
 }
 
 TH_PRIVATE(void)
@@ -65,7 +65,7 @@ th_upload_save(const th_upload* upload, const char* dir_label, const char* filep
     th_err err = TH_ERR_OK;
     th_open_opt opt = {.create = true, .write = true, .truncate = true};
     th_file file;
-    th_file_init(&file, upload->fcache->file_ops);
+    th_file_init(&file, upload->file_ops);
     if ((err = th_file_openat(&file, dir, th_str_from_cstr(filepath), opt)) != TH_ERR_OK)
         return err;
     size_t total_written = 0;

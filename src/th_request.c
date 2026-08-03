@@ -127,7 +127,7 @@ TH_PRIVATE(th_err)
 th_request_add_upload(th_request* request, th_str data, th_str name, th_str filename, th_str content_type)
 {
     th_upload upload;
-    th_upload_init(&upload, data, request->dir_mgr, request->fcache, request->allocator);
+    th_upload_init(&upload, data, request->dir_mgr, request->fcache ? request->fcache->file_ops : NULL, request->allocator);
     th_err err = TH_ERR_OK;
     if ((err = th_upload_set_name(&upload, name)) != TH_ERR_OK)
         goto cleanup_upload;

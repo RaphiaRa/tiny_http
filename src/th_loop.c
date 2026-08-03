@@ -7,6 +7,7 @@ th_loop_init(th_loop* loop, th_reactor* reactor)
     loop->reactor = reactor;
     loop->queue = th_task_queue_make();
     loop->num_tasks = 0;
+    th_task_init(&loop->reactor_task, NULL, NULL);
     th_task_queue_push(&loop->queue, &loop->reactor_task);
 }
 

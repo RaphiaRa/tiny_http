@@ -181,6 +181,7 @@ TH_TEST_BEGIN(http)
     th_router router;
     th_router_init(&router, th_default_allocator_get());
     TH_EXPECT(th_router_add_route(&router, TH_METHOD_GET, TH_STR("/test"), th_test_handler, NULL) == TH_ERR_OK);
+    TH_EXPECT(th_router_add_route(&router, TH_METHOD_POST, TH_STR("/test"), th_test_handler, NULL) == TH_ERR_OK);
     th_http_upgrader upgrader;
     th_http_upgrader_init(&upgrader, &tracker, &router, NULL, NULL, th_default_allocator_get());
     th_fake_conn conn;
@@ -248,6 +249,44 @@ TH_TEST_BEGIN(http)
 
         TH_EXPECT(conn.destroyed);
         TH_EXPECT(th_buf_starts_with(conn.written, conn.written_len, "HTTP/1.1 200 OK\r\n"));
+    }
+    TH_TEST_CASE_END
+    TH_TEST_CASE_BEGIN(http_handles_partial_header)
+    {
+        //"GET /test HTTP/1.1\r\nHost: example.com\r\nConnection: close\r\n\r\n");
+        th_fake_conn_set_request(&conn, TH_STR("GET /test HTTP/1.1\r\nHost: ex"));
+        th_conn_upgrader_upgrade(&upgrader.base, &conn.base);
+        th_fake_conn_run(&conn);
+        TH_EXPECT(!conn.destroyed);
+        TH_EXPECT(conn.written_len == 0); // still waiting on the rest of the header
+
+        // remaining bytes
+        th_fake_conn_set_request(&conn, TH_STR("ample.com\r\nConnection: close\r\n\r\n"));
+        while (!conn.destroyed && conn.callback != NULL)
+            th_fake_conn_run(&conn);
+
+        TH_EXPECT(th_buf_starts_with(conn.written, conn.written_len, "HTTP/1.1 200 OK\r\n"));
+        TH_EXPECT(th_buf_ends_with(conn.written, conn.written_len, "Hello, World!"));
+        TH_EXPECT(conn.destroyed);
+    }
+    TH_TEST_CASE_END
+    TH_TEST_CASE_BEGIN(http_handles_partial_body)
+    {
+        // POST /test HTTP/1.1\r\nHost: example.com\r\nConnection: close\r\nContent-Length: 11\r\n\r\nHello, World!
+        th_fake_conn_set_request(&conn, TH_STR("POST /test HTTP/1.1\r\nHost: example.com\r\nConnection: close\r\nContent-Length: 11\r\n\r\nHello"));
+        th_conn_upgrader_upgrade(&upgrader.base, &conn.base);
+        th_fake_conn_run(&conn);
+        TH_EXPECT(!conn.destroyed);
+        TH_EXPECT(conn.written_len == 0); // still waiting on the rest of the body
+
+        // Remaining bytes
+        th_fake_conn_set_request(&conn, TH_STR(", World!"));
+        while (!conn.destroyed && conn.callback != NULL)
+            th_fake_conn_run(&conn);
+
+        TH_EXPECT(th_buf_starts_with(conn.written, conn.written_len, "HTTP/1.1 200 OK\r\n"));
+        TH_EXPECT(th_buf_ends_with(conn.written, conn.written_len, "Hello, World!"));
+        TH_EXPECT(conn.destroyed);
     }
     TH_TEST_CASE_END
 

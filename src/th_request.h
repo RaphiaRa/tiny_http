@@ -5,7 +5,7 @@
 
 #include "th_config.h"
 #include "th_dir_mgr.h"
-#include "th_fcache.h"
+#include "th_file.h"
 #include "th_method.h"
 #include "th_string.h"
 #include "th_upload.h"
@@ -36,7 +36,7 @@ TH_DEFINE_VEC(th_upload_vec, th_upload, th_upload_deinit)
 struct th_request {
     th_allocator* allocator;
     th_dir_mgr* dir_mgr;
-    th_fcache* fcache;
+    th_file_ops* file_ops;
     th_string uri_path;
     th_string uri_query;
     th_upload_vec uploads;
@@ -52,7 +52,7 @@ struct th_request {
 };
 
 TH_PRIVATE(void)
-th_request_init(th_request* request, th_dir_mgr* dir_mgr, th_fcache* fcache, th_allocator* allocator);
+th_request_init(th_request* request, th_dir_mgr* dir_mgr, th_file_ops* file_ops, th_allocator* allocator);
 
 TH_PRIVATE(void)
 th_request_deinit(th_request* request);

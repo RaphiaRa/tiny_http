@@ -127,7 +127,7 @@ TH_PRIVATE(th_err)
 th_request_add_upload(th_request* request, th_str data, th_str name, th_str filename, th_str content_type)
 {
     th_upload upload;
-    th_upload_init(&upload, data, request->dir_mgr, request->fcache ? request->fcache->file_ops : NULL, request->allocator);
+    th_upload_init(&upload, data, request->dir_mgr, request->file_ops, request->allocator);
     th_err err = TH_ERR_OK;
     if ((err = th_upload_set_name(&upload, name)) != TH_ERR_OK)
         goto cleanup_upload;
@@ -199,11 +199,11 @@ th_request_set_body(th_request* request, th_str body)
 }
 
 TH_PRIVATE(void)
-th_request_init(th_request* request, th_dir_mgr* dir_mgr, th_fcache* fcache, th_allocator* allocator)
+th_request_init(th_request* request, th_dir_mgr* dir_mgr, th_file_ops* file_ops, th_allocator* allocator)
 {
     request->allocator = allocator ? allocator : th_default_allocator_get();
     request->dir_mgr = dir_mgr;
-    request->fcache = fcache;
+    request->file_ops = file_ops;
     th_string_init(&request->uri_path, request->allocator);
     th_string_init(&request->uri_query, request->allocator);
     th_upload_vec_init(&request->uploads, request->allocator);

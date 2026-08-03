@@ -277,7 +277,7 @@ th_http_init(th_http* http, const th_conn_tracker* tracker, th_conn* conn,
 {
     allocator = allocator ? allocator : th_default_allocator_get();
     th_request_parser_init(&http->parser);
-    th_request_init(&http->request, dir_mgr, fcache, allocator);
+    th_request_init(&http->request, dir_mgr, fcache ? fcache->file_ops : NULL, allocator);
     th_response_init(&http->response, dir_mgr, fcache, allocator);
     th_buf_vec_init(&http->buf, allocator);
     http->tracker = tracker;

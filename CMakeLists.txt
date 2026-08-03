@@ -199,6 +199,7 @@ if (NOT TH_DISABLE_TESTS)
         src/th_allocator_test.c
         src/th_request_parser_test.c
         src/th_response_test.c
+        src/th_http_test.c
         src/th_fcache_test.c
         src/th_hashmap_test.c
         src/th_str_test.c

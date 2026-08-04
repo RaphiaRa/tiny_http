@@ -270,6 +270,7 @@ if (TH_ENABLE_BENCHMARKS)
 
     set(TH_BENCHES
         src/th_str_bench.c
+        src/th_cookie_parser_bench.c
         src/th_multipart_parser_bench.c
     )
 

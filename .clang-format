@@ -24,4 +24,4 @@ BraceWrapping:
   BeforeCatch: false
   BeforeElse: false
   IndentBraces: false
-StatementMacros: [ 'TH_TEST_BEGIN(name)', 'TH_TEST_END' , 'TH_TEST_CASE_BEGIN(name)', 'TH_TEST_CASE_END' , 'TH_EXPECT(x)', 'TH_STRING(x)']
+StatementMacros: [ 'TH_TEST_BEGIN(name)', 'TH_TEST_END' , 'TH_TEST_CASE_BEGIN(name)', 'TH_TEST_CASE_END' , 'TH_EXPECT(x)', 'TH_STRING(x)', 'TH_BENCH_BEGIN(name)', 'TH_BENCH_END', 'TH_BENCH_CASE_BEGIN(name, iterations)', 'TH_BENCH_CASE_END', 'TH_BENCH_RUN_BEGIN', 'TH_BENCH_RUN_END']

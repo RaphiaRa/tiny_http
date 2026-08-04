@@ -89,20 +89,23 @@ TH_LOCAL(th_err)
 th_route_consume_trail(th_route_segment* route, th_request* request, th_str* trail, bool dry, bool* result)
 {
     th_str route_name = th_string_view(&route->name);
-    th_string decoded = {0};
-    th_string_init(&decoded, route->allocator);
+    th_str raw_segment = th_str_substr(*trail, 0, th_str_find_first_of(*trail, 0, "/?"));
+    th_string decoded;
+    bool decoded_init = false;
+    th_str segment = raw_segment;
     th_err err = TH_ERR_OK;
-    if ((err = th_url_decode_string(th_str_substr(*trail, 0, th_str_find_first_of(*trail, 0, "/?")), &decoded, TH_URL_DECODE_TYPE_PATH))
-        != TH_ERR_OK) {
-        goto cleanup;
+    if (th_str_find_first(raw_segment, 0, '%') != th_str_npos) {
+        th_string_init(&decoded, route->allocator);
+        decoded_init = true;
+        if ((err = th_url_decode_string(raw_segment, &decoded, TH_URL_DECODE_TYPE_PATH)) != TH_ERR_OK) {
+            goto cleanup;
+        }
+        segment = th_string_view(&decoded);
     }
-    th_str segment = th_string_view(&decoded);
-    // if (th_str_empty(segment) && route->type != TH_CAPTURE_TYPE_NONE)
-    //     return false;
     switch (route->type) {
     case TH_CAPTURE_TYPE_NONE:
         if (th_str_eq(route_name, segment)) {
-            *trail = th_str_substr(*trail, segment.len + 1, th_str_npos);
+            *trail = th_str_substr(*trail, raw_segment.len + 1, th_str_npos);
             *result = true;
         }
         break;
@@ -110,14 +113,14 @@ th_route_consume_trail(th_route_segment* route, th_request* request, th_str* tra
         if (th_str_is_uint(segment)) {
             if (!dry)
                 (void)th_request_add_pathvar(request, route_name, segment);
-            *trail = th_str_substr(*trail, segment.len + 1, th_str_npos);
+            *trail = th_str_substr(*trail, raw_segment.len + 1, th_str_npos);
             *result = true;
         }
         break;
     case TH_CAPTURE_TYPE_STRING:
         if (!dry)
             (void)th_request_add_pathvar(request, route_name, segment);
-        *trail = th_str_substr(*trail, segment.len + 1, th_str_npos);
+        *trail = th_str_substr(*trail, raw_segment.len + 1, th_str_npos);
         *result = true;
         break;
     case TH_CAPTURE_TYPE_PATH:
@@ -130,7 +133,8 @@ th_route_consume_trail(th_route_segment* route, th_request* request, th_str* tra
         break;
     }
 cleanup:
-    th_string_deinit(&decoded);
+    if (decoded_init)
+        th_string_deinit(&decoded);
     return err;
 }
 

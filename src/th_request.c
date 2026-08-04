@@ -41,34 +41,34 @@ static th_iter_methods th_hstr_iter_methods = {
 };
 
 // hstr iterator end
-// upload iterator begin
+// part iterator begin
 
 TH_INLINE(bool)
-th_upload_iter_next(th_iter* it)
+th_part_iter_next(th_iter* it)
 {
-    it->ptr = ((const th_upload*)it->ptr) + 1;
+    it->ptr = ((const th_part*)it->ptr) + 1;
     return it->ptr < it->end;
 }
 
 TH_INLINE(const char*)
-th_upload_iter_key(const th_iter* it)
+th_part_iter_key(const th_iter* it)
 {
-    return th_string_data(&((const th_upload*)it->ptr)->name);
+    return th_string_data(&((const th_part*)it->ptr)->name);
 }
 
 TH_INLINE(const void*)
-th_upload_iter_val(const th_iter* it)
+th_part_iter_val(const th_iter* it)
 {
     return it->ptr;
 }
 
-static th_iter_methods th_upload_iter_methods = {
-    .next = th_upload_iter_next,
-    .key = th_upload_iter_key,
-    .val = th_upload_iter_val,
+static th_iter_methods th_part_iter_methods = {
+    .next = th_part_iter_next,
+    .key = th_part_iter_key,
+    .val = th_part_iter_val,
 };
 
-// upload iterator end
+// part iterator end
 
 TH_LOCAL(th_err)
 th_request_map_store(th_request* request, th_hstr_vec* vec, th_str key, th_str value)
@@ -124,22 +124,22 @@ th_request_add_header(th_request* request, th_str key, th_str value)
 }
 
 TH_PRIVATE(th_err)
-th_request_add_upload(th_request* request, th_str data, th_str name, th_str filename, th_str content_type)
+th_request_add_part(th_request* request, th_str content, th_str name, th_str filename, th_str content_type)
 {
-    th_upload upload;
-    th_upload_init(&upload, data, request->dir_mgr, request->file_ops, request->allocator);
+    th_part part;
+    th_part_init(&part, content, request->allocator);
     th_err err = TH_ERR_OK;
-    if ((err = th_upload_set_name(&upload, name)) != TH_ERR_OK)
-        goto cleanup_upload;
-    if ((err = th_upload_set_filename(&upload, filename)) != TH_ERR_OK)
-        goto cleanup_upload;
-    if ((err = th_upload_set_content_type(&upload, content_type)) != TH_ERR_OK)
-        goto cleanup_upload;
-    if ((err = th_upload_vec_push_back(&request->uploads, upload)) != TH_ERR_OK)
-        goto cleanup_upload;
+    if ((err = th_part_set_name(&part, name)) != TH_ERR_OK)
+        goto cleanup_part;
+    if ((err = th_part_set_filename(&part, filename)) != TH_ERR_OK)
+        goto cleanup_part;
+    if ((err = th_part_set_content_type(&part, content_type)) != TH_ERR_OK)
+        goto cleanup_part;
+    if ((err = th_part_vec_push_back(&request->parts, part)) != TH_ERR_OK)
+        goto cleanup_part;
     return TH_ERR_OK;
-cleanup_upload:
-    th_upload_deinit(&upload);
+cleanup_part:
+    th_part_deinit(&part);
     return err;
 }
 
@@ -206,7 +206,7 @@ th_request_init(th_request* request, th_dir_mgr* dir_mgr, th_file_ops* file_ops,
     request->file_ops = file_ops;
     th_string_init(&request->uri_path, request->allocator);
     th_string_init(&request->uri_query, request->allocator);
-    th_upload_vec_init(&request->uploads, request->allocator);
+    th_part_vec_init(&request->parts, request->allocator);
     th_hstr_vec_init(&request->cookies, request->allocator);
     th_hstr_vec_init(&request->headers, request->allocator);
     th_hstr_vec_init(&request->queryvars, request->allocator);
@@ -222,7 +222,7 @@ th_request_deinit(th_request* request)
 {
     th_string_deinit(&request->uri_path);
     th_string_deinit(&request->uri_query);
-    th_upload_vec_deinit(&request->uploads);
+    th_part_vec_deinit(&request->parts);
     th_hstr_vec_deinit(&request->cookies);
     th_hstr_vec_deinit(&request->headers);
     th_hstr_vec_deinit(&request->queryvars);
@@ -235,7 +235,7 @@ th_request_reset(th_request* request)
 {
     th_string_clear(&request->uri_path);
     th_string_clear(&request->uri_query);
-    th_upload_vec_clear(&request->uploads);
+    th_part_vec_clear(&request->parts);
     th_hstr_vec_clear(&request->cookies);
     th_hstr_vec_clear(&request->headers);
     th_hstr_vec_clear(&request->queryvars);
@@ -281,13 +281,13 @@ th_request_get_formvar(th_request* request, th_str key)
     return th_request_vec_get(&request->formvars, key);
 }
 
-TH_PRIVATE(th_upload*)
-th_request_get_upload(th_request* request, th_str key)
+TH_PRIVATE(th_part*)
+th_request_get_part(th_request* request, th_str key)
 {
-    size_t num = th_upload_vec_size(&request->uploads);
+    size_t num = th_part_vec_size(&request->parts);
     for (size_t i = 0; i < num; i++) {
-        if (th_string_eq(&request->uploads.data[i].name, key))
-            return th_upload_vec_at(&request->uploads, i);
+        if (th_string_eq(&request->parts.data[i].name, key))
+            return th_part_vec_at(&request->parts, i);
     }
     return NULL;
 }
@@ -337,6 +337,32 @@ TH_PUBLIC(th_buffer)
 th_get_body(const th_request* req)
 {
     return (th_buffer){req->body.ptr, req->body.len};
+}
+
+TH_PUBLIC(th_err)
+th_save_to_disk(const th_request* req, th_buffer data, const char* dir_label, const char* filepath)
+{
+    th_dir* dir = th_dir_mgr_get(req->dir_mgr, th_str_from_cstr(dir_label));
+    if (!dir)
+        return TH_ERR_HTTP(TH_CODE_NOT_FOUND);
+    th_err err = TH_ERR_OK;
+    th_open_opt opt = {.create = true, .write = true, .truncate = true};
+    th_file file;
+    th_file_init(&file, req->file_ops);
+    if ((err = th_file_openat(&file, dir, th_str_from_cstr(filepath), opt)) != TH_ERR_OK)
+        return err;
+    size_t total_written = 0;
+    while (total_written < data.len) {
+        size_t written = 0;
+        if ((err = th_file_write(&file, data.ptr + total_written, data.len - total_written, total_written, &written))
+            != TH_ERR_OK) {
+            th_file_close(&file);
+            return err;
+        }
+        total_written += written;
+    }
+    th_file_close(&file);
+    return TH_ERR_OK;
 }
 
 TH_PUBLIC(th_method)
@@ -461,25 +487,26 @@ th_pathvar_iter(const th_request* req)
     };
 }
 
-TH_PUBLIC(const th_upload*)
-th_find_upload(const th_request* req, const char* name)
+TH_PUBLIC(const th_part*)
+th_find_part(const th_request* req, const char* name)
 {
-    size_t num = th_upload_vec_size(&req->uploads);
+    size_t num = th_part_vec_size(&req->parts);
     for (size_t i = 0; i < num; i++) {
-        if (strncmp(name, th_string_data(&req->uploads.data[i].name), th_string_len(&req->uploads.data[i].name)) == 0) {
-            return th_upload_vec_cat(&req->uploads, i);
+        if (strncmp(name, th_string_data(&req->parts.data[i].name), th_string_len(&req->parts.data[i].name))
+            == 0) {
+            return th_part_vec_cat(&req->parts, i);
         }
     }
     return NULL;
 }
 
 TH_PUBLIC(th_iter)
-th_upload_iter(const th_request* req)
+th_part_iter(const th_request* req)
 {
     return (th_iter){
-        .methods = &th_upload_iter_methods,
-        .ptr = req->uploads.data,
-        .end = req->uploads.data + req->uploads.size,
+        .methods = &th_part_iter_methods,
+        .ptr = req->parts.data,
+        .end = req->parts.data + req->parts.size,
     };
 }
 

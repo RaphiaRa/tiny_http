@@ -7,8 +7,8 @@
 #include "th_dir_mgr.h"
 #include "th_file.h"
 #include "th_method.h"
+#include "th_part.h"
 #include "th_string.h"
-#include "th_upload.h"
 #include "th_vec.h"
 
 struct th_iter_methods {
@@ -31,7 +31,7 @@ th_hstr_pair_deinit(th_hstr_pair* pair)
 
 TH_DEFINE_VEC(th_hstr_vec, th_hstr_pair, th_hstr_pair_deinit)
 
-TH_DEFINE_VEC(th_upload_vec, th_upload, th_upload_deinit)
+TH_DEFINE_VEC(th_part_vec, th_part, th_part_deinit)
 
 struct th_request {
     th_allocator* allocator;
@@ -39,7 +39,7 @@ struct th_request {
     th_file_ops* file_ops;
     th_string uri_path;
     th_string uri_query;
-    th_upload_vec uploads;
+    th_part_vec parts;
     th_hstr_vec cookies;
     th_hstr_vec headers;
     th_hstr_vec queryvars;
@@ -88,7 +88,7 @@ TH_PRIVATE(th_err)
 th_request_add_header(th_request* request, th_str key, th_str value);
 
 TH_PRIVATE(th_err)
-th_request_add_upload(th_request* request, th_str data, th_str name, th_str filename, th_str content_type);
+th_request_add_part(th_request* request, th_str content, th_str name, th_str filename, th_str content_type);
 
 TH_PRIVATE(void)
 th_request_clear_queryvars(th_request* request);
@@ -108,7 +108,7 @@ th_request_get_queryvar(th_request* request, th_str key) TH_MAYBE_UNUSED;
 TH_PRIVATE(th_str)
 th_request_get_formvar(th_request* request, th_str key) TH_MAYBE_UNUSED;
 
-TH_PRIVATE(th_upload*)
-th_request_get_upload(th_request* request, th_str key) TH_MAYBE_UNUSED;
+TH_PRIVATE(th_part*)
+th_request_get_part(th_request* request, th_str key) TH_MAYBE_UNUSED;
 
 #endif

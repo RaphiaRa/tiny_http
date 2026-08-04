@@ -360,14 +360,8 @@ th_request_parser_do_multipart_form_data(th_request* request, th_str body)
         th_multipart_part part;
         if ((err = th_multipart_parser_next(&parser, &part)) != TH_ERR_OK)
             return err;
-        if (th_str_empty(part.filename)) {
-            if (th_request_add_formvar(request, part.name, part.content) != TH_ERR_OK)
-                return TH_ERR_BAD_ALLOC;
-        } else {
-            if (th_request_add_upload(request, part.content, part.name, part.filename, part.content_type)
-                != TH_ERR_OK)
-                return TH_ERR_BAD_ALLOC;
-        }
+        if (th_request_add_part(request, part.content, part.name, part.filename, part.content_type) != TH_ERR_OK)
+            return TH_ERR_BAD_ALLOC;
     }
     return TH_ERR_OK;
 }

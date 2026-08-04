@@ -17,12 +17,14 @@ static th_err
 handler(void* userp, const th_request* req, th_response* resp)
 {
     (void)userp;
-    for (th_iter it = th_upload_iter(req); th_next(&it);) {
-        const th_upload* upload = th_val(&it);
-        th_upload_info info = th_upload_get_info(upload);
+    for (th_iter it = th_part_iter(req); th_next(&it);) {
+        const th_part* part = th_val(&it);
+        const char* filename = th_part_filename(part);
+        if (filename[0] == '\0')
+            continue; // plain form field, not a file
         th_err err = TH_ERR_OK;
-        if ((err = th_upload_save(upload, "upload_dir", info.filename)) != TH_ERR_OK) {
-            th_printf_body(resp, "Failed to save upload: %s, reason %s\n", info.filename, th_strerror(err));
+        if ((err = th_save_to_disk(req, th_part_content(part), "upload_dir", filename)) != TH_ERR_OK) {
+            th_printf_body(resp, "Failed to save upload: %s, reason %s\n", filename, th_strerror(err));
             th_add_header(resp, "Content-Type", "text/plain");
             return TH_ERR_OK;
         }

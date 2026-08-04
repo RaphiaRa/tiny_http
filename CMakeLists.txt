@@ -289,6 +289,7 @@ endif()
 # Amalgamation
 
 if (NOT TH_DISABLE_AMALGAMATION)
+    set(Python3_FIND_VIRTUALENV FIRST)
     find_package(Python3)
     if (Python3_FOUND)
         message(STATUS "Found Python3: ${Python3_EXECUTABLE}")

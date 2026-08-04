@@ -242,6 +242,7 @@ TH_PRIVATE(void)
 th_response_async_write(th_response* response, th_conn* conn, th_send_cb callback, void* user_data)
 {
     th_err err = TH_ERR_OK;
+    size_t iovcnt = 2; // start line + headers
     if (response->is_file) {
         response->file_len = response->fcache_entry->stream.size;
     }
@@ -249,7 +250,6 @@ th_response_async_write(th_response* response, th_conn* conn, th_send_cb callbac
         goto cleanup;
     if ((err = th_response_finalize_headers(response)) != TH_ERR_OK)
         goto cleanup;
-    size_t iovcnt = 2; // start line + headers
     if (!response->only_headers && response->is_file == 0 && th_string_len(&response->body) > 0) {
         response->iov[iovcnt].base = (void*)th_string_data(&response->body);
         response->iov[iovcnt].len = th_string_len(&response->body);

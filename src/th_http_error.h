@@ -33,6 +33,8 @@ th_http_error(th_err err)
     case TH_ERR_CATEGORY_HTTP:
         return err;
         break;
+    default:
+        break;
     }
     return TH_ERR_HTTP(TH_CODE_INTERNAL_SERVER_ERROR);
 }

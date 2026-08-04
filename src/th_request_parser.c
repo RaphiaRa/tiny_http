@@ -238,7 +238,7 @@ th_request_parser_do_version(th_request_parser* parser, th_request* request, th_
     if (buffer.ptr[n + 1] != '\n')
         return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
     th_str version = th_str_substr(buffer, 0, n);
-    if (version.len < 8)
+    if (version.len != 8)
         return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
     if (version.ptr[0] != 'H')
         return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);

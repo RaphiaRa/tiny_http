@@ -209,6 +209,7 @@ if (NOT TH_DISABLE_TESTS)
         src/th_request_parser_test.c
         src/th_cookie_parser_test.c
         src/th_multipart_parser_test.c
+        src/th_url_decode_test.c
         src/th_response_test.c
         src/th_http_test.c
         src/th_fcache_test.c
@@ -272,6 +273,7 @@ if (TH_ENABLE_BENCHMARKS)
         src/th_cookie_parser_bench.c
         src/th_multipart_parser_bench.c
         src/th_router_bench.c
+        src/th_url_decode_bench.c
     )
 
     create_test_sourcelist(TH_BENCH_SRC_LIST th_bench.c

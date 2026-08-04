@@ -32,26 +32,15 @@ th_url_decode_next(th_str str, size_t* pos, char* out, th_url_decode_type type)
     return TH_ERR_OK;
 }
 
-/*
-TH_PRIVATE(th_err)
-th_url_decode_inplace(char* str, size_t* in_out_len, th_url_decode_type type)
+TH_LOCAL(size_t)
+th_url_decode_literal_run(th_str input, size_t pos, th_url_decode_type type)
 {
-    size_t i = 0;
-    size_t j = 0;
-    size_t len = *in_out_len;
-    while (i < len) {
-        char c;
-        th_err err = th_url_decode_next(str, &i, &c, type);
-        if (err != TH_ERR_OK) {
-            return err;
-        }
-        str[j++] = c;
-    }
-    str[j] = '\0';
-    *in_out_len = j;
-    return TH_ERR_OK;
+    size_t start = pos;
+    while (pos < input.len && input.ptr[pos] != '%'
+           && !(type == TH_URL_DECODE_TYPE_QUERY && input.ptr[pos] == '+'))
+        pos++;
+    return pos - start;
 }
-*/
 
 TH_PRIVATE(th_err)
 th_url_decode_string(th_str input, th_string* output, th_url_decode_type type)
@@ -63,6 +52,13 @@ th_url_decode_string(th_str input, th_string* output, th_url_decode_type type)
         return TH_ERR_OK;
     size_t i = 0;
     while (i < input.len) {
+        size_t run = th_url_decode_literal_run(input, i, type);
+        if (run > 0) {
+            if ((err = th_string_append(output, th_str_substr(input, i, run))) != TH_ERR_OK)
+                return err;
+            i += run;
+            continue;
+        }
         char c;
         if ((err = th_url_decode_next(input, &i, &c, type)) != TH_ERR_OK) {
             return err;

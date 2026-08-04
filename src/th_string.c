@@ -158,7 +158,8 @@ TH_LOCAL(void)
 th_detail_small_string_resize(th_detail_small_string* self, size_t new_len, char fill)
 {
     TH_ASSERT(new_len <= TH_STRING_SMALL_MAX_LEN && "Invalid length");
-    memset(self->buf + self->len, fill, new_len - self->len);
+    if (new_len > self->len)
+        memset(self->buf + self->len, fill, new_len - self->len);
     self->len = new_len & 0x7F;
     self->buf[new_len] = '\0';
 }

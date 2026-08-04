@@ -19,6 +19,8 @@ th_strerror(th_err err)
             return "invalid argument";
         case TH_ERRC_EOF:
             return "end of file";
+        default:
+            return "unknown error";
         }
         break;
     case TH_ERR_CATEGORY_SYSTEM:
@@ -32,6 +34,8 @@ th_strerror(th_err err)
         TH_ASSERT(0 && "SSL not enabled");
         return NULL;
 #endif
+    default:
+        break;
     }
     return "Unknown error category";
 }

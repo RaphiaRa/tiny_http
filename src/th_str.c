@@ -1,6 +1,7 @@
 #include <th.h>
 
 #include <stdbool.h>
+#include <string.h>
 
 #include "th_config.h"
 #include "th_hash.h"
@@ -48,12 +49,11 @@ th_str_eq(th_str a, th_str b)
 TH_PRIVATE(size_t)
 th_str_find_first(th_str str, size_t start, char c)
 {
-    for (size_t i = start; i < str.len; i++) {
-        if (str.ptr[i] == c) {
-            return i;
-        }
+    if (start >= str.len) {
+        return th_str_npos;
     }
-    return th_str_npos;
+    const char* found = memchr(str.ptr + start, c, str.len - start);
+    return found ? (size_t)(found - str.ptr) : th_str_npos;
 }
 
 TH_PRIVATE(size_t)
@@ -70,8 +70,9 @@ th_str_find_first_not(th_str str, size_t start, char c)
 TH_PRIVATE(size_t)
 th_str_find_first_of(th_str str, size_t start, const char* chars)
 {
+    size_t chars_len = strlen(chars);
     for (size_t i = start; i < str.len; i++) {
-        for (size_t j = 0; chars[j] != '\0'; j++) {
+        for (size_t j = 0; j < chars_len; j++) {
             if (str.ptr[i] == chars[j]) {
                 return i;
             }

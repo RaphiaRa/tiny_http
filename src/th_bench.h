@@ -34,22 +34,26 @@ th_bench_now_ns(void)
     return 0;        \
     }
 
-/* Runs the case body `iterations` times, timing the whole loop once (not
- * per iteration - clock_gettime itself isn't free), then reports the
- * average. Keep setup out of the body - hoist it above TH_BENCH_BEGIN so
- * only the real work gets timed. */
-#define TH_BENCH_CASE_BEGIN(name, iterations)      \
-    if (th_index++ == th_target) {                 \
-        th_ran = true;                             \
-        const char* th_bench_name = #name;         \
-        size_t th_bench_iterations = (iterations); \
-        double th_bench_start = th_bench_now_ns(); \
-        for (size_t th_bench_i = 0; th_bench_i < th_bench_iterations; th_bench_i++) {
+/* Case body runs once - put fixture setup here, right next to the run it
+ * feeds, instead of hoisting it out to file scope. */
+#define TH_BENCH_CASE_BEGIN(name, iterations) \
+    if (th_index++ == th_target) {            \
+        th_ran = true;                        \
+        const char* th_bench_name = #name;    \
+        size_t th_bench_iterations = (iterations);
 
-#define TH_BENCH_CASE_END                                                                        \
+#define TH_BENCH_CASE_END }
+
+/* Runs the enclosed body `th_bench_iterations` times, timing the whole
+ * loop once (not per iteration - clock_gettime itself isn't free), then
+ * reports the average. */
+#define TH_BENCH_RUN_BEGIN                     \
+    double th_bench_start = th_bench_now_ns(); \
+    for (size_t th_bench_i = 0; th_bench_i < th_bench_iterations; th_bench_i++) {
+
+#define TH_BENCH_RUN_END                                                                         \
     }                                                                                            \
     double th_bench_avg_ns = (th_bench_now_ns() - th_bench_start) / (double)th_bench_iterations; \
-    printf("%-40s n=%-8zu avg=%9.1fns\n", th_bench_name, th_bench_iterations, th_bench_avg_ns);  \
-    }
+    printf("%-40s n=%-8zu avg=%9.1fns\n", th_bench_name, th_bench_iterations, th_bench_avg_ns);
 
 #endif

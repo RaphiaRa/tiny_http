@@ -165,14 +165,24 @@ TH_TEST_BEGIN(request_parser)
         TH_EXPECT(request.method == TH_METHOD_POST);
         TH_EXPECT(th_string_eq(&request.uri_path, TH_STR("/")));
         TH_EXPECT(request.version == 1);
-        TH_EXPECT(TH_STR_EQ(th_request_get_formvar(&request, TH_STR("variable1")), "value1"));
-        TH_EXPECT(TH_STR_EQ(th_request_get_formvar(&request, TH_STR("variable2")), "value2"));
-        th_upload* upload = th_request_get_upload(&request, TH_STR("variable3"));
+        th_part* field1 = th_request_get_part(&request, TH_STR("variable1"));
+        TH_EXPECT(field1);
+        TH_EXPECT(strcmp(th_part_name(field1), "variable1") == 0);
+        TH_EXPECT(strcmp(th_part_filename(field1), "") == 0);
+        th_buffer field1_content = th_part_content(field1);
+        TH_EXPECT(strncmp(field1_content.ptr, "value1", field1_content.len) == 0);
+
+        th_part* field2 = th_request_get_part(&request, TH_STR("variable2"));
+        TH_EXPECT(field2);
+        th_buffer field2_content = th_part_content(field2);
+        TH_EXPECT(strncmp(field2_content.ptr, "value2", field2_content.len) == 0);
+
+        th_part* upload = th_request_get_part(&request, TH_STR("variable3"));
         TH_EXPECT(upload);
-        TH_EXPECT(strcmp(th_upload_get_info(upload).filename, "example.txt") == 0);
-        TH_EXPECT(strcmp(th_upload_get_info(upload).content_type, "text/plain") == 0);
-        TH_EXPECT(strcmp(th_upload_get_info(upload).name, "variable3") == 0);
-        th_buffer upload_data = th_upload_get_data(upload);
+        TH_EXPECT(strcmp(th_part_filename(upload), "example.txt") == 0);
+        TH_EXPECT(strcmp(th_part_content_type(upload), "text/plain") == 0);
+        TH_EXPECT(strcmp(th_part_name(upload), "variable3") == 0);
+        th_buffer upload_data = th_part_content(upload);
         TH_EXPECT(strncmp(upload_data.ptr, "Hello File", upload_data.len) == 0);
     }
     TH_TEST_CASE_END

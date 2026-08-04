@@ -46,6 +46,7 @@ SET(TH_CORE_SRC
     src/th_request_parser.c
     src/th_cookie_parser.c
     src/th_multipart_parser.c
+    src/th_part.c
     src/th_request.c
     src/th_response.c
     src/th_conn.c
@@ -64,7 +65,6 @@ SET(TH_CORE_SRC
     src/th_timer.c
     src/th_conn_tracker.c
     src/th_url_decode.c
-    src/th_upload.c
 #   SSL (compiled out via TH_WITH_SSL=0 until SSL is ported onto th_conn/th_socket)
     src/th_ssl_smem_bio.c
     src/th_ssl_context.c
@@ -155,7 +155,7 @@ target_compile_definitions(tiny_http PRIVATE TH_LOG_LEVEL=${TH_LOG_LEVEL})
 target_compile_definitions(tiny_http PRIVATE TH_WITH_SSL=${TH_WITH_SSL})
 target_compile_definitions(tiny_http PRIVATE TH_HAVE_MMAP=${TH_WITH_MMAP})
 target_compile_definitions(tiny_http PRIVATE TH_HAVE_SENDFILE=${TH_WITH_SENDFILE})
-target_include_directories(tiny_http 
+target_include_directories(tiny_http
     PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>/include
     PRIVATE src
 )
@@ -216,7 +216,6 @@ if (NOT TH_DISABLE_TESTS)
         src/th_str_test.c
         src/th_list_test.c
         src/th_dir_mgr_test.c
-        src/th_upload_test.c
         src/th_string_test.c
     )
 

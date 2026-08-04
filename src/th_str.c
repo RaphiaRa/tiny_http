@@ -38,12 +38,7 @@ th_str_eq(th_str a, th_str b)
     if (a.len != b.len) {
         return 0;
     }
-    for (size_t i = 0; i < a.len; i++) {
-        if (a.ptr[i] != b.ptr[i]) {
-            return 0;
-        }
-    }
-    return 1;
+    return memcmp(a.ptr, b.ptr, a.len) == 0;
 }
 
 TH_PRIVATE(size_t)

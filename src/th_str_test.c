@@ -31,5 +31,35 @@ TH_TEST_BEGIN(str)
         TH_EXPECT(TH_STR_EQ(trimmed, "Test String"));
     }
     TH_TEST_CASE_END
+    TH_TEST_CASE_BEGIN(str_eq_identical_strings_are_equal)
+    {
+        TH_EXPECT(th_str_eq(TH_STR("hello"), TH_STR("hello")));
+    }
+    TH_TEST_CASE_END
+    TH_TEST_CASE_BEGIN(str_eq_different_lengths_are_not_equal)
+    {
+        TH_EXPECT(!th_str_eq(TH_STR("hello"), TH_STR("hello!")));
+    }
+    TH_TEST_CASE_END
+    TH_TEST_CASE_BEGIN(str_eq_same_length_different_content_are_not_equal)
+    {
+        TH_EXPECT(!th_str_eq(TH_STR("hello"), TH_STR("hellp")));
+    }
+    TH_TEST_CASE_END
+    TH_TEST_CASE_BEGIN(str_eq_differ_in_last_byte_are_not_equal)
+    {
+        TH_EXPECT(!th_str_eq(TH_STR("aaaaaaaaaa"), TH_STR("aaaaaaaaab")));
+    }
+    TH_TEST_CASE_END
+    TH_TEST_CASE_BEGIN(str_eq_empty_strings_are_equal)
+    {
+        TH_EXPECT(th_str_eq(th_str_make_empty(), th_str_make_empty()));
+    }
+    TH_TEST_CASE_END
+    TH_TEST_CASE_BEGIN(str_eq_empty_and_non_empty_are_not_equal)
+    {
+        TH_EXPECT(!th_str_eq(th_str_make_empty(), TH_STR("a")));
+    }
+    TH_TEST_CASE_END
 }
 TH_TEST_END

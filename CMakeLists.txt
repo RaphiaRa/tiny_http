@@ -260,6 +260,32 @@ if (NOT TH_DISABLE_TESTS)
     endif()
 endif()
 
+# Benchmarks
+
+option(TH_ENABLE_BENCHMARKS "Build th_bench, a microbenchmark driver" OFF)
+if (TH_ENABLE_BENCHMARKS)
+    # th_bench cases don't use th_test's setup/teardown hooks
+    unset(CMAKE_TESTDRIVER_BEFORE_TESTMAIN)
+    unset(CMAKE_TESTDRIVER_AFTER_TESTMAIN)
+
+    set(TH_BENCHES
+        src/th_str_bench.c
+        src/th_multipart_parser_bench.c
+    )
+
+    create_test_sourcelist(TH_BENCH_SRC_LIST th_bench.c
+        ${TH_BENCHES}
+        EXTRA_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/src/th_bench.h
+    )
+
+    add_executable(th_bench ${TH_BENCH_SRC_LIST})
+
+    target_link_libraries(th_bench PUBLIC
+        tiny_http::tiny_http
+    )
+    target_include_directories(th_bench PRIVATE src)
+endif()
+
 # Amalgamation
 
 if (NOT TH_DISABLE_AMALGAMATION)

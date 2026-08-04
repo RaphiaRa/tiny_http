@@ -2,6 +2,7 @@
 
 #include "th_cookie_parser.h"
 #include "th_header_id.h"
+#include "th_multipart_parser.h"
 
 #undef TH_LOG_TAG
 #define TH_LOG_TAG "request_parser"
@@ -278,8 +279,12 @@ th_request_parse_handle_header(th_request_parser* parser, th_request* request, t
     switch (id) {
     case TH_HEADER_ID_COOKIE:
         return th_request_parser_do_cookie_list(request, value);
-    case TH_HEADER_ID_CONTENT_LENGTH:
-        return th_str_to_uint(value, (unsigned*)&parser->content_len);
+    case TH_HEADER_ID_CONTENT_LENGTH: {
+        unsigned int content_len = 0;
+        th_err err = th_str_to_uint(value, &content_len);
+        parser->content_len = content_len;
+        return err;
+    }
     case TH_HEADER_ID_CONNECTION:
         if (th_str_eq(value, TH_STR("close"))) {
             request->close = true;
@@ -298,22 +303,6 @@ th_request_parse_handle_header(th_request_parser* parser, th_request* request, t
         break;
     }
     return th_request_add_header(request, th_string_view(&normalized_name), value);
-}
-
-TH_LOCAL(th_err)
-th_request_parser_parse_header_line(th_str line, th_str* out_name, th_str* out_value)
-{
-    th_err err = TH_ERR_OK;
-    size_t parsed = 0;
-    if ((err = th_request_parser_next_token(line, out_name, ':', &parsed)) != TH_ERR_OK)
-        return err;
-    if (parsed == 0)
-        return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
-    th_str header_value = th_str_substr(line, parsed, th_str_npos);
-    if (!th_request_parser_is_printable_string(header_value))
-        return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
-    *out_value = th_str_trim(header_value);
-    return TH_ERR_OK;
 }
 
 TH_LOCAL(th_err)
@@ -352,242 +341,34 @@ th_request_parser_do_header(th_request_parser* parser, th_request* request, th_s
     return TH_ERR_OK;
 }
 
-TH_LOCAL(size_t)
-th_request_parser_multipart_find_eol(th_str buffer, size_t start)
-{
-    size_t pos = start;
-    while (pos + 1 < buffer.len) {
-        if (buffer.ptr[pos] == '\r' && buffer.ptr[pos + 1] == '\n')
-            return pos;
-        pos++;
-    }
-    return th_str_npos;
-}
-
-TH_LOCAL(bool)
-th_request_parser_multipart_is_boundary_line(th_str line, th_str boundary, bool* last)
-{
-    *last = false;
-    if (line.len < boundary.len + 2)
-        return false;
-    if (line.ptr[0] != '-' || line.ptr[1] != '-')
-        return false;
-    if (th_str_eq(th_str_substr(line, 2, boundary.len), boundary)) {
-        if (line.len == boundary.len + 2)
-            return true;
-        if (line.ptr[boundary.len + 2] == '-' && line.ptr[boundary.len + 3] == '-') {
-            *last = true;
-            return true;
-        }
-    }
-    return false;
-}
-
-TH_LOCAL(th_err)
-th_request_parser_multipart_next_header_param(th_str buffer, th_str* out_name, th_str* out_value, size_t* out_parsed)
-{
-    // skip leading spaces
-    buffer = th_str_substr(buffer, th_str_find_first_not(buffer, 0, ' '), th_str_npos);
-    size_t eq = th_str_find_first_of(buffer, 0, "=; ");
-    if (eq == th_str_npos || buffer.ptr[eq] == ';') {
-        *out_name = th_str_substr(buffer, 0, eq);
-        *out_value = th_str_make_empty();
-        *out_parsed = eq == th_str_npos ? buffer.len : eq + 1;
-        return TH_ERR_OK;
-    }
-    if (buffer.ptr[eq] == ' ') // spaces are not allowed
-        return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
-    *out_name = th_str_substr(buffer, 0, eq);
-    size_t parsed = eq + 1;
-    buffer = th_str_substr(buffer, eq + 1, th_str_npos);
-    if (th_str_empty(buffer)) // equals sign must be followed by a value
-        return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
-    if (buffer.ptr[0] == '"') {
-        size_t end = th_str_find_first(buffer, 1, '"');
-        if (end == th_str_npos) // no closing quote
-            return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
-        *out_value = th_str_substr(buffer, 1, end - 1);
-        parsed += (end == th_str_npos ? buffer.len : end + 1);
-    } else {
-        size_t end = th_str_find_first_of(buffer, 0, "; ");
-        if (end != th_str_npos && buffer.ptr[end] == ' ')
-            return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
-        *out_value = th_str_substr(buffer, 0, end);
-        parsed += (end == th_str_npos ? buffer.len : end + 1);
-    }
-    *out_parsed = parsed;
-    return TH_ERR_OK;
-}
-
-TH_LOCAL(th_err)
-th_request_parser_multipart_content_disposition(th_str header_value, th_str* out_name, th_str* out_filename)
-{
-    // skip heading
-    header_value = th_str_substr(header_value, th_str_find_first(header_value, 0, ';') + 1, th_str_npos);
-    // parse the parameters
-    while (!th_str_empty(header_value)) {
-        th_err err = TH_ERR_OK;
-        th_str name, value = th_str_make_empty();
-        size_t parsed = 0;
-        if ((err = th_request_parser_multipart_next_header_param(header_value, &name, &value, &parsed)) != TH_ERR_OK)
-            return err;
-        header_value = th_str_substr(header_value, parsed, th_str_npos);
-        if (th_str_eq(name, TH_STR("name"))) {
-            *out_name = value;
-        } else if (th_str_eq(name, TH_STR("filename"))) {
-            *out_filename = value;
-        }
-    }
-    return TH_ERR_OK;
-}
-
-TH_LOCAL(size_t)
-th_request_parser_multipart_find_boundary(th_str buffer, th_str boundary, bool* last, size_t* length)
-{
-    TH_ASSERT(length && "lenght pointer must not be NULL");
-    size_t pos = 0;
-    while (1) {
-        size_t eol = th_request_parser_multipart_find_eol(buffer, pos);
-        if (eol == th_str_npos)
-            return th_str_npos;
-        th_str line = th_str_substr(buffer, pos, eol - pos);
-        if (th_request_parser_multipart_is_boundary_line(line, boundary, last)) {
-            *length = line.len;
-            break;
-        }
-        pos = eol + 2;
-    }
-    return pos;
-}
-
-TH_LOCAL(th_err)
-th_request_parser_multipart_do_next(th_request* request, th_str buffer, th_str boundary, size_t* out_parsed)
-{
-    th_str content_disposition, content_type;
-    content_disposition = content_type = th_str_make_empty();
-    size_t content_len = th_str_npos;
-    size_t original_len = buffer.len;
-    // parse the headers
-    while (1) {
-        if (th_str_empty(buffer))
-            return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
-        size_t line_length = th_request_parser_multipart_find_eol(buffer, 0);
-        if (line_length == th_str_npos)
-            return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
-        th_str line = th_str_substr(buffer, 0, line_length);
-        if (th_str_empty(line)) {
-            buffer = th_str_substr(buffer, line_length + 2, th_str_npos);
-            break; // end of headers
-        }
-        th_str header_name;
-        th_str header_value;
-        th_err err = TH_ERR_OK;
-        if ((err = th_request_parser_parse_header_line(line, &header_name, &header_value)) != TH_ERR_OK)
-            return err;
-        if (th_str_eq(header_name, TH_STR("Content-Disposition"))) {
-            content_disposition = header_value;
-        } else if (th_str_eq(header_name, TH_STR("Content-Length"))) {
-            if (th_str_to_uint(header_value, (unsigned*)&content_len) != TH_ERR_OK)
-                return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
-        } else if (th_str_eq(header_name, TH_STR("Content-Type"))) {
-            content_type = header_value;
-        }
-        buffer = th_str_substr(buffer, line_length + 2, th_str_npos);
-    }
-    if (th_str_empty(content_disposition))
-        return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
-    th_str name, filename;
-    name = filename = th_str_make_empty();
-    th_err err = TH_ERR_OK;
-    if ((err = th_request_parser_multipart_content_disposition(content_disposition, &name, &filename)) != TH_ERR_OK)
-        return err;
-    if (th_str_empty(name))
-        return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
-    bool last = false;
-    th_str content = th_str_make_empty();
-    if (content_len != th_str_npos) {
-        content = th_str_substr(buffer, 0, content_len);
-        buffer = th_str_substr(buffer, content_len, th_str_npos);
-        // check the boundary
-        if (buffer.ptr[0] != '\r' || buffer.ptr[1] != '\n')
-            return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
-        th_str line = th_str_substr(buffer, 2, th_request_parser_multipart_find_eol(buffer, 0));
-        if (!th_request_parser_multipart_is_boundary_line(line, boundary, &last))
-            return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
-        buffer = th_str_substr(buffer, content_len + boundary.len + 2, th_str_npos);
-    } else {
-        // we don't have the content length, so we need to find the boundary
-        size_t boundary_length = 0;
-        size_t pos = th_request_parser_multipart_find_boundary(buffer, boundary, &last, &boundary_length);
-        if (pos == th_str_npos)
-            return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
-        content = th_str_substr(buffer, 0, pos - 2); // -2 to remove the \r\n
-        buffer = th_str_substr(buffer, pos + boundary_length + 2, th_str_npos);
-    }
-    if (last && !th_str_empty(buffer)) {
-        return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
-    }
-    if (th_str_empty(filename)) {
-        if (th_request_add_formvar(request, name, content) != TH_ERR_OK)
-            return TH_ERR_BAD_ALLOC;
-    } else {
-        if (th_request_add_upload(request, content, name, filename, content_type) != TH_ERR_OK)
-            return TH_ERR_BAD_ALLOC;
-    }
-    *out_parsed = original_len - buffer.len;
-    return TH_ERR_OK;
-}
-
-TH_LOCAL(th_err)
-th_request_parsed_multipart_parse_content_type(th_str content_type, th_str* boundary)
-{
-    // skip heading
-    content_type = th_str_substr(content_type, th_str_find_first(content_type, 0, ';') + 1, th_str_npos);
-    while (!th_str_empty(content_type)) {
-        th_str name, value = th_str_make_empty();
-        size_t parsed = 0;
-        th_err err = TH_ERR_OK;
-        if ((err = th_request_parser_multipart_next_header_param(content_type, &name, &value, &parsed)) != TH_ERR_OK)
-            return err;
-        content_type = th_str_substr(content_type, parsed, th_str_npos);
-        if (th_str_eq(name, TH_STR("boundary"))) {
-            *boundary = value;
-            return TH_ERR_OK;
-        }
-    }
-    return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
-}
-
 TH_LOCAL(th_err)
 th_request_parser_do_multipart_form_data(th_request* request, th_str body)
 {
-    // first, read the boundary
     th_str content_type = th_request_get_header(request, TH_STR("content-type"));
     if (th_str_empty(content_type)) {
         return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
     }
     th_err err = TH_ERR_OK;
     th_str boundary = th_str_make_empty();
-    if ((err = th_request_parsed_multipart_parse_content_type(content_type, &boundary)) != TH_ERR_OK)
+    if ((err = th_multipart_parser_boundary(content_type, &boundary)) != TH_ERR_OK)
         return err;
-    if (th_str_empty(boundary))
-        return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
-    // parse the body
-    // first, find the first boundary
-    bool last = false;
-    size_t pos = th_request_parser_multipart_find_eol(body, 0);
-    if (!th_request_parser_multipart_is_boundary_line(th_str_substr(body, 0, pos), boundary, &last)
-        || last) {
-        return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
-    }
-    body = th_str_substr(body, pos + 2, th_str_npos);
-    do {
-        size_t parsed = 0;
-        if ((err = th_request_parser_multipart_do_next(request, body, boundary, &parsed)) != TH_ERR_OK) {
+
+    th_multipart_parser parser;
+    if ((err = th_multipart_parser_init(&parser, body, boundary)) != TH_ERR_OK)
+        return err;
+    while (!th_multipart_parser_done(&parser)) {
+        th_multipart_part part;
+        if ((err = th_multipart_parser_next(&parser, &part)) != TH_ERR_OK)
             return err;
+        if (th_str_empty(part.filename)) {
+            if (th_request_add_formvar(request, part.name, part.content) != TH_ERR_OK)
+                return TH_ERR_BAD_ALLOC;
+        } else {
+            if (th_request_add_upload(request, part.content, part.name, part.filename, part.content_type)
+                != TH_ERR_OK)
+                return TH_ERR_BAD_ALLOC;
         }
-        body = th_str_substr(body, parsed, th_str_npos);
-    } while (!th_str_empty(body));
+    }
     return TH_ERR_OK;
 }
 

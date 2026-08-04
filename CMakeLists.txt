@@ -271,6 +271,7 @@ if (TH_ENABLE_BENCHMARKS)
         src/th_str_bench.c
         src/th_cookie_parser_bench.c
         src/th_multipart_parser_bench.c
+        src/th_router_bench.c
     )
 
     create_test_sourcelist(TH_BENCH_SRC_LIST th_bench.c

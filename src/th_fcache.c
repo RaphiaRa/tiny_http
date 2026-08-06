@@ -40,8 +40,13 @@ TH_LOCAL(th_err)
 th_fcache_entry_open(th_fcache_entry* entry, th_dir* dir, th_str path)
 {
     th_err err = TH_ERR_OK;
+    th_filepath filepath;
     th_open_opt opt = {.read = true};
-    if ((err = th_file_openat(&entry->stream, dir, path, opt)) != TH_ERR_OK) {
+    if ((err = th_filepath_init(&filepath, path)) != TH_ERR_OK) {
+        TH_LOG_INFO("Invalid file path %.*s: %s", (int)path.len, path.ptr, th_strerror(err));
+        goto cleanup;
+    }
+    if ((err = th_file_openat(&entry->stream, dir, &filepath, opt)) != TH_ERR_OK) {
         TH_LOG_INFO("Failed to open file at %.*s: %s", (int)path.len, path.ptr, th_strerror(err));
         goto cleanup;
     }

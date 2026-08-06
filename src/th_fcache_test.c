@@ -40,16 +40,25 @@ typedef struct th_fake_file_ops {
 } th_fake_file_ops;
 
 static th_err
-th_fake_file_ops_openat(void* self, th_dir* dir, th_str path, th_open_opt opt, int* fd, size_t* size)
+th_fake_file_ops_openat(void* self, int dirfd, const char* path, int flags, int* fd)
 {
-    (void)dir;
+    (void)dirfd;
     (void)path;
-    (void)opt;
+    (void)flags;
     th_fake_file_ops* ops = self;
     if (ops->open_fails)
         return TH_ERR_SYSTEM(ENOENT);
     *fd = ops->next_fd++;
-    *size = 0;
+    return TH_ERR_OK;
+}
+
+static th_err
+th_fake_file_ops_seek(void* self, int fd, int whence, size_t* pos)
+{
+    (void)self;
+    (void)fd;
+    (void)whence;
+    *pos = 0;
     return TH_ERR_OK;
 }
 
@@ -75,12 +84,14 @@ th_fake_file_ops_write(void* self, int fd, const void* addr, size_t len, size_t 
     return TH_ERR_OK;
 }
 
-static uint32_t
-th_fake_file_ops_stat_hash(void* self, int fd)
+static th_err
+th_fake_file_ops_stat(void* self, int fd, struct stat* out)
 {
     (void)fd;
     th_fake_file_ops* ops = self;
-    return ops->stat_hash;
+    *out = (struct stat){0};
+    out->st_ino = ops->stat_hash;
+    return TH_ERR_OK;
 }
 
 static void
@@ -94,9 +105,10 @@ static void
 th_fake_file_ops_init(th_fake_file_ops* ops)
 {
     ops->base.openat = th_fake_file_ops_openat;
+    ops->base.seek = th_fake_file_ops_seek;
     ops->base.read = th_fake_file_ops_read;
     ops->base.write = th_fake_file_ops_write;
-    ops->base.stat_hash = th_fake_file_ops_stat_hash;
+    ops->base.stat = th_fake_file_ops_stat;
     ops->base.close = th_fake_file_ops_close;
     ops->next_fd = 3;
     ops->open_fails = false;

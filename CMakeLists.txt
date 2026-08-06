@@ -51,6 +51,7 @@ SET(TH_CORE_SRC
     src/th_response.c
     src/th_conn.c
     src/th_header_id.c
+    src/th_filepath.c
     src/th_file.c
     src/th_fcache.c
     src/th_dir.c
@@ -217,6 +218,8 @@ if (NOT TH_DISABLE_TESTS)
         src/th_response_test.c
         src/th_http_test.c
         src/th_fcache_test.c
+        src/th_filepath_test.c
+        src/th_file_test.c
         src/th_hashmap_test.c
         src/th_str_test.c
         src/th_list_test.c
@@ -278,6 +281,7 @@ if (TH_ENABLE_BENCHMARKS)
         src/th_multipart_parser_bench.c
         src/th_router_bench.c
         src/th_url_decode_bench.c
+        src/th_filepath_bench.c
     )
 
     create_test_sourcelist(TH_BENCH_SRC_LIST th_bench.c

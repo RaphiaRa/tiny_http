@@ -346,10 +346,13 @@ th_save_to_disk(const th_request* req, th_buffer data, const char* dir_label, co
     if (!dir)
         return TH_ERR_HTTP(TH_CODE_NOT_FOUND);
     th_err err = TH_ERR_OK;
+    th_filepath path;
+    if ((err = th_filepath_init(&path, th_str_from_cstr(filepath))) != TH_ERR_OK)
+        return err;
     th_open_opt opt = {.create = true, .write = true, .truncate = true};
     th_file file;
     th_file_init(&file, req->file_ops);
-    if ((err = th_file_openat(&file, dir, th_str_from_cstr(filepath), opt)) != TH_ERR_OK)
+    if ((err = th_file_openat(&file, dir, &path, opt)) != TH_ERR_OK)
         return err;
     size_t total_written = 0;
     while (total_written < data.len) {

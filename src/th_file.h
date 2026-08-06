@@ -4,6 +4,9 @@
 #include <th.h>
 
 #include "th_dir.h"
+#include "th_filepath.h"
+
+#include <sys/stat.h>
 
 typedef struct th_open_opt {
     bool read;
@@ -19,10 +22,11 @@ typedef struct th_open_opt {
  * on success, TH_ERR_SYSTEM(errno) on failure.
  */
 typedef struct th_file_ops {
-    th_err (*openat)(void* self, th_dir* dir, th_str path, th_open_opt opt, int* fd, size_t* size);
+    th_err (*openat)(void* self, int dirfd, const char* path, int flags, int* fd);
+    th_err (*seek)(void* self, int fd, int whence, size_t* pos);
     th_err (*read)(void* self, int fd, void* addr, size_t len, size_t offset, size_t* read);
     th_err (*write)(void* self, int fd, const void* addr, size_t len, size_t offset, size_t* written);
-    uint32_t (*stat_hash)(void* self, int fd);
+    th_err (*stat)(void* self, int fd, struct stat* out);
     void (*close)(void* self, int fd);
 } th_file_ops;
 
@@ -39,7 +43,7 @@ TH_PRIVATE(void)
 th_file_init(th_file* stream, th_file_ops* ops);
 
 TH_PRIVATE(th_err)
-th_file_openat(th_file* stream, th_dir* dir, th_str path, th_open_opt opt);
+th_file_openat(th_file* stream, th_dir* dir, const th_filepath* path, th_open_opt opt);
 
 TH_PRIVATE(th_err)
 th_file_read(th_file* stream, void* addr, size_t len, size_t offset, size_t* read) TH_MAYBE_UNUSED;

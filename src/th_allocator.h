@@ -59,32 +59,11 @@ TH_PRIVATE(void)
 th_arena_allocator_init_with_alignment(th_arena_allocator* allocator, void* buf, size_t size, size_t alignment, th_allocator* fallback);
 
 /* th_arena_allocator end */
-/* th_pool_allocator begin */
-typedef struct th_pool_allocator_node th_pool_allocator_node;
-struct th_pool_allocator_node {
-    th_pool_allocator_node* next;
-    th_pool_allocator_node* prev;
-};
-TH_DEFINE_LIST(th_pool_allocator_list, th_pool_allocator_node, prev, next)
-typedef struct th_pool_allocator {
-    th_allocator base;
-    th_pool_allocator_list free_list;
-    th_pool_allocator_list used_list;
-    th_allocator* allocator;
-    size_t block_size;
-} th_pool_allocator;
-
-TH_PRIVATE(void)
-th_pool_allocator_init(th_pool_allocator* pool, th_allocator* allocator, size_t block_size);
-
-TH_PRIVATE(void)
-th_pool_allocator_deinit(th_pool_allocator* pool);
-
 /** Generic object pool allocator.
  * The pool allocator is a allocator that allocates objects from a pool of fixed-size blocks.
  * It can be used with any object that has a next and prev pointer.
  */
-#define TH_DEFINE_OBJ_POOL_ALLOCATOR(NAME, T, PREV, NEXT)                                         \
+#define TH_DEFINE_POOL_ALLOCATOR(NAME, T, PREV, NEXT)                                            \
     TH_DEFINE_LIST(NAME##_list, T, PREV, NEXT)                                                    \
     typedef struct NAME {                                                                         \
         th_allocator base;                                                                        \

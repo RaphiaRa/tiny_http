@@ -39,7 +39,7 @@ TH_TEST_BEGIN(router)
         th_router router;
         th_router_init(&router, NULL);
         th_request request = {0};
-        th_request_init(&request, NULL, NULL, NULL);
+        th_request_init(&request, NULL);
         request.method = TH_METHOD_GET;
         th_string_set(&request.uri_path, TH_STR("/test"));
         th_response response = {0};
@@ -63,7 +63,7 @@ TH_TEST_BEGIN(router)
         th_err err = th_router_add_route(&router, TH_METHOD_GET, TH_STR("/test"), expect_pathvars_handler, NULL);
         TH_EXPECT(err == TH_ERR_OK);
         th_request request = {0};
-        th_request_init(&request, NULL, NULL, NULL);
+        th_request_init(&request, NULL);
         request.method = TH_METHOD_GET;
         th_string_set(&request.uri_path, TH_STR("/test"));
         th_response response = {0};
@@ -78,7 +78,7 @@ TH_TEST_BEGIN(router)
         TH_EXPECT(th_router_add_route(&router, TH_METHOD_GET, TH_STR("/"), expect_pathvars_handler, NULL) == TH_ERR_OK);
         {
             th_request request = {0};
-            th_request_init(&request, NULL, NULL, NULL);
+            th_request_init(&request, NULL);
             request.method = TH_METHOD_GET;
             th_string_set(&request.uri_path, TH_STR("/"));
             th_response response = {0};
@@ -87,7 +87,7 @@ TH_TEST_BEGIN(router)
         }
         {
             th_request request = {0};
-            th_request_init(&request, NULL, NULL, NULL);
+            th_request_init(&request, NULL);
             request.method = TH_METHOD_GET;
             th_string_set(&request.uri_path, TH_STR("/test"));
             th_response response = {0};
@@ -110,7 +110,7 @@ TH_TEST_BEGIN(router)
             TH_EXPECT(err == TH_ERR_OK);
 
             th_request request = {0};
-            th_request_init(&request, NULL, NULL, NULL);
+            th_request_init(&request, NULL);
             request.method = TH_METHOD_GET;
             th_string_set(&request.uri_path, TH_STR("/test/abc"));
             th_response response = {0};
@@ -133,7 +133,7 @@ TH_TEST_BEGIN(router)
             TH_EXPECT(err == TH_ERR_OK);
 
             th_request request = {0};
-            th_request_init(&request, NULL, NULL, NULL);
+            th_request_init(&request, NULL);
             request.method = TH_METHOD_GET;
             th_string_set(&request.uri_path, TH_STR("/test/abc/def"));
             th_response response = {0};
@@ -157,7 +157,7 @@ TH_TEST_BEGIN(router)
         TH_EXPECT(err == TH_ERR_OK);
         {
             th_request request = {0};
-            th_request_init(&request, NULL, NULL, NULL);
+            th_request_init(&request, NULL);
             request.method = TH_METHOD_GET;
             th_string_set(&request.uri_path, TH_STR("/test/abc/test2/def"));
             th_response response = {0};
@@ -179,7 +179,7 @@ TH_TEST_BEGIN(router)
         TH_EXPECT(err == TH_ERR_OK);
         {
             th_request request = {0};
-            th_request_init(&request, NULL, NULL, NULL);
+            th_request_init(&request, NULL);
             request.method = TH_METHOD_GET;
             th_string_set(&request.uri_path, TH_STR("/test/123"));
             th_response response = {0};
@@ -188,7 +188,7 @@ TH_TEST_BEGIN(router)
         }
         {
             th_request request = {0};
-            th_request_init(&request, NULL, NULL, NULL);
+            th_request_init(&request, NULL);
             request.method = TH_METHOD_GET;
             th_string_set(&request.uri_path, TH_STR("/test/abc"));
             th_response response = {0};
@@ -206,7 +206,7 @@ TH_TEST_BEGIN(router)
         TH_EXPECT(err == TH_ERR_OK);
         {
             th_request request = {0};
-            th_request_init(&request, NULL, NULL, NULL);
+            th_request_init(&request, NULL);
             request.method = TH_METHOD_GET;
             th_string_set(&request.uri_path, TH_STR("/a%20b"));
             th_response response = {0};
@@ -228,7 +228,7 @@ TH_TEST_BEGIN(router)
         TH_EXPECT(err == TH_ERR_OK);
         {
             th_request request = {0};
-            th_request_init(&request, NULL, NULL, NULL);
+            th_request_init(&request, NULL);
             request.method = TH_METHOD_GET;
             th_string_set(&request.uri_path, TH_STR("/test/a%20b"));
             th_response response = {0};
@@ -246,7 +246,7 @@ TH_TEST_BEGIN(router)
         TH_EXPECT(err == TH_ERR_OK);
         {
             th_request request = {0};
-            th_request_init(&request, NULL, NULL, NULL);
+            th_request_init(&request, NULL);
             request.method = TH_METHOD_GET;
             th_string_set(&request.uri_path, TH_STR("/a%20b/test"));
             th_response response = {0};
@@ -281,7 +281,7 @@ TH_TEST_BEGIN(router)
         }
         for (size_t i = 0; i < sizeof(routes) / sizeof(routes[0]); i++) {
             th_request request = {0};
-            th_request_init(&request, NULL, NULL, NULL);
+            th_request_init(&request, NULL);
             request.method = TH_METHOD_GET;
             th_string_set(&request.uri_path, th_str_from_cstr(routes[i]));
             th_response response = {0};
@@ -349,7 +349,7 @@ TH_TEST_BEGIN(router)
         }
         for (size_t i = 0; i < num_routes; i++) {
             th_request request = {0};
-            th_request_init(&request, NULL, NULL, NULL);
+            th_request_init(&request, NULL);
             request.method = TH_METHOD_GET;
             th_string_set(&request.uri_path, th_str_from_cstr(routes[i][1]));
             th_response response = {0};

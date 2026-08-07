@@ -4,8 +4,6 @@
 #include <th.h>
 
 #include "th_config.h"
-#include "th_dir_mgr.h"
-#include "th_file.h"
 #include "th_method.h"
 #include "th_part.h"
 #include "th_string.h"
@@ -35,8 +33,6 @@ TH_DEFINE_VEC(th_part_vec, th_part, th_part_deinit)
 
 struct th_request {
     th_allocator* allocator;
-    th_dir_mgr* dir_mgr;
-    th_file_ops* file_ops;
     th_string uri_path;
     th_string uri_query;
     th_part_vec parts;
@@ -52,7 +48,7 @@ struct th_request {
 };
 
 TH_PRIVATE(void)
-th_request_init(th_request* request, th_dir_mgr* dir_mgr, th_file_ops* file_ops, th_allocator* allocator);
+th_request_init(th_request* request, th_allocator* allocator);
 
 TH_PRIVATE(void)
 th_request_deinit(th_request* request);

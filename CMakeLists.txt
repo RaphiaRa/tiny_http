@@ -282,6 +282,7 @@ if (TH_ENABLE_BENCHMARKS)
         src/th_router_bench.c
         src/th_url_decode_bench.c
         src/th_filepath_bench.c
+        src/th_hashmap_bench.c
     )
 
     create_test_sourcelist(TH_BENCH_SRC_LIST th_bench.c

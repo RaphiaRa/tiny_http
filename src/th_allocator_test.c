@@ -9,7 +9,7 @@ typedef struct th_test_object {
     struct th_test_object* prev;
 } th_test_object;
 
-TH_DEFINE_OBJ_POOL_ALLOCATOR(th_test_pool_allocator, th_test_object, prev, next)
+TH_DEFINE_POOL_ALLOCATOR(th_test_pool_allocator, th_test_object, prev, next)
 
 TH_TEST_BEGIN(allocator)
 {

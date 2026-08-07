@@ -72,7 +72,7 @@ struct th_poll_handle {
     bool timeout_enabled;
 };
 
-TH_DEFINE_OBJ_POOL_ALLOCATOR(th_poll_handle_pool, th_poll_handle, prev, next)
+TH_DEFINE_POOL_ALLOCATOR(th_poll_handle_pool, th_poll_handle, prev, next)
 TH_DEFINE_VEC(th_pollfd_vec, struct pollfd, (void))
 
 /* th_poll_handle end */

@@ -199,11 +199,9 @@ th_request_set_body(th_request* request, th_str body)
 }
 
 TH_PRIVATE(void)
-th_request_init(th_request* request, th_dir_mgr* dir_mgr, th_file_ops* file_ops, th_allocator* allocator)
+th_request_init(th_request* request, th_allocator* allocator)
 {
     request->allocator = allocator ? allocator : th_default_allocator_get();
-    request->dir_mgr = dir_mgr;
-    request->file_ops = file_ops;
     th_string_init(&request->uri_path, request->allocator);
     th_string_init(&request->uri_query, request->allocator);
     th_part_vec_init(&request->parts, request->allocator);
@@ -337,35 +335,6 @@ TH_PUBLIC(th_buffer)
 th_get_body(const th_request* req)
 {
     return (th_buffer){req->body.ptr, req->body.len};
-}
-
-TH_PUBLIC(th_err)
-th_save_to_disk(const th_request* req, th_buffer data, const char* dir_label, const char* filepath)
-{
-    th_dir* dir = th_dir_mgr_get(req->dir_mgr, th_str_from_cstr(dir_label));
-    if (!dir)
-        return TH_ERR_HTTP(TH_CODE_NOT_FOUND);
-    th_err err = TH_ERR_OK;
-    th_filepath path;
-    if ((err = th_filepath_init(&path, th_str_from_cstr(filepath))) != TH_ERR_OK)
-        return err;
-    th_open_opt opt = {.create = true, .write = true, .truncate = true};
-    th_file file;
-    th_file_init(&file, req->file_ops);
-    if ((err = th_file_openat(&file, dir, &path, opt)) != TH_ERR_OK)
-        return err;
-    size_t total_written = 0;
-    while (total_written < data.len) {
-        size_t written = 0;
-        if ((err = th_file_write(&file, data.ptr + total_written, data.len - total_written, total_written, &written))
-            != TH_ERR_OK) {
-            th_file_close(&file);
-            return err;
-        }
-        total_written += written;
-    }
-    th_file_close(&file);
-    return TH_ERR_OK;
 }
 
 TH_PUBLIC(th_method)

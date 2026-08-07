@@ -7,6 +7,8 @@
 #include "th_clock.h"
 #include "th_config.h"
 #include "th_dir_mgr.h"
+#include "th_file.h"
+#include "th_filepath.h"
 #include "th_listener.h"
 #include "th_loop.h"
 #include "th_poll.h"
@@ -212,6 +214,35 @@ th_server_add_dir(th_server* server, const char* name, const char* path)
 }
 
 TH_LOCAL(th_err)
+th_server_save_to_disk(th_server* server, th_buffer data, const char* dir_label, const char* filepath)
+{
+    th_dir* dir = th_dir_mgr_get(&server->dir_mgr, th_str_from_cstr(dir_label));
+    if (!dir)
+        return TH_ERR_HTTP(TH_CODE_NOT_FOUND);
+    th_err err = TH_ERR_OK;
+    th_filepath path;
+    if ((err = th_filepath_init(&path, th_str_from_cstr(filepath))) != TH_ERR_OK)
+        return err;
+    th_open_opt opt = {.create = true, .write = true, .truncate = true};
+    th_file file;
+    th_file_init(&file, server->fcache.file_ops);
+    if ((err = th_file_openat(&file, dir, &path, opt)) != TH_ERR_OK)
+        return err;
+    size_t total_written = 0;
+    while (total_written < data.len) {
+        size_t written = 0;
+        if ((err = th_file_write(&file, data.ptr + total_written, data.len - total_written, total_written, &written))
+            != TH_ERR_OK) {
+            th_file_close(&file);
+            return err;
+        }
+        total_written += written;
+    }
+    th_file_close(&file);
+    return TH_ERR_OK;
+}
+
+TH_LOCAL(th_err)
 th_server_poll(th_server* server, int timeout_ms)
 {
     return th_loop_poll(&server->loop, timeout_ms);
@@ -259,6 +290,12 @@ TH_PUBLIC(th_err)
 th_add_dir(th_server* server, const char* name, const char* path)
 {
     return th_server_add_dir(server, name, path);
+}
+
+TH_PUBLIC(th_err)
+th_save_to_disk(th_server* server, th_buffer data, const char* dir_label, const char* filepath)
+{
+    return th_server_save_to_disk(server, data, dir_label, filepath);
 }
 
 TH_PUBLIC(th_err)

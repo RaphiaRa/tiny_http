@@ -272,14 +272,6 @@ th_buffer th_get_body(const th_request* req);
 th_method th_get_method(const th_request* req);
 th_prot_version th_get_version(const th_request* req);
 
-/** th_save_to_disk
- * @brief Write data to a file inside one of the server's registered
- * directories (see th_add_dir).
- * @return TH_ERR_HTTP(TH_CODE_NOT_FOUND) if dir_label isn't registered,
- * otherwise an error from opening/writing the file.
- */
-th_err th_save_to_disk(const th_request* req, th_buffer data, const char* dir_label, const char* filepath);
-
 /* request related declarations end */
 /* response related declarations begin */
 
@@ -354,6 +346,14 @@ th_err th_route(th_server* server, th_method method, const char* route, th_handl
  * @return TH_ERR_OK on success, otherwise an error code.
  */
 th_err th_add_dir(th_server* server, const char* name, const char* path);
+
+/** th_save_to_disk
+ * @brief Write data to a file inside one of the server's registered
+ * directories (see th_add_dir).
+ * @return TH_ERR_HTTP(TH_CODE_NOT_FOUND) if dir_label isn't registered,
+ * otherwise an error from opening/writing the file.
+ */
+th_err th_save_to_disk(th_server* server, th_buffer data, const char* dir_label, const char* filepath);
 
 /** th_poll
  * @brief Poll the server for any events and pending tasks.

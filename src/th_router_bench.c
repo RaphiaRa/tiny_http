@@ -21,7 +21,7 @@ TH_BENCH_BEGIN(router)
         th_router_add_route(&router, TH_METHOD_GET, TH_STR("/test"), router_bench_handler, NULL);
 
         th_request request = {0};
-        th_request_init(&request, NULL, NULL, NULL);
+        th_request_init(&request, NULL);
         request.method = TH_METHOD_GET;
         th_string_set(&request.uri_path, TH_STR("/test"));
         th_response response = {0};
@@ -45,7 +45,7 @@ TH_BENCH_BEGIN(router)
             &router, TH_METHOD_GET, TH_STR("/user/{int:id}/profile/{name}"), router_bench_handler, NULL);
 
         th_request request = {0};
-        th_request_init(&request, NULL, NULL, NULL);
+        th_request_init(&request, NULL);
         request.method = TH_METHOD_GET;
         th_string_set(&request.uri_path, TH_STR("/user/42/profile/edit"));
         th_response response = {0};
@@ -76,7 +76,7 @@ TH_BENCH_BEGIN(router)
         }
 
         th_request request = {0};
-        th_request_init(&request, NULL, NULL, NULL);
+        th_request_init(&request, NULL);
         request.method = TH_METHOD_GET;
         th_string_set(&request.uri_path, TH_STR("/victor"));
         th_response response = {0};

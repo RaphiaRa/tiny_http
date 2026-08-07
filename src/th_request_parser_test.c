@@ -7,7 +7,7 @@
 TH_TEST_BEGIN(request_parser)
 {
     th_request request;
-    th_request_init(&request, NULL, NULL, NULL);
+    th_request_init(&request, NULL);
     th_request_parser parser;
     th_request_parser_init(&parser);
 

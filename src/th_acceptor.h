@@ -6,6 +6,7 @@
 #include "th_address.h"
 #include "th_loop.h"
 #include "th_reactor.h"
+#include "th_socket.h"
 
 /** th_acceptor_ops
  * @brief The raw listen-socket syscalls a th_acceptor performs. Injected
@@ -83,11 +84,12 @@ th_acceptor_post(th_acceptor* acceptor, th_task* task)
     th_loop_push_task(acceptor->loop, task);
 }
 
-TH_INLINE(th_err)
-th_acceptor_accept(th_acceptor* acceptor, th_address* addr, int* out_fd)
-{
-    return acceptor->ops->accept(acceptor->ops, th_acceptor_get_fd(acceptor), addr, out_fd);
-}
+/** th_acceptor_accept
+ * @brief Accepts one pending connection and registers it with out_socket
+ * (via th_socket_set_fd), replacing any fd previously set on it.
+ */
+TH_PRIVATE(th_err)
+th_acceptor_accept(th_acceptor* acceptor, th_address* addr, th_socket* out_socket);
 
 /** th_acceptor_close
  * @brief Closes the underlying fd; the acceptor object itself stays valid

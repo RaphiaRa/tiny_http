@@ -8,6 +8,7 @@
 #include "th_op.h"
 #include "th_recv.h"
 #include "th_send.h"
+#include "th_socket.h"
 
 /* th_conn interface begin */
 
@@ -20,6 +21,7 @@
  */
 typedef struct th_conn_methods {
     th_address* (*get_address)(void* self);
+    th_socket* (*get_socket)(void* self);
     void (*start)(void* self);
 
     /** recv
@@ -50,6 +52,12 @@ TH_INLINE(th_address*)
 th_conn_get_address(th_conn* conn)
 {
     return conn->methods->get_address(conn);
+}
+
+TH_INLINE(th_socket*)
+th_conn_get_socket(th_conn* conn)
+{
+    return conn->methods->get_socket(conn);
 }
 
 TH_INLINE(void)

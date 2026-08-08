@@ -151,3 +151,13 @@ th_acceptor_deinit(th_acceptor* acceptor)
 {
     th_acceptor_close(acceptor);
 }
+
+TH_PRIVATE(th_err)
+th_acceptor_accept(th_acceptor* acceptor, th_address* addr, th_socket* out_socket)
+{
+    int fd = -1;
+    th_err err = acceptor->ops->accept(acceptor->ops, th_acceptor_get_fd(acceptor), addr, &fd);
+    if (err != TH_ERR_OK)
+        return err;
+    return th_socket_set_fd(out_socket, fd);
+}

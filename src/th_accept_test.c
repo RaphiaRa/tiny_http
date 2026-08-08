@@ -130,16 +130,14 @@ th_fake_acceptor_ops_reset(th_fake_acceptor_ops* ops)
 
 typedef struct th_recorded_result {
     bool called;
-    int fd;
     th_err err;
 } th_recorded_result;
 
 static void
-th_recorded_result_cb(void* user_data, int fd, th_err err)
+th_recorded_result_cb(void* user_data, th_err err)
 {
     th_recorded_result* result = user_data;
     result->called = true;
-    result->fd = fd;
     result->err = err;
 }
 
@@ -147,7 +145,6 @@ static void
 th_recorded_result_init(th_recorded_result* result)
 {
     result->called = false;
-    result->fd = -1;
     result->err = TH_ERR_OK;
 }
 
@@ -168,17 +165,19 @@ TH_TEST_BEGIN(accept)
         th_fake_acceptor_ops_reset(&ops);
         ops.accept_fd = 42;
 
+        th_socket socket;
+        th_socket_init(&socket, &loop, NULL);
         th_address addr;
         th_recorded_result result;
         th_recorded_result_init(&result);
         th_accept_op op;
-        th_accept_op_init(&op, &acceptor, &addr, th_recorded_result_cb, &result);
+        th_accept_op_init(&op, &acceptor, &addr, &socket, th_recorded_result_cb, &result);
         th_op_perform(&op.base);
         th_loop_run(&loop);
 
         TH_EXPECT(result.called);
         TH_EXPECT(result.err == TH_ERR_OK);
-        TH_EXPECT(result.fd == 42);
+        TH_EXPECT(th_socket_get_fd(&socket) == 42);
     }
     TH_TEST_CASE_END
     TH_TEST_CASE_BEGIN(accept_eagain_submits_and_retries)
@@ -187,17 +186,19 @@ TH_TEST_BEGIN(accept)
         ops.accept_err = TH_ERR_SYSTEM(TH_EAGAIN);
         ops.accept_fd = 7;
 
+        th_socket socket;
+        th_socket_init(&socket, &loop, NULL);
         th_address addr;
         th_recorded_result result;
         th_recorded_result_init(&result);
         th_accept_op op;
-        th_accept_op_init(&op, &acceptor, &addr, th_recorded_result_cb, &result);
+        th_accept_op_init(&op, &acceptor, &addr, &socket, th_recorded_result_cb, &result);
         th_op_perform(&op.base);
         th_loop_run(&loop);
 
         TH_EXPECT(result.called);
         TH_EXPECT(result.err == TH_ERR_OK);
-        TH_EXPECT(result.fd == 7);
+        TH_EXPECT(th_socket_get_fd(&socket) == 7);
     }
     TH_TEST_CASE_END
     TH_TEST_CASE_BEGIN(accept_error_completes_with_error)
@@ -205,11 +206,13 @@ TH_TEST_BEGIN(accept)
         th_fake_acceptor_ops_reset(&ops);
         ops.accept_err = TH_ERR_SYSTEM(TH_EIO);
 
+        th_socket socket;
+        th_socket_init(&socket, &loop, NULL);
         th_address addr;
         th_recorded_result result;
         th_recorded_result_init(&result);
         th_accept_op op;
-        th_accept_op_init(&op, &acceptor, &addr, th_recorded_result_cb, &result);
+        th_accept_op_init(&op, &acceptor, &addr, &socket, th_recorded_result_cb, &result);
         th_op_perform(&op.base);
         th_loop_run(&loop);
 
@@ -221,11 +224,13 @@ TH_TEST_BEGIN(accept)
     {
         th_fake_acceptor_ops_reset(&ops);
 
+        th_socket socket;
+        th_socket_init(&socket, &loop, NULL);
         th_address addr;
         th_recorded_result result;
         th_recorded_result_init(&result);
         th_accept_op op;
-        th_accept_op_init(&op, &acceptor, &addr, th_recorded_result_cb, &result);
+        th_accept_op_init(&op, &acceptor, &addr, &socket, th_recorded_result_cb, &result);
         th_op_abort(&op.base, TH_ERR_SYSTEM(TH_ECANCELED));
         th_loop_run(&loop);
 

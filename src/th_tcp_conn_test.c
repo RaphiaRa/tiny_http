@@ -248,7 +248,7 @@ TH_TEST_BEGIN(tcp_conn)
         th_conn* conn = NULL;
         TH_EXPECT(th_tcp_conn_create(&conn, &socket, &upgrader, &observer.base, NULL) == TH_ERR_OK);
         TH_EXPECT(observer.init_count == 1);
-        TH_EXPECT(th_tcp_conn_set_fd(conn, 5) == TH_ERR_OK);
+        TH_EXPECT(th_socket_set_fd(th_conn_get_socket(conn), 5) == TH_ERR_OK);
 
         th_conn_start(conn);
         TH_EXPECT(th_upgrade_calls == 1);
@@ -276,7 +276,7 @@ TH_TEST_BEGIN(tcp_conn)
 
         th_conn* conn = NULL;
         TH_EXPECT(th_tcp_conn_create(&conn, &socket, &upgrader, &observer.base, NULL) == TH_ERR_OK);
-        TH_EXPECT(th_tcp_conn_set_fd(conn, 5) == TH_ERR_OK);
+        TH_EXPECT(th_socket_set_fd(th_conn_get_socket(conn), 5) == TH_ERR_OK);
 
         th_address* addr = th_conn_get_address(conn);
         TH_EXPECT(addr != NULL);
@@ -303,7 +303,7 @@ TH_TEST_BEGIN(tcp_conn)
 
         th_conn* conn = NULL;
         TH_EXPECT(th_tcp_conn_create(&conn, &socket, &upgrader, &observer.base, NULL) == TH_ERR_OK);
-        TH_EXPECT(th_tcp_conn_set_fd(conn, 5) == TH_ERR_OK);
+        TH_EXPECT(th_socket_set_fd(th_conn_get_socket(conn), 5) == TH_ERR_OK);
 
         th_iov iov[1] = {{(void*)"hello", 5}};
         th_recorded_send result;
@@ -340,7 +340,7 @@ TH_TEST_BEGIN(tcp_conn)
 
         th_conn* conn = NULL;
         TH_EXPECT(th_tcp_conn_create(&conn, &socket, &upgrader, &observer.base, NULL) == TH_ERR_OK);
-        TH_EXPECT(th_tcp_conn_set_fd(conn, 5) == TH_ERR_OK);
+        TH_EXPECT(th_socket_set_fd(th_conn_get_socket(conn), 5) == TH_ERR_OK);
 
         char buf[64] = {0};
         th_recorded_recv result;
@@ -375,7 +375,7 @@ TH_TEST_BEGIN(tcp_conn)
 
         th_conn* conn = NULL;
         TH_EXPECT(th_tcp_conn_create(&conn, &socket, &upgrader, &observer.base, NULL) == TH_ERR_OK);
-        TH_EXPECT(th_tcp_conn_set_fd(conn, 5) == TH_ERR_OK);
+        TH_EXPECT(th_socket_set_fd(th_conn_get_socket(conn), 5) == TH_ERR_OK);
 
         th_conn_cancel(conn);
         TH_EXPECT(reactor.handle.cancelled);

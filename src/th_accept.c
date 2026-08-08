@@ -11,7 +11,7 @@ th_accept_op_is_retryable(th_err err)
 TH_LOCAL(void)
 th_accept_op_finalize(th_accept_op* op)
 {
-    op->callback(op->user_data, op->fd, op->err);
+    op->callback(op->user_data, op->err);
 }
 
 TH_LOCAL(void)
@@ -27,7 +27,7 @@ th_accept_op_perform(th_accept_op* op)
 {
     th_op_clear_flags(&op->base, TH_OP_IMMEDIATE);
     th_address_init(op->addr);
-    return th_acceptor_accept(op->acceptor, op->addr, &op->fd);
+    return th_acceptor_accept(op->acceptor, op->addr, op->socket);
 }
 
 TH_LOCAL(void)
@@ -54,13 +54,14 @@ th_accept_op_abort(void* self, th_err err)
 }
 
 TH_PRIVATE(void)
-th_accept_op_init(th_accept_op* op, th_acceptor* acceptor, th_address* addr, th_accept_cb callback, void* user_data)
+th_accept_op_init(th_accept_op* op, th_acceptor* acceptor, th_address* addr,
+                  th_socket* socket, th_accept_cb callback, void* user_data)
 {
     th_op_init(&op->base, TH_OP_READ, th_accept_op_fn, NULL, th_accept_op_abort);
     op->acceptor = acceptor;
     op->addr = addr;
+    op->socket = socket;
     op->callback = callback;
     op->user_data = user_data;
-    op->fd = -1;
     op->err = TH_ERR_OK;
 }

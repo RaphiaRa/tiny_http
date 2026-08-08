@@ -11,6 +11,10 @@
 #include <winsock2.h>
 #endif
 
+#if defined(TH_CONFIG_OS_OSX)
+#include <limits.h>
+#endif
+
 #if defined(TH_CONFIG_OS_POSIX)
 
 TH_LOCAL(th_err)
@@ -38,7 +42,12 @@ th_socket_ops_os_sendvec(void* self, int fd, const th_iov* iov, size_t iovcnt, s
 #endif
     struct msghdr msg = {0};
     msg.msg_iov = (struct iovec*)iov;
+#if defined(TH_CONFIG_OS_OSX)
+    TH_ASSERT(iovcnt <= INT_MAX);
+    msg.msg_iovlen = (int)iovcnt;
+#else
     msg.msg_iovlen = iovcnt;
+#endif
     ssize_t ret = sendmsg(fd, &msg, flags);
     if (ret < 0)
         return TH_ERR_SYSTEM(errno);
@@ -102,7 +111,12 @@ th_socket_ops_os_sendfile(void* self, int fd, const th_iov* iov, size_t iovcnt, 
 #endif
     struct msghdr msg = {0};
     msg.msg_iov = vec;
+#if defined(TH_CONFIG_OS_OSX)
+    TH_ASSERT(veclen <= INT_MAX);
+    msg.msg_iovlen = (int)veclen;
+#else
     msg.msg_iovlen = veclen;
+#endif
     ssize_t ret = sendmsg(fd, &msg, flags);
     if (ret < 0)
         return TH_ERR_SYSTEM(errno);

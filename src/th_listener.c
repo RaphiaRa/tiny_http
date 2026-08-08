@@ -7,6 +7,8 @@
 #include "th_allocator.h"
 #include "th_listener.h"
 #include "th_log.h"
+#include "th_ssl_conn.h"
+#include "th_ssl_ops.h"
 #include "th_tcp_conn.h"
 
 #undef TH_LOG_TAG
@@ -16,11 +18,11 @@ TH_LOCAL(th_err)
 th_listener_enable_ssl(th_listener* listener, const char* key_file, const char* cert_file)
 {
 #if TH_WITH_SSL
-    (void)listener;
-    (void)key_file;
-    (void)cert_file;
-    TH_LOG_ERROR("SSL support is being reworked onto th_conn/th_socket, not available yet.");
-    return TH_ERR_NOSUPPORT;
+    th_err err = TH_ERR_OK;
+    if ((err = th_ssl_context_init(&listener->ssl_context, th_ssl_ops_os(), key_file, cert_file)) != TH_ERR_OK)
+        return err;
+    listener->ssl_enabled = true;
+    return TH_ERR_OK;
 #else
     (void)listener;
     (void)key_file;
@@ -38,6 +40,7 @@ th_listener_init(th_listener* listener, th_loop* loop,
 {
     listener->loop = loop;
     listener->running = 0;
+    listener->ssl_enabled = false;
     listener->allocator = allocator ? allocator : th_default_allocator_get();
     th_err err = TH_ERR_OK;
     th_acceptor_init(&listener->acceptor, loop, th_acceptor_ops_os());
@@ -84,11 +87,21 @@ th_listener_async_accept(th_listener* listener)
     th_socket socket;
     th_socket_init(&socket, listener->loop, th_socket_ops_os());
     th_err err = TH_ERR_OK;
-    if ((err = th_tcp_conn_create(&listener->conn, &socket,
-                                  &listener->upgrader.base,
-                                  (th_conn_observer*)&listener->conn_tracker,
-                                  listener->allocator))
-        != TH_ERR_OK) {
+#if TH_WITH_SSL
+    if (listener->ssl_enabled) {
+        err = th_ssl_conn_create(&listener->conn, &socket, &listener->ssl_context, th_ssl_ops_os(),
+                                 &listener->upgrader.base,
+                                 (th_conn_observer*)&listener->conn_tracker,
+                                 listener->allocator);
+    } else
+#endif
+    {
+        err = th_tcp_conn_create(&listener->conn, &socket,
+                                 &listener->upgrader.base,
+                                 (th_conn_observer*)&listener->conn_tracker,
+                                 listener->allocator);
+    }
+    if (err != TH_ERR_OK) {
         return err;
     }
     th_accept_op_init(&listener->accept_op, &listener->acceptor, &listener->accept_addr,
@@ -135,7 +148,7 @@ th_listener_start(th_listener* listener)
 {
     // Client destroy handler
     listener->client_destroy_handler.listener = listener;
-    th_task_init(&listener->client_destroy_handler.base, th_listener_client_destroy_handler_fn, NULL);
+    th_task_init(&listener->client_destroy_handler.base, th_listener_client_destroy_handler_fn);
     listener->running = 1;
     th_err err = TH_ERR_OK;
     if ((err = th_listener_async_accept(listener)) != TH_ERR_OK)
@@ -156,6 +169,10 @@ th_listener_deinit(th_listener* listener)
 {
     th_acceptor_deinit(&listener->acceptor);
     th_conn_tracker_deinit(&listener->conn_tracker);
+#if TH_WITH_SSL
+    if (listener->ssl_enabled)
+        th_ssl_context_deinit(&listener->ssl_context);
+#endif
 }
 
 TH_PRIVATE(void)

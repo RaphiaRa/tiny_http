@@ -62,7 +62,7 @@ th_recv_op_abort(void* self, th_err err)
 TH_PRIVATE(void)
 th_recv_op_init(th_recv_op* op, th_socket* socket, void* addr, size_t len, bool exact, th_recv_cb callback, void* user_data)
 {
-    th_op_init(&op->base, TH_OP_READ, th_recv_op_fn, NULL, th_recv_op_abort);
+    th_op_init(&op->base, TH_OP_READ, th_recv_op_fn, th_recv_op_abort);
     op->socket = socket;
     op->addr = addr;
     op->len = len;

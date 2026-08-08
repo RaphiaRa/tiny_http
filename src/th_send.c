@@ -62,7 +62,7 @@ th_send_op_abort(void* self, th_err err)
 TH_PRIVATE(void)
 th_send_op_init(th_send_op* op, th_socket* socket, const void* addr, size_t len, th_send_cb callback, void* user_data)
 {
-    th_op_init(&op->base, TH_OP_WRITE, th_send_op_fn, NULL, th_send_op_abort);
+    th_op_init(&op->base, TH_OP_WRITE, th_send_op_fn, th_send_op_abort);
     op->socket = socket;
     op->addr = addr;
     op->len = len;

@@ -10,6 +10,7 @@
 #include "th_http.h"
 #include "th_loop.h"
 #include "th_router.h"
+#include "th_ssl_context.h"
 #include "th_string.h"
 
 typedef struct th_listener th_listener;
@@ -41,10 +42,20 @@ struct th_listener {
      */
     th_accept_op accept_op;
 
+#if TH_WITH_SSL
+    /** Ssl context used to create SSL connections, when ssl_enabled. */
+    th_ssl_context ssl_context;
+#endif
+
     /** As long as the listener keeps accepting new connections,
      * this flag will be set to 1.
      */
     bool running;
+
+    /** Set once th_listener_enable_ssl succeeds; incoming connections
+     * are then accepted as th_ssl_conn instead of th_tcp_conn.
+     */
+    bool ssl_enabled;
     th_allocator* allocator;
 };
 

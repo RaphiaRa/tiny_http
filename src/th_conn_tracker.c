@@ -19,7 +19,6 @@ th_conn_tracker_on_conn_deinit(th_conn_observer* observer, th_conn_observable* o
     if (tracker->task) {
         th_task* task = TH_MOVE_PTR(tracker->task);
         th_task_complete(task);
-        th_task_destroy(task);
     }
 }
 

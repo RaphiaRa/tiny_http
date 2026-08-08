@@ -37,6 +37,13 @@ th_tcp_conn_get_address(void* self)
     return &conn->addr;
 }
 
+TH_LOCAL(th_socket*)
+th_tcp_conn_get_socket(void* self)
+{
+    th_tcp_conn* conn = self;
+    return &conn->socket;
+}
+
 TH_LOCAL(void)
 th_tcp_conn_start(void* self)
 {
@@ -84,6 +91,7 @@ th_tcp_conn_free(void* self)
 
 static const th_conn_methods th_tcp_conn_methods = {
     .get_address = th_tcp_conn_get_address,
+    .get_socket = th_tcp_conn_get_socket,
     .start = th_tcp_conn_start,
     .recv = th_tcp_conn_recv,
     .send = th_tcp_conn_send,
@@ -107,11 +115,4 @@ th_tcp_conn_create(th_conn** out, th_socket* socket,
     th_address_init(&conn->addr);
     *out = (th_conn*)conn;
     return TH_ERR_OK;
-}
-
-TH_PRIVATE(th_err)
-th_tcp_conn_set_fd(th_conn* conn_base, int fd)
-{
-    th_tcp_conn* conn = (th_tcp_conn*)conn_base;
-    return th_socket_set_fd(&conn->socket, fd);
 }

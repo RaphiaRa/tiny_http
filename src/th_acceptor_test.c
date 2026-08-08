@@ -184,10 +184,11 @@ TH_TEST_BEGIN(acceptor)
         TH_EXPECT(th_acceptor_open(&acceptor, "127.0.0.1", "8080") == TH_ERR_OK);
         ops.accept_fd = 42;
         th_address addr;
-        int out_fd = -1;
-        TH_EXPECT(th_acceptor_accept(&acceptor, &addr, &out_fd) == TH_ERR_OK);
+        th_socket socket;
+        th_socket_init(&socket, &loop, NULL);
+        TH_EXPECT(th_acceptor_accept(&acceptor, &addr, &socket) == TH_ERR_OK);
         TH_EXPECT(ops.last_fd == 9);
-        TH_EXPECT(out_fd == 42);
+        TH_EXPECT(th_socket_get_fd(&socket) == 42);
     }
     TH_TEST_CASE_END
     TH_TEST_CASE_BEGIN(acceptor_accept_propagates_eagain)
@@ -195,8 +196,9 @@ TH_TEST_BEGIN(acceptor)
         TH_EXPECT(th_acceptor_open(&acceptor, "127.0.0.1", "8080") == TH_ERR_OK);
         ops.accept_err = TH_ERR_SYSTEM(TH_EAGAIN);
         th_address addr;
-        int out_fd = -1;
-        TH_EXPECT(th_acceptor_accept(&acceptor, &addr, &out_fd) == TH_ERR_SYSTEM(TH_EAGAIN));
+        th_socket socket;
+        th_socket_init(&socket, &loop, NULL);
+        TH_EXPECT(th_acceptor_accept(&acceptor, &addr, &socket) == TH_ERR_SYSTEM(TH_EAGAIN));
     }
     TH_TEST_CASE_END
     TH_TEST_CASE_BEGIN(acceptor_cancel_forwards_to_handle)

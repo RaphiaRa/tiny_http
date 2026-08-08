@@ -76,7 +76,7 @@ cleanup:
 }
 
 TH_LOCAL(void)
-th_listener_accept_complete(void* user_data, int fd, th_err err);
+th_listener_accept_complete(void* user_data, th_err err);
 
 TH_LOCAL(th_err)
 th_listener_async_accept(th_listener* listener)
@@ -92,6 +92,7 @@ th_listener_async_accept(th_listener* listener)
         return err;
     }
     th_accept_op_init(&listener->accept_op, &listener->acceptor, &listener->accept_addr,
+                      th_conn_get_socket(listener->conn),
                       th_listener_accept_complete, listener);
     th_op_perform(&listener->accept_op.base);
     return TH_ERR_OK;
@@ -111,14 +112,13 @@ th_listener_client_destroy_handler_fn(void* self)
 }
 
 TH_LOCAL(void)
-th_listener_accept_complete(void* user_data, int fd, th_err err)
+th_listener_accept_complete(void* user_data, th_err err)
 {
     th_listener* listener = user_data;
     if (err != TH_ERR_OK) {
         TH_LOG_ERROR("Accept failed: %s", th_strerror(err));
         th_conn_destroy(TH_MOVE_PTR(listener->conn));
     } else {
-        th_tcp_conn_set_fd(listener->conn, fd);
         th_conn_start(listener->conn);
     }
     if (!listener->running) {

@@ -89,11 +89,20 @@ add_library(tiny_http::tiny_http ALIAS tiny_http)
 
 # Extra warnings, treat warnings as error
 if(CMAKE_C_COMPILER_ID MATCHES "Clang|GNU")
-   SET(TH_WOPTIONS -Wall -Wextra -Wpedantic -Werror -Wstrict-prototypes -Wmissing-prototypes -Wshadow -Wconversion
-       -Wformat=2 -Wformat-security -Wnull-dereference -Wcast-align -Wwrite-strings -Wredundant-decls
+   include(CheckCCompilerFlag)
+   SET(TH_WOPTIONS_CANDIDATES -Wall -Wextra -Wpedantic -Werror -Wstrict-prototypes -Wmissing-prototypes -Wshadow
+       -Wconversion -Wformat=2 -Wformat-security -Wnull-dereference -Wcast-align -Wwrite-strings -Wredundant-decls
        -Wduplicated-cond -Wduplicated-branches -Wold-style-definition -Wnested-externs -Wbad-function-cast
        -Wundef -Wvla -Wdouble-promotion -Wfloat-equal -Winline -Warray-bounds=2 -Wstringop-overflow=4
        -Wjump-misses-init -Wswitch-default)
+   SET(TH_WOPTIONS "")
+   foreach (WOPTION ${TH_WOPTIONS_CANDIDATES})
+       string(MAKE_C_IDENTIFIER "TH_HAVE${WOPTION}" WOPTION_VAR)
+       check_c_compiler_flag(${WOPTION} ${WOPTION_VAR})
+       if (${WOPTION_VAR})
+           list(APPEND TH_WOPTIONS ${WOPTION})
+       endif()
+   endforeach()
    message(STATUS "Using Clang/GNU compiler, enabling extra warnings: ${TH_WOPTIONS}")
    target_compile_options(tiny_http PRIVATE ${TH_WOPTIONS})
 endif()

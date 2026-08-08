@@ -62,11 +62,9 @@ th_smem_ensure_buf_size(BIO* bio, size_t size)
 {
     th_static_bio_data* data = BIO_get_data(bio);
     size = TH_MIN(size, data->max_len);
-    if (th_buf_vec_size(&data->buf) < size) {
+    if (th_buf_vec_size(&data->buf) < size)
         (void)th_buf_vec_resize(&data->buf, size);
-        size = th_buf_vec_size(&data->buf);
-    }
-    return size;
+    return th_buf_vec_size(&data->buf);
 }
 
 TH_PRIVATE(void)

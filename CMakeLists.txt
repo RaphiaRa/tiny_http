@@ -66,10 +66,16 @@ SET(TH_CORE_SRC
     src/th_timer.c
     src/th_conn_tracker.c
     src/th_url_decode.c
-#   SSL (compiled out via TH_WITH_SSL=0 until SSL is ported onto th_conn/th_socket)
+#   SSL (compiled out via TH_WITH_SSL=0 when OpenSSL is not found)
     src/th_ssl_smem_bio.c
     src/th_ssl_context.c
     src/th_ssl_error.c
+    src/th_ssl_ops.c
+    src/th_ssl_session.c
+    src/th_ssl_io.c
+    src/th_ssl_recv.c
+    src/th_ssl_send.c
+    src/th_ssl_conn.c
 )
 
 SET(TH_TEST_SRC
@@ -227,6 +233,16 @@ if (NOT TH_DISABLE_TESTS)
         src/th_string_test.c
     )
 
+    if (TH_WITH_SSL)
+        list(APPEND TH_TESTS
+            src/th_ssl_smem_bio_test.c
+            src/th_ssl_context_test.c
+            src/th_ssl_session_test.c
+            src/th_ssl_io_test.c
+            src/th_ssl_conn_test.c
+        )
+    endif()
+
     create_test_sourcelist(TH_TEST_SRC_LIST th_test.c
         ${TH_TESTS}
         EXTRA_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/src/th_test.h
@@ -238,6 +254,7 @@ if (NOT TH_DISABLE_TESTS)
         tiny_http::tiny_http
     )
     target_include_directories(th_test PRIVATE src)
+    target_compile_definitions(th_test PRIVATE TH_WITH_SSL=${TH_WITH_SSL})
 
     foreach (test_src ${TH_TESTS})
         get_filename_component(test_name ${test_src} NAME_WE)

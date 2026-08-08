@@ -60,7 +60,7 @@ TH_TEST_BEGIN(loop)
     TH_TEST_CASE_BEGIN(loop_runs_queued_task_polling_reactor_with_zero_timeout_first)
     {
         th_task task;
-        th_task_init(&task, th_noop_task_fn, NULL);
+        th_task_init(&task, th_noop_task_fn);
         th_loop_push_task(&loop, &task);
         TH_EXPECT(th_loop_poll(&loop, 1000) == TH_ERR_OK);
         TH_EXPECT(reactor.run_count == 1);
@@ -71,7 +71,7 @@ TH_TEST_BEGIN(loop)
     TH_TEST_CASE_BEGIN(loop_push_uncounted_task_does_not_change_count)
     {
         th_task task;
-        th_task_init(&task, th_noop_task_fn, NULL);
+        th_task_init(&task, th_noop_task_fn);
         size_t before = loop.num_tasks;
         th_loop_push_uncounted_task(&loop, &task);
         TH_EXPECT(loop.num_tasks == before);
@@ -84,7 +84,7 @@ TH_TEST_BEGIN(loop)
     {
         th_task tasks[3];
         for (int i = 0; i < 3; ++i) {
-            th_task_init(&tasks[i], th_noop_task_fn, NULL);
+            th_task_init(&tasks[i], th_noop_task_fn);
             th_loop_push_task(&loop, &tasks[i]);
         }
         th_loop_run(&loop);

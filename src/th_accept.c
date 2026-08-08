@@ -57,7 +57,7 @@ TH_PRIVATE(void)
 th_accept_op_init(th_accept_op* op, th_acceptor* acceptor, th_address* addr,
                   th_socket* socket, th_accept_cb callback, void* user_data)
 {
-    th_op_init(&op->base, TH_OP_READ, th_accept_op_fn, NULL, th_accept_op_abort);
+    th_op_init(&op->base, TH_OP_READ, th_accept_op_fn, th_accept_op_abort);
     op->acceptor = acceptor;
     op->addr = addr;
     op->socket = socket;

@@ -80,7 +80,7 @@ th_test_op_abort(void* self, th_err err)
 static void
 th_test_op_init(th_test_op* op, th_handle* handle, th_op_type type, int runs)
 {
-    th_op_init(&op->base, type, th_test_op_fn, NULL, th_test_op_abort);
+    th_op_init(&op->base, type, th_test_op_fn, th_test_op_abort);
     op->handle = handle;
     op->runs = runs;
     op->aborted = false;

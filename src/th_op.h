@@ -58,9 +58,9 @@ typedef struct th_op {
 } th_op;
 
 TH_INLINE(void)
-th_op_init(th_op* op, th_op_type type, void (*fn)(void* self), void (*destroy)(void* self), void (*abort)(void* self, th_err err))
+th_op_init(th_op* op, th_op_type type, void (*fn)(void* self), void (*abort)(void* self, th_err err))
 {
-    th_task_init(&op->base, fn, destroy);
+    th_task_init(&op->base, fn);
     op->abort = abort;
     op->type = type;
     op->flags = TH_OP_IMMEDIATE;

@@ -69,7 +69,7 @@ th_sendfile_op_abort(void* self, th_err err)
 TH_PRIVATE(void)
 th_sendfile_op_init(th_sendfile_op* op, th_socket* socket, th_iov* iov, size_t iovcnt, th_file* file, size_t offset, size_t len, th_send_cb callback, void* user_data)
 {
-    th_op_init(&op->base, TH_OP_WRITE, th_sendfile_op_fn, NULL, th_sendfile_op_abort);
+    th_op_init(&op->base, TH_OP_WRITE, th_sendfile_op_fn, th_sendfile_op_abort);
     op->socket = socket;
     op->iov = iov;
     op->iovcnt = iovcnt;

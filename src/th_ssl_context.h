@@ -6,15 +6,18 @@
 #if TH_WITH_SSL
 #include <th.h>
 
+#include "th_ssl_ops.h"
+
 #include <openssl/ssl.h>
 
 typedef struct th_ssl_context {
     SSL_CTX* ctx;
     BIO_METHOD* smem_method;
+    th_ssl_ops* ops;
 } th_ssl_context;
 
 TH_PRIVATE(th_err)
-th_ssl_context_init(th_ssl_context* context, const char* key, const char* cert);
+th_ssl_context_init(th_ssl_context* context, th_ssl_ops* ops, const char* key, const char* cert);
 
 TH_PRIVATE(void)
 th_ssl_context_deinit(th_ssl_context* context);

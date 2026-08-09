@@ -326,20 +326,21 @@ endif()
 
 # Amalgamation
 
-if (NOT TH_DISABLE_AMALGAMATION)
+option(TH_ENABLE_AMALGAMATION "Generate and build the amalgamated th.c/th.h" OFF)
+
+if (TH_ENABLE_AMALGAMATION)
     set(Python3_FIND_VIRTUALENV FIRST)
     find_package(Python3)
     if (Python3_FOUND)
         message(STATUS "Found Python3: ${Python3_EXECUTABLE}")
     else()
-        message(STATUS "Python3 not found, disabling amalgamation")
-        SET(TH_DISABLE_AMALGAMATION 1)
+        message(FATAL_ERROR "TH_ENABLE_AMALGAMATION is on but Python3 was not found")
     endif()
 endif()
 
 # Check whether all required python modules are available
 
-if (NOT TH_DISABLE_AMALGAMATION)
+if (TH_ENABLE_AMALGAMATION)
     SET(PYTHON_REQUIRED_MODULES os re argparse networkx)
     foreach (PYTHON_MODULE ${PYTHON_REQUIRED_MODULES})
         execute_process(
@@ -347,14 +348,13 @@ if (NOT TH_DISABLE_AMALGAMATION)
             RESULT_VARIABLE PYTHON_MODULE_RESULT
         )
         if (NOT PYTHON_MODULE_RESULT EQUAL 0)
-            message(STATUS "Python module ${PYTHON_MODULE} not found, disabling amalgamation")
-            SET(TH_DISABLE_AMALGAMATION 1)
+            message(FATAL_ERROR "TH_ENABLE_AMALGAMATION is on but Python module ${PYTHON_MODULE} was not found")
         endif()
     endforeach()
 endif()
 
 
-if (NOT TH_DISABLE_AMALGAMATION)
+if (TH_ENABLE_AMALGAMATION)
     # run amalgamation.py with TH_CORE_SRC and TH_3RD_PARTY_SRC
    function(amalgamation_generate OUTPUT_FILE)
         # Amalgamation of th.c

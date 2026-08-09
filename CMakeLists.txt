@@ -9,6 +9,7 @@ check_ipo_supported()
 find_program(GPERF gperf)
 if (GPERF)
     message(STATUS "Found gperf: ${GPERF}")
+    set(TH_GPERF_SOURCES "")
     function(gperf_generate OUTPUT_FILE INPUT_FILE)
         add_custom_command(
             OUTPUT ${OUTPUT_FILE}
@@ -16,6 +17,10 @@ if (GPERF)
             DEPENDS ${INPUT_FILE}
             COMMENT "Running gperf on ${INPUT_FILE}"
         )
+        # OUTPUT_FILE is excluded from coverage directly; INPUT_FILE (the
+        # .gperf grammar) is excluded too since gperf emits #line directives
+        # pointing back to it, so gcov attributes some lines there instead.
+        set(TH_GPERF_SOURCES ${TH_GPERF_SOURCES} ${OUTPUT_FILE} ${INPUT_FILE} PARENT_SCOPE)
     endfunction(gperf_generate OUTPUT_FILE INPUT_FILE)
     gperf_generate(${CMAKE_CURRENT_SOURCE_DIR}/src/th_mime.c ${CMAKE_CURRENT_SOURCE_DIR}/src/th_mime.gperf)
     gperf_generate(${CMAKE_CURRENT_SOURCE_DIR}/src/th_method.c ${CMAKE_CURRENT_SOURCE_DIR}/src/th_method.gperf)
@@ -273,15 +278,23 @@ if (NOT TH_DISABLE_TESTS)
     if (TH_ENABLE_COVERAGE)
         find_program(GCOVR gcovr)
         if (GCOVR)
+            set(TH_COVERAGE_GPERF_EXCLUDES "")
+            foreach (GPERF_SOURCE ${TH_GPERF_SOURCES})
+                list(APPEND TH_COVERAGE_GPERF_EXCLUDES --exclude ${GPERF_SOURCE})
+            endforeach()
             add_custom_target(coverage
                 COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
                 COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/coverage
                 COMMAND ${GCOVR} --root ${CMAKE_CURRENT_SOURCE_DIR}
                     --filter ${CMAKE_CURRENT_SOURCE_DIR}/src/
                     --exclude .*_test\\.c$$
+                    --exclude .*_bench\\.c$$
+                    ${TH_COVERAGE_GPERF_EXCLUDES}
                     --object-directory ${CMAKE_CURRENT_BINARY_DIR}
+                    --merge-mode-functions separate
                     --print-summary
                     --html-details ${CMAKE_CURRENT_BINARY_DIR}/coverage/index.html
+                    --xml-pretty --output ${CMAKE_CURRENT_BINARY_DIR}/coverage/coverage.xml
                 WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
                 DEPENDS th_test
                 COMMENT "Running tests and generating coverage report"

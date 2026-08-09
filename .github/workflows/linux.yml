@@ -18,19 +18,38 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential gperf
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.x'
-      - name: Install Python dependencies
-        run: |
-          pip install -r requirements.txt
       - name: Build
         run: |
           mkdir build; cd build
-          cmake .. -DPython3_EXECUTABLE==$(which python)
+          cmake .. -DCMAKE_BUILD_TYPE=Debug -DTH_ENABLE_ASAN=ON -DTH_ENABLE_UBSAN=ON
           make -j$(nproc)
       - name: Test
         run: |
           cd build
-          ctest
+          ctest --output-on-failure
+
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential gperf
+      - name: Build with coverage
+        run: |
+          mkdir build; cd build
+          cmake .. -DTH_ENABLE_COVERAGE=ON
+          make -j$(nproc)
+      - name: Test
+        run: |
+          cd build
+          ctest --output-on-failure
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          directory: build
+          gcov: true
+          fail_ci_if_error: true

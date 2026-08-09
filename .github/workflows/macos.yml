@@ -17,19 +17,12 @@ jobs:
       - name: Install dependencies
         run: |
           brew install gperf
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.x'
-      - name: Install Python dependencies
-        run: |
-          pip install -r requirements.txt
       - name: Build
         run: |
           mkdir build; cd build
-          cmake .. -DPython3_EXECUTABLE==$(which python)
+          cmake .. -DCMAKE_BUILD_TYPE=Debug -DTH_ENABLE_ASAN=ON -DTH_ENABLE_UBSAN=ON
           make -j$(nproc)
       - name: Test
         run: |
           cd build
-          ctest
+          ctest --output-on-failure

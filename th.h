@@ -4,6 +4,12 @@
 #include <stdbool.h>
 #include <stddef.h>
 
+#if defined(__GNUC__) || defined(__clang__)
+#define TH_PRINTF_FMT(fmt_idx, args_idx) __attribute__((format(printf, fmt_idx, args_idx)))
+#else
+#define TH_PRINTF_FMT(fmt_idx, args_idx)
+#endif
+
 /* th_allocator declarations begin */
 
 /** th_allocator
@@ -216,14 +222,7 @@ typedef struct th_cookie_attr {
 /* cookie related declarations end */
 /* request related declarations begin */
 
-typedef struct th_upload th_upload;
-
-typedef struct th_upload_info {
-    const char* name;
-    const char* filename;
-    const char* content_type;
-    size_t size;
-} th_upload_info;
+typedef struct th_part th_part;
 
 typedef struct th_iter_methods th_iter_methods;
 
@@ -250,11 +249,13 @@ const char* th_cval(const th_iter* it);
 
 typedef struct th_request th_request;
 
-const th_upload* th_find_upload(const th_request* req, const char* name);
-th_upload_info th_upload_get_info(const th_upload* upload);
-th_buffer th_upload_get_data(const th_upload* upload);
-th_err th_upload_save(const th_upload* upload, const char* dir_label, const char* filepath);
-th_iter th_upload_iter(const th_request* req);
+const th_part* th_find_part(const th_request* req, const char* name);
+th_iter th_part_iter(const th_request* req);
+
+const char* th_part_name(const th_part* part);
+const char* th_part_filename(const th_part* part);
+const char* th_part_content_type(const th_part* part);
+th_buffer th_part_content(const th_part* part);
 
 const char* th_find_header(const th_request* req, const char* name);
 th_iter th_header_iter(const th_request* req);
@@ -285,7 +286,7 @@ typedef struct th_response th_response;
 /** th_printf_body
  * @brief Set the body of the response from a printf-style format string.
  */
-th_err th_printf_body(th_response* resp, const char* fmt, ...);
+th_err th_printf_body(th_response* resp, const char* fmt, ...) TH_PRINTF_FMT(2, 3);
 
 /** th_set_body_from_file
  * @brief Set the body of the response from a file.
@@ -351,6 +352,14 @@ th_err th_route(th_server* server, th_method method, const char* route, th_handl
  * @return TH_ERR_OK on success, otherwise an error code.
  */
 th_err th_add_dir(th_server* server, const char* name, const char* path);
+
+/** th_save_to_disk
+ * @brief Write data to a file inside one of the server's registered
+ * directories (see th_add_dir).
+ * @return TH_ERR_HTTP(TH_CODE_NOT_FOUND) if dir_label isn't registered,
+ * otherwise an error from opening/writing the file.
+ */
+th_err th_save_to_disk(th_server* server, th_buffer data, const char* dir_label, const char* filepath);
 
 /** th_poll
  * @brief Poll the server for any events and pending tasks.

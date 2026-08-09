@@ -159,6 +159,7 @@ th_response_set_body(th_response* response, th_str body)
 }
 
 TH_LOCAL(th_err)
+TH_PRINTF_FMT(2, 0)
 th_response_set_body_va(th_response* response, const char* fmt, va_list args)
 {
     char buffer[512];

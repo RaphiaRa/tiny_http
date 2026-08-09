@@ -90,7 +90,7 @@ th_http_handle_error(th_http* http, th_err err)
 TH_LOCAL(void)
 th_http_handle_require_1_1(th_http* http)
 {
-    TH_LOG_ERROR("%p: Trying send a HTTP/1.1 response to a HTTP/1.0 client, sending 400 Bad Request instead", http);
+    TH_LOG_ERROR("%p: Trying send a HTTP/1.1 response to a HTTP/1.0 client, sending 400 Bad Request instead", (void*)http);
     th_response_set_body(&http->response, TH_STR("HTTP/1.1 required for this request"));
     th_http_handle_error(http, TH_ERR_HTTP(TH_CODE_BAD_REQUEST));
 }
@@ -254,7 +254,7 @@ th_http_handle_write_response(void* user_data, size_t len, th_err err)
     th_http* http = user_data;
     (void)len;
     if (err != TH_ERR_OK) {
-        TH_LOG_ERROR("%p: Write error: %s", http, th_strerror(err));
+        TH_LOG_ERROR("%p: Write error: %s", (void*)http, th_strerror(err));
         http->close = TH_HTTP_CLOSE; // Connection is broken, close it
     } else {
         TH_LOG_TRACE("%p: Write response of %d bytes", http, (int)len);

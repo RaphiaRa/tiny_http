@@ -4,6 +4,12 @@
 #include <stdbool.h>
 #include <stddef.h>
 
+#if defined(__GNUC__) || defined(__clang__)
+#define TH_PRINTF_FMT(fmt_idx, args_idx) __attribute__((format(printf, fmt_idx, args_idx)))
+#else
+#define TH_PRINTF_FMT(fmt_idx, args_idx)
+#endif
+
 /* th_allocator declarations begin */
 
 /** th_allocator
@@ -280,7 +286,7 @@ typedef struct th_response th_response;
 /** th_printf_body
  * @brief Set the body of the response from a printf-style format string.
  */
-th_err th_printf_body(th_response* resp, const char* fmt, ...);
+th_err th_printf_body(th_response* resp, const char* fmt, ...) TH_PRINTF_FMT(2, 3);
 
 /** th_set_body_from_file
  * @brief Set the body of the response from a file.

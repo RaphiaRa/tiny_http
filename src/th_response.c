@@ -276,6 +276,7 @@ th_set_body(th_response* response, const char* body)
 }
 
 TH_PUBLIC(th_err)
+TH_PRINTF_FMT(2, 3)
 th_printf_body(th_response* resp, const char* fmt, ...)
 {
     va_list args;

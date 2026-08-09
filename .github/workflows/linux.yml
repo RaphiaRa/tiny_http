@@ -37,19 +37,19 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential gperf
+          pip install gcovr
       - name: Build with coverage
         run: |
           mkdir build; cd build
           cmake .. -DTH_ENABLE_COVERAGE=ON
           make -j$(nproc)
-      - name: Test
+      - name: Generate coverage report
         run: |
           cd build
-          ctest --output-on-failure
+          make coverage
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          directory: build
-          gcov: true
+          files: build/coverage/coverage.xml
           fail_ci_if_error: true

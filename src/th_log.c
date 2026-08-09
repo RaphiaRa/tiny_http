@@ -50,6 +50,7 @@ th_default_log_get(void)
 }
 
 TH_PRIVATE(void)
+TH_PRINTF_FMT(2, 3)
 th_log_printf(int level, const char* fmt, ...)
 {
     th_log* log = th_log_get();

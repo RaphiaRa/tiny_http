@@ -51,7 +51,7 @@ th_ssl_conn_handshake_complete(void* user_data, size_t size, th_err err)
     (void)size;
     th_ssl_conn* conn = user_data;
     if (err != TH_ERR_OK) {
-        TH_LOG_ERROR("%p: SSL handshake failed: %s", conn, th_strerror(err));
+        TH_LOG_ERROR("%p: SSL handshake failed: %s", (void*)conn, th_strerror(err));
         th_conn_destroy((th_conn*)conn);
         return;
     }

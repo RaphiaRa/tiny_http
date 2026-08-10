@@ -10,10 +10,10 @@ typedef enum {
     TH_TEST_FAILURE = -1,
 } th_test_result;
 
-#define TH_EXPECT(x)                                                   \
-    if ((x) == 0) {                                                    \
-        printf("Test failed: %s, at %s:%d\n", #x, __FILE__, __LINE__); \
-        return TH_TEST_FAILURE;                                        \
+#define TH_EXPECT(x)                                                           \
+    if ((x) == 0) {                                                            \
+        printf(" failed\n Case %s failed at %s:%d\n", #x, __FILE__, __LINE__); \
+        return TH_TEST_FAILURE;                                                \
     }
 
 /** th_test_setup

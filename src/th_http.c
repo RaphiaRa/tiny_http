@@ -166,6 +166,7 @@ th_http_handle_request_and_write_response(th_http* http)
     th_response* response = &http->response;
     th_http_prehandle_request(http);
     th_err err = th_http_error(th_http_handle_route(http->router, &http->request, &http->response));
+    th_response_set_code(response, TH_ERR_CODE(err));
     switch (th_http_code_get_type(TH_ERR_CODE(err))) {
     case TH_HTTP_CODE_TYPE_INFORMATIONAL:
         if (request->version == 0) {

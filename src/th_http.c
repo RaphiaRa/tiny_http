@@ -52,7 +52,13 @@ th_http_complete(th_http* http)
 TH_LOCAL(void)
 th_http_write_response(th_http* http)
 {
-    th_response_async_write(&http->response, http->conn, th_http_handle_write_response, http);
+    th_response_write_plan plan;
+    th_err err = th_response_prepare_write(&http->response, &plan);
+    if (err != TH_ERR_OK) {
+        th_http_handle_write_response(http, 0, err);
+        return;
+    }
+    th_conn_send(http->conn, plan.iov, plan.iovcnt, plan.file, plan.offset, plan.len, th_http_handle_write_response, http);
 }
 
 TH_LOCAL(void)

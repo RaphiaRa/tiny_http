@@ -176,7 +176,7 @@ th_response_set_body_va(th_response* response, const char* fmt, va_list args)
         }
     } else {
         th_string_resize(&response->body, (size_t)len, ' ');
-        vsnprintf(th_string_at(&response->body, 0), (size_t)len, fmt, args);
+        vsnprintf(th_string_at(&response->body, 0), (size_t)len + 1, fmt, args);
     }
     response->is_file = 0;
     return TH_ERR_OK;
@@ -239,8 +239,8 @@ th_response_set_default_headers(th_response* response)
     return TH_ERR_OK;
 }
 
-TH_PRIVATE(void)
-th_response_async_write(th_response* response, th_conn* conn, th_send_cb callback, void* user_data)
+TH_PRIVATE(th_err)
+th_response_prepare_write(th_response* response, th_response_write_plan* plan)
 {
     th_err err = TH_ERR_OK;
     size_t iovcnt = 2; // start line + headers
@@ -248,24 +248,26 @@ th_response_async_write(th_response* response, th_conn* conn, th_send_cb callbac
         response->file_len = response->fcache_entry->stream.size;
     }
     if ((err = th_response_set_default_headers(response)) != TH_ERR_OK)
-        goto cleanup;
+        return err;
     if ((err = th_response_finalize_headers(response)) != TH_ERR_OK)
-        goto cleanup;
+        return err;
     if (!response->only_headers && response->is_file == 0 && th_string_len(&response->body) > 0) {
         response->iov[iovcnt].base = (void*)th_string_data(&response->body);
         response->iov[iovcnt].len = th_string_len(&response->body);
         iovcnt++;
     }
+    plan->iov = response->iov;
+    plan->iovcnt = iovcnt;
     if (!response->only_headers && response->is_file != 0) {
-        th_conn_send(conn, response->iov, iovcnt, &response->fcache_entry->stream, 0, (size_t)response->file_len, callback, user_data);
+        plan->file = &response->fcache_entry->stream;
+        plan->offset = 0;
+        plan->len = (size_t)response->file_len;
     } else {
-        th_conn_send(conn, response->iov, iovcnt, NULL, 0, 0, callback, user_data);
+        plan->file = NULL;
+        plan->offset = 0;
+        plan->len = 0;
     }
-    return;
-cleanup:
-    // Header formatting failed before any I/O was attempted (out of
-    // memory); safe to call back synchronously since no op is pending.
-    callback(user_data, 0, err);
+    return TH_ERR_OK;
 }
 
 /* Public response API begin */

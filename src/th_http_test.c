@@ -1,6 +1,7 @@
 #include "th_conn_tracker.h"
 #include "th_fmt.h"
 #include "th_http.h"
+#include "th_system_error.h"
 #include "th_test.h"
 #include "th_utility.h"
 
@@ -175,6 +176,24 @@ th_test_handler(void* user_data, const th_request* req, th_response* resp)
     return TH_ERR_OK;
 }
 
+static th_err
+th_test_informational_handler(void* user_data, const th_request* req, th_response* resp)
+{
+    (void)user_data;
+    (void)req;
+    (void)resp;
+    return TH_ERR_HTTP(100); // Continue
+}
+
+static th_err
+th_test_system_error_handler(void* user_data, const th_request* req, th_response* resp)
+{
+    (void)user_data;
+    (void)req;
+    (void)resp;
+    return TH_ERR_SYSTEM(TH_ENOENT);
+}
+
 TH_TEST_BEGIN(http)
 {
     th_conn_tracker tracker;
@@ -183,6 +202,8 @@ TH_TEST_BEGIN(http)
     th_router_init(&router, th_default_allocator_get());
     TH_EXPECT(th_router_add_route(&router, TH_METHOD_GET, TH_STR("/test"), th_test_handler, NULL) == TH_ERR_OK);
     TH_EXPECT(th_router_add_route(&router, TH_METHOD_POST, TH_STR("/test"), th_test_handler, NULL) == TH_ERR_OK);
+    TH_EXPECT(th_router_add_route(&router, TH_METHOD_GET, TH_STR("/informational"), th_test_informational_handler, NULL) == TH_ERR_OK);
+    TH_EXPECT(th_router_add_route(&router, TH_METHOD_GET, TH_STR("/system-error"), th_test_system_error_handler, NULL) == TH_ERR_OK);
     th_http_upgrader upgrader;
     th_http_upgrader_init(&upgrader, &tracker, &router, NULL, NULL, th_default_allocator_get());
     th_fake_conn conn;
@@ -405,6 +426,46 @@ TH_TEST_BEGIN(http)
 
         TH_EXPECT(th_buf_starts_with(conn.written, conn.written_len, "HTTP/1.1 200 OK\r\n"));
         TH_EXPECT(th_buf_has_header(conn.written, conn.written_len, "Allow", "OPTIONS, GET, HEAD, POST, PUT, DELETE, PATCH"));
+        TH_EXPECT(conn.destroyed);
+    }
+    TH_TEST_CASE_END
+    TH_TEST_CASE_BEGIN(http_writes_informational_response_for_1_1)
+    {
+        th_fake_conn_set_request(&conn, TH_STR("GET /informational HTTP/1.1\r\nHost: example.com\r\nConnection: close\r\n\r\n"));
+
+        th_conn_upgrader_upgrade(&upgrader.base, &conn.base);
+        while (!conn.destroyed && conn.callback != NULL)
+            th_fake_conn_run(&conn);
+
+        TH_EXPECT(th_buf_starts_with(conn.written, conn.written_len, "HTTP/1.1 100 "));
+        TH_EXPECT(conn.destroyed);
+    }
+    TH_TEST_CASE_END
+    TH_TEST_CASE_BEGIN(http_rejects_informational_response_for_1_0)
+    {
+        // HTTP/1.0 clients can't handle 1xx responses, so this is
+        // downgraded to a 400 Bad Request instead.
+        th_fake_conn_set_request(&conn, TH_STR("GET /informational HTTP/1.0\r\nHost: example.com\r\nConnection: close\r\n\r\n"));
+
+        th_conn_upgrader_upgrade(&upgrader.base, &conn.base);
+        while (!conn.destroyed && conn.callback != NULL)
+            th_fake_conn_run(&conn);
+
+        TH_EXPECT(th_buf_starts_with(conn.written, conn.written_len, "HTTP/1.1 400 Bad Request\r\n"));
+        TH_EXPECT(conn.destroyed);
+    }
+    TH_TEST_CASE_END
+    TH_TEST_CASE_BEGIN(http_maps_unrelated_system_error_to_404)
+    {
+        // A handler returning a plain system error (not an HTTP error) gets
+        // translated by th_http_error, e.g. ENOENT maps to 404.
+        th_fake_conn_set_request(&conn, TH_STR("GET /system-error HTTP/1.1\r\nHost: example.com\r\nConnection: close\r\n\r\n"));
+
+        th_conn_upgrader_upgrade(&upgrader.base, &conn.base);
+        while (!conn.destroyed && conn.callback != NULL)
+            th_fake_conn_run(&conn);
+
+        TH_EXPECT(th_buf_starts_with(conn.written, conn.written_len, "HTTP/1.1 404 Not Found\r\n"));
         TH_EXPECT(conn.destroyed);
     }
     TH_TEST_CASE_END

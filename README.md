@@ -1,11 +1,11 @@
-# tiny_http - Work in Progress...
+# tiny_http
 <div align="center">
 
 [![Linux](https://github.com/RaphiaRa/tiny_http/actions/workflows/linux.yml/badge.svg?branch=main)](https://github.com/RaphiaRa/tiny_http/actions/workflows/linux.yml)
 [![MacOS](https://github.com/RaphiaRa/tiny_http/actions/workflows/macos.yml/badge.svg?branch=main)](https://github.com/RaphiaRa/tiny_http/actions/workflows/macos.yml)
-
+[![codecov](https://codecov.io/github/RaphiaRa/tiny_http/graph/badge.svg?token=M1L5Y67BF2)](https://codecov.io/github/RaphiaRa/tiny_http)
 </div>
-tiny_http is my attempt at creating a lightweight, easy-to-use, and embeddable HTTP server library in C99.
+tiny_http is a fast, lightweight, easy-to-use, and embeddable HTTP server library in C99.
 
 ##### Hello, World! Example:
 ```c

@@ -1,4 +1,5 @@
 #include "th_conn_tracker.h"
+#include "th_fmt.h"
 #include "th_http.h"
 #include "th_test.h"
 #include "th_utility.h"
@@ -286,6 +287,97 @@ TH_TEST_BEGIN(http)
 
         TH_EXPECT(th_buf_starts_with(conn.written, conn.written_len, "HTTP/1.1 200 OK\r\n"));
         TH_EXPECT(th_buf_ends_with(conn.written, conn.written_len, "Hello, World!"));
+        TH_EXPECT(conn.destroyed);
+    }
+    TH_TEST_CASE_END
+    TH_TEST_CASE_BEGIN(http_rejects_header_too_large)
+    {
+        // Header never terminates and keeps growing past
+        // TH_CONFIG_LARGE_HEADER_LEN, so it's rejected outright rather
+        // than resized indefinitely.
+        char request[TH_CONFIG_LARGE_HEADER_LEN + 256];
+        size_t pos = 0;
+        pos += th_fmt_str_append(request, pos, sizeof(request), "GET /test HTTP/1.1\r\n");
+        while (pos + 32 < sizeof(request)) {
+            pos += th_fmt_str_append(request, pos, sizeof(request), "X-Pad: aaaaaaaaaaaaaaaaaaaaaaaa\r\n");
+        }
+        th_fake_conn_set_request(&conn, th_str_make(request, pos));
+
+        th_conn_upgrader_upgrade(&upgrader.base, &conn.base);
+        while (!conn.destroyed && conn.callback != NULL)
+            th_fake_conn_run(&conn);
+
+        TH_EXPECT(th_buf_starts_with(conn.written, conn.written_len, "HTTP/1.1 431 Request Header Fields Too Large\r\n"));
+        TH_EXPECT(conn.destroyed);
+    }
+    TH_TEST_CASE_END
+    TH_TEST_CASE_BEGIN(http_rejects_body_too_large)
+    {
+        char request[256];
+        size_t pos = 0;
+        pos += th_fmt_str_append(request, pos, sizeof(request), "POST /test HTTP/1.1\r\nHost: example.com\r\nConnection: close\r\nContent-Length: ");
+        char content_len[32];
+        pos += th_fmt_str_append(request, pos, sizeof(request), th_fmt_uint_to_str(content_len, sizeof(content_len), TH_MAX_BODY_LEN + 1));
+        pos += th_fmt_str_append(request, pos, sizeof(request), "\r\n\r\n");
+        th_fake_conn_set_request(&conn, th_str_make(request, pos));
+
+        th_conn_upgrader_upgrade(&upgrader.base, &conn.base);
+        while (!conn.destroyed && conn.callback != NULL)
+            th_fake_conn_run(&conn);
+
+        TH_EXPECT(th_buf_starts_with(conn.written, conn.written_len, "HTTP/1.1 413 Payload Too Large\r\n"));
+        TH_EXPECT(conn.destroyed);
+    }
+    TH_TEST_CASE_END
+    TH_TEST_CASE_BEGIN(http_accepts_large_body_growing_internal_buffer)
+    {
+        // Body alone is bigger than TH_CONFIG_SMALL_HEADER_LEN (the
+        // initial buffer size), but well within TH_MAX_BODY_LEN, so the
+        // request is accepted and th_buf_vec_resize's growth path runs.
+        size_t body_len = TH_CONFIG_SMALL_HEADER_LEN + 1000;
+        char request[TH_CONFIG_SMALL_HEADER_LEN + 1200];
+        size_t pos = 0;
+        pos += th_fmt_str_append(request, pos, sizeof(request), "POST /test HTTP/1.1\r\nHost: example.com\r\nConnection: close\r\nContent-Length: ");
+        char content_len[32];
+        pos += th_fmt_str_append(request, pos, sizeof(request), th_fmt_uint_to_str(content_len, sizeof(content_len), (unsigned int)body_len));
+        pos += th_fmt_str_append(request, pos, sizeof(request), "\r\n\r\n");
+        for (size_t i = 0; i < body_len; ++i)
+            request[pos++] = 'a';
+        th_fake_conn_set_request(&conn, th_str_make(request, pos));
+
+        th_conn_upgrader_upgrade(&upgrader.base, &conn.base);
+        while (!conn.destroyed && conn.callback != NULL)
+            th_fake_conn_run(&conn);
+
+        TH_EXPECT(th_buf_starts_with(conn.written, conn.written_len, "HTTP/1.1 200 OK\r\n"));
+        TH_EXPECT(th_buf_ends_with(conn.written, conn.written_len, "Hello, World!"));
+        TH_EXPECT(conn.destroyed);
+    }
+    TH_TEST_CASE_END
+    TH_TEST_CASE_BEGIN(http_rejects_too_many_connections)
+    {
+        // Rejected outright at upgrade time, before any request is read.
+        tracker.count = TH_CONFIG_MAX_CONNECTIONS + 1;
+
+        th_conn_upgrader_upgrade(&upgrader.base, &conn.base);
+        while (!conn.destroyed && conn.callback != NULL)
+            th_fake_conn_run(&conn);
+
+        TH_EXPECT(th_buf_starts_with(conn.written, conn.written_len, "HTTP/1.1 503 Service Unavailable\r\n"));
+        TH_EXPECT(conn.destroyed);
+    }
+    TH_TEST_CASE_END
+    TH_TEST_CASE_BEGIN(http_head_request_writes_headers_without_body)
+    {
+        th_fake_conn_set_request(&conn, TH_STR("HEAD /test HTTP/1.1\r\nHost: example.com\r\nConnection: close\r\n\r\n"));
+
+        th_conn_upgrader_upgrade(&upgrader.base, &conn.base);
+        while (!conn.destroyed && conn.callback != NULL)
+            th_fake_conn_run(&conn);
+
+        TH_EXPECT(th_buf_starts_with(conn.written, conn.written_len, "HTTP/1.1 200 OK\r\n"));
+        TH_EXPECT(th_buf_has_header(conn.written, conn.written_len, "Content-Length", "13")); // matches GET's body length
+        TH_EXPECT(!th_buf_ends_with(conn.written, conn.written_len, "Hello, World!"));        // but body itself is omitted
         TH_EXPECT(conn.destroyed);
     }
     TH_TEST_CASE_END

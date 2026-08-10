@@ -354,7 +354,7 @@ th_find_header(const th_request* req, const char* key)
 {
     size_t num = th_hstr_vec_size(&req->headers);
     for (size_t i = 0; i < num; i++) {
-        if (strncmp(key, th_string_data(&req->headers.data[i].key), th_string_len(&req->headers.data[i].key)) == 0) {
+        if (strcmp(key, th_string_data(&req->headers.data[i].key)) == 0) {
             return th_string_data(&req->headers.data[i].value);
         }
     }
@@ -376,7 +376,7 @@ th_find_cookie(const th_request* req, const char* key)
 {
     size_t num = th_hstr_vec_size(&req->cookies);
     for (size_t i = 0; i < num; i++) {
-        if (strncmp(key, th_string_data(&req->cookies.data[i].key), th_string_len(&req->cookies.data[i].key)) == 0) {
+        if (strcmp(key, th_string_data(&req->cookies.data[i].key)) == 0) {
             return th_string_data(&req->cookies.data[i].value);
         }
     }
@@ -398,7 +398,7 @@ th_find_queryvar(const th_request* req, const char* key)
 {
     size_t num = th_hstr_vec_size(&req->queryvars);
     for (size_t i = 0; i < num; i++) {
-        if (strncmp(key, th_string_data(&req->queryvars.data[i].key), th_string_len(&req->queryvars.data[i].key)) == 0) {
+        if (strcmp(key, th_string_data(&req->queryvars.data[i].key)) == 0) {
             return th_string_data(&req->queryvars.data[i].value);
         }
     }
@@ -420,7 +420,7 @@ th_find_formvar(const th_request* req, const char* key)
 {
     size_t num = th_hstr_vec_size(&req->formvars);
     for (size_t i = 0; i < num; i++) {
-        if (strncmp(key, th_string_data(&req->formvars.data[i].key), th_string_len(&req->formvars.data[i].key)) == 0) {
+        if (strcmp(key, th_string_data(&req->formvars.data[i].key)) == 0) {
             return th_string_data(&req->formvars.data[i].value);
         }
     }
@@ -442,7 +442,7 @@ th_find_pathvar(const th_request* req, const char* key)
 {
     size_t num = th_hstr_vec_size(&req->pathvars);
     for (size_t i = 0; i < num; i++) {
-        if (strncmp(key, th_string_data(&req->pathvars.data[i].key), th_string_len(&req->pathvars.data[i].key)) == 0) {
+        if (strcmp(key, th_string_data(&req->pathvars.data[i].key)) == 0) {
             return th_string_data(&req->pathvars.data[i].value);
         }
     }
@@ -464,8 +464,7 @@ th_find_part(const th_request* req, const char* name)
 {
     size_t num = th_part_vec_size(&req->parts);
     for (size_t i = 0; i < num; i++) {
-        if (strncmp(name, th_string_data(&req->parts.data[i].name), th_string_len(&req->parts.data[i].name))
-            == 0) {
+        if (strcmp(name, th_string_data(&req->parts.data[i].name)) == 0) {
             return th_part_vec_cat(&req->parts, i);
         }
     }

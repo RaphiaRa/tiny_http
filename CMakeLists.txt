@@ -231,6 +231,7 @@ if (NOT TH_DISABLE_TESTS)
         src/th_tcp_conn_test.c
         src/th_router_test.c
         src/th_allocator_test.c
+        src/th_request_test.c
         src/th_request_parser_test.c
         src/th_cookie_parser_test.c
         src/th_multipart_parser_test.c

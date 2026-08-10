@@ -228,11 +228,6 @@ th_http_handle_read_request(void* user_data, size_t len, th_err err)
         th_conn_recv(http->conn, th_buf_vec_at(&http->buf, http->read_bytes),
                      th_buf_vec_size(&http->buf) - http->read_bytes, false, th_http_handle_read_request, http);
     } else {
-        if (th_conn_tracker_count(http->tracker) > TH_CONFIG_MAX_CONNECTIONS) {
-            TH_LOG_WARN("Too many connections, rejecting new connection");
-            th_http_write_error_response(http, TH_ERR_HTTP(TH_CODE_SERVICE_UNAVAILABLE));
-            return;
-        }
         size_t content_received = http->read_bytes - http->parsed_bytes;
         size_t content_len = th_request_parser_content_len(&http->parser);
         if (content_len > TH_MAX_BODY_LEN) {
@@ -242,7 +237,7 @@ th_http_handle_read_request(void* user_data, size_t len, th_err err)
         }
         size_t remaining = content_len - content_received;
         if (http->read_bytes + remaining > th_buf_vec_size(&http->buf)) {
-            memcpy(th_buf_vec_at(&http->buf, 0), th_buf_vec_at(&http->buf, http->parsed_bytes), content_received);
+            memmove(th_buf_vec_at(&http->buf, 0), th_buf_vec_at(&http->buf, http->parsed_bytes), content_received);
             http->read_bytes = content_received;
             http->parsed_bytes = 0;
             if (content_len > th_buf_vec_size(&http->buf)) {
@@ -318,6 +313,11 @@ th_http_upgrader_upgrade(void* self, th_conn* conn)
     if ((err = th_http_create(&http, upgrader->tracker, conn, upgrader->router, upgrader->dir_mgr, upgrader->fcache, upgrader->allocator)) != TH_ERR_OK) {
         TH_LOG_ERROR("Failed to create http instance: %s", th_strerror(err));
         th_conn_destroy(conn);
+        return;
+    }
+    if (th_conn_tracker_count(upgrader->tracker) > TH_CONFIG_MAX_CONNECTIONS) {
+        TH_LOG_WARN("Too many connections, rejecting new connection");
+        th_http_handle_error(http, TH_ERR_HTTP(TH_CODE_SERVICE_UNAVAILABLE));
         return;
     }
     th_http_start(http);

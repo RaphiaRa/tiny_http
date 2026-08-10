@@ -289,6 +289,7 @@ if (NOT TH_DISABLE_TESTS)
                     --filter ${CMAKE_CURRENT_SOURCE_DIR}/src/
                     --exclude .*_test\\.c$$
                     --exclude .*_bench\\.c$$
+                    --exclude .*/th_bench\\.h$$
                     ${TH_COVERAGE_GPERF_EXCLUDES}
                     --object-directory ${CMAKE_CURRENT_BINARY_DIR}
                     --merge-mode-functions separate

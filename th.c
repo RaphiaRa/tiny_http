@@ -3054,8 +3054,26 @@ th_response_deinit(th_response* response);
 
 /* th_response end */
 
-TH_PRIVATE(void)
-th_response_async_write(th_response* response, th_conn* conn, th_send_cb callback, void* user_data);
+/** th_response_write_plan
+ * @brief What to send for a response: iov always (start line + headers,
+ * plus body if any), file/offset/len additionally if a file is being
+ * sent (file is NULL otherwise).
+ */
+typedef struct th_response_write_plan {
+    th_iov* iov;
+    size_t iovcnt;
+    th_file* file;
+    size_t offset;
+    size_t len;
+} th_response_write_plan;
+
+/** th_response_prepare_write
+ * @brief Finalizes headers (default headers, start line) and fills out
+ * plan with what to send. Does no I/O - the caller sends plan itself
+ * (e.g. via th_conn_send).
+ */
+TH_PRIVATE(th_err)
+th_response_prepare_write(th_response* response, th_response_write_plan* plan);
 
 /* End of th_response.h */
 /* Start of th_router.h */
@@ -7786,7 +7804,7 @@ th_response_set_body_va(th_response* response, const char* fmt, va_list args)
         }
     } else {
         th_string_resize(&response->body, (size_t)len, ' ');
-        vsnprintf(th_string_at(&response->body, 0), (size_t)len, fmt, args);
+        vsnprintf(th_string_at(&response->body, 0), (size_t)len + 1, fmt, args);
     }
     response->is_file = 0;
     return TH_ERR_OK;
@@ -7849,8 +7867,8 @@ th_response_set_default_headers(th_response* response)
     return TH_ERR_OK;
 }
 
-TH_PRIVATE(void)
-th_response_async_write(th_response* response, th_conn* conn, th_send_cb callback, void* user_data)
+TH_PRIVATE(th_err)
+th_response_prepare_write(th_response* response, th_response_write_plan* plan)
 {
     th_err err = TH_ERR_OK;
     size_t iovcnt = 2; // start line + headers
@@ -7858,24 +7876,26 @@ th_response_async_write(th_response* response, th_conn* conn, th_send_cb callbac
         response->file_len = response->fcache_entry->stream.size;
     }
     if ((err = th_response_set_default_headers(response)) != TH_ERR_OK)
-        goto cleanup;
+        return err;
     if ((err = th_response_finalize_headers(response)) != TH_ERR_OK)
-        goto cleanup;
+        return err;
     if (!response->only_headers && response->is_file == 0 && th_string_len(&response->body) > 0) {
         response->iov[iovcnt].base = (void*)th_string_data(&response->body);
         response->iov[iovcnt].len = th_string_len(&response->body);
         iovcnt++;
     }
+    plan->iov = response->iov;
+    plan->iovcnt = iovcnt;
     if (!response->only_headers && response->is_file != 0) {
-        th_conn_send(conn, response->iov, iovcnt, &response->fcache_entry->stream, 0, (size_t)response->file_len, callback, user_data);
+        plan->file = &response->fcache_entry->stream;
+        plan->offset = 0;
+        plan->len = (size_t)response->file_len;
     } else {
-        th_conn_send(conn, response->iov, iovcnt, NULL, 0, 0, callback, user_data);
+        plan->file = NULL;
+        plan->offset = 0;
+        plan->len = 0;
     }
-    return;
-cleanup:
-    // Header formatting failed before any I/O was attempted (out of
-    // memory); safe to call back synchronously since no op is pending.
-    callback(user_data, 0, err);
+    return TH_ERR_OK;
 }
 
 /* Public response API begin */
@@ -9188,7 +9208,13 @@ th_http_complete(th_http* http)
 TH_LOCAL(void)
 th_http_write_response(th_http* http)
 {
-    th_response_async_write(&http->response, http->conn, th_http_handle_write_response, http);
+    th_response_write_plan plan;
+    th_err err = th_response_prepare_write(&http->response, &plan);
+    if (err != TH_ERR_OK) {
+        th_http_handle_write_response(http, 0, err);
+        return;
+    }
+    th_conn_send(http->conn, plan.iov, plan.iovcnt, plan.file, plan.offset, plan.len, th_http_handle_write_response, http);
 }
 
 TH_LOCAL(void)
@@ -9358,11 +9384,6 @@ th_http_handle_read_request(void* user_data, size_t len, th_err err)
         th_conn_recv(http->conn, th_buf_vec_at(&http->buf, http->read_bytes),
                      th_buf_vec_size(&http->buf) - http->read_bytes, false, th_http_handle_read_request, http);
     } else {
-        if (th_conn_tracker_count(http->tracker) > TH_CONFIG_MAX_CONNECTIONS) {
-            TH_LOG_WARN("Too many connections, rejecting new connection");
-            th_http_write_error_response(http, TH_ERR_HTTP(TH_CODE_SERVICE_UNAVAILABLE));
-            return;
-        }
         size_t content_received = http->read_bytes - http->parsed_bytes;
         size_t content_len = th_request_parser_content_len(&http->parser);
         if (content_len > TH_MAX_BODY_LEN) {
@@ -9372,7 +9393,7 @@ th_http_handle_read_request(void* user_data, size_t len, th_err err)
         }
         size_t remaining = content_len - content_received;
         if (http->read_bytes + remaining > th_buf_vec_size(&http->buf)) {
-            memcpy(th_buf_vec_at(&http->buf, 0), th_buf_vec_at(&http->buf, http->parsed_bytes), content_received);
+            memmove(th_buf_vec_at(&http->buf, 0), th_buf_vec_at(&http->buf, http->parsed_bytes), content_received);
             http->read_bytes = content_received;
             http->parsed_bytes = 0;
             if (content_len > th_buf_vec_size(&http->buf)) {
@@ -9448,6 +9469,11 @@ th_http_upgrader_upgrade(void* self, th_conn* conn)
     if ((err = th_http_create(&http, upgrader->tracker, conn, upgrader->router, upgrader->dir_mgr, upgrader->fcache, upgrader->allocator)) != TH_ERR_OK) {
         TH_LOG_ERROR("Failed to create http instance: %s", th_strerror(err));
         th_conn_destroy(conn);
+        return;
+    }
+    if (th_conn_tracker_count(upgrader->tracker) > TH_CONFIG_MAX_CONNECTIONS) {
+        TH_LOG_WARN("Too many connections, rejecting new connection");
+        th_http_handle_error(http, TH_ERR_HTTP(TH_CODE_SERVICE_UNAVAILABLE));
         return;
     }
     th_http_start(http);

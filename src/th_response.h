@@ -7,10 +7,11 @@
 
 #include "th_allocator.h"
 #include "th_config.h"
-#include "th_conn.h"
 #include "th_dir_mgr.h"
 #include "th_fcache.h"
+#include "th_file.h"
 #include "th_header_id.h"
+#include "th_iov.h"
 #include "th_string.h"
 /* th_response begin */
 
@@ -53,7 +54,25 @@ th_response_deinit(th_response* response);
 
 /* th_response end */
 
-TH_PRIVATE(void)
-th_response_async_write(th_response* response, th_conn* conn, th_send_cb callback, void* user_data);
+/** th_response_write_plan
+ * @brief What to send for a response: iov always (start line + headers,
+ * plus body if any), file/offset/len additionally if a file is being
+ * sent (file is NULL otherwise).
+ */
+typedef struct th_response_write_plan {
+    th_iov* iov;
+    size_t iovcnt;
+    th_file* file;
+    size_t offset;
+    size_t len;
+} th_response_write_plan;
+
+/** th_response_prepare_write
+ * @brief Finalizes headers (default headers, start line) and fills out
+ * plan with what to send. Does no I/O - the caller sends plan itself
+ * (e.g. via th_conn_send).
+ */
+TH_PRIVATE(th_err)
+th_response_prepare_write(th_response* response, th_response_write_plan* plan);
 
 #endif

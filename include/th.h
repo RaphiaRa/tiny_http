@@ -354,11 +354,11 @@ typedef enum th_ws_type {
 typedef th_err (*th_ws_handler)(void* userp, th_ws* ws, th_ws_event ev, th_buffer data, th_ws_type type);
 
 /** th_ws_send
- * @brief Sends one WebSocket message. type selects the opcode (text vs
- * binary), it does not otherwise affect encoding - data is sent as-is.
- * @return TH_ERR_BUSY if a previous send on this connection hasn't
- * finished yet (retry once the next event is delivered), TH_ERR_INVALID_ARG
- * if the connection is closing/closed.
+ * @brief Queues one WebSocket message for sending. type selects the
+ * opcode (text vs binary), it does not otherwise affect encoding - data
+ * is sent as-is.
+ * @return TH_ERR_SYSTEM(TH_EAGAIN) if the send queue is full - retry
+ * once a previously queued message has gone out.
  */
 th_err th_ws_send(th_ws* ws, th_buffer data, th_ws_type type);
 

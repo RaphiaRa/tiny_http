@@ -11,6 +11,13 @@ typedef struct th_fake_conn {
     void (*callback)(void* user_data, size_t size, th_err err);
     void* user_data;
     th_err next_recv_err;
+
+    th_iov send_iov[2];
+    size_t send_iovcnt;
+    void (*send_callback)(void* user_data, size_t size, th_err err);
+    void* send_user_data;
+    unsigned char sent_buf[256];
+    size_t sent_len;
 } th_fake_conn;
 
 static th_address*
@@ -42,15 +49,17 @@ th_fake_conn_recv(void* self, void* addr, size_t len, bool exact, th_recv_cb cal
 static void
 th_fake_conn_send(void* self, th_iov* iov, size_t iovcnt, th_file* file, size_t offset, size_t len, th_send_cb callback, void* user_data)
 {
-    (void)self;
-    (void)iov;
-    (void)iovcnt;
     (void)file;
     (void)offset;
     (void)len;
-    (void)callback;
-    (void)user_data;
-    TH_ASSERT(0 && "not expected to be called in this slice");
+    th_fake_conn* conn = self;
+    TH_ASSERT(conn->send_callback == NULL);
+    TH_ASSERT(iovcnt <= 2);
+    for (size_t i = 0; i < iovcnt; ++i)
+        conn->send_iov[i] = iov[i];
+    conn->send_iovcnt = iovcnt;
+    conn->send_callback = callback;
+    conn->send_user_data = user_data;
 }
 
 static void
@@ -84,6 +93,10 @@ th_fake_conn_init(th_fake_conn* conn)
     conn->callback = NULL;
     conn->user_data = NULL;
     conn->next_recv_err = TH_ERR_EOF;
+    conn->send_iovcnt = 0;
+    conn->send_callback = NULL;
+    conn->send_user_data = NULL;
+    conn->sent_len = 0;
 }
 
 static void
@@ -107,6 +120,48 @@ th_fake_conn_deliver(th_fake_conn* conn, const unsigned char* data, size_t len)
     conn->callback = NULL;
     conn->user_data = NULL;
     callback(user_data, len, TH_ERR_OK);
+}
+
+// Completes the pending send as if every queued byte went out, without
+// recording it anywhere - for tests that only care about the total length,
+// too large to fit in sent_buf.
+static size_t
+th_fake_conn_complete_send_len(th_fake_conn* conn)
+{
+    TH_ASSERT(conn->send_callback != NULL);
+    size_t total = 0;
+    for (size_t i = 0; i < conn->send_iovcnt; ++i)
+        total += conn->send_iov[i].len;
+
+    void (*callback)(void*, size_t, th_err) = conn->send_callback;
+    void* user_data = conn->send_user_data;
+    conn->send_callback = NULL;
+    conn->send_user_data = NULL;
+    conn->send_iovcnt = 0;
+    callback(user_data, total, TH_ERR_OK);
+    return total;
+}
+
+// Completes the pending send as if every queued byte went out, appending
+// it to sent_buf so tests can inspect everything sent so far.
+static void
+th_fake_conn_complete_send(th_fake_conn* conn)
+{
+    TH_ASSERT(conn->send_callback != NULL);
+    size_t total = 0;
+    for (size_t i = 0; i < conn->send_iovcnt; ++i) {
+        TH_ASSERT(conn->sent_len + total + conn->send_iov[i].len <= sizeof(conn->sent_buf));
+        memcpy(conn->sent_buf + conn->sent_len + total, conn->send_iov[i].base, conn->send_iov[i].len);
+        total += conn->send_iov[i].len;
+    }
+    conn->sent_len += total;
+
+    void (*callback)(void*, size_t, th_err) = conn->send_callback;
+    void* user_data = conn->send_user_data;
+    conn->send_callback = NULL;
+    conn->send_user_data = NULL;
+    conn->send_iovcnt = 0;
+    callback(user_data, total, TH_ERR_OK);
 }
 
 struct handler_calls {
@@ -303,15 +358,109 @@ TH_TEST_BEGIN(ws)
         TH_EXPECT(conn.destroyed);
     }
     TH_TEST_CASE_END
-    TH_TEST_CASE_BEGIN(ws_send_returns_nosupport)
+    TH_TEST_CASE_BEGIN(ws_send_writes_unmasked_frame)
     {
         th_ws* ws = NULL;
         TH_EXPECT(th_ws_create(&ws, &conn.base, th_test_ws_handler, &calls, NULL) == TH_ERR_OK);
         th_ws_start(ws);
-        TH_EXPECT(th_ws_send(ws, (th_buffer){"hi", 2}, TH_WS_TEXT) == TH_ERR_NOSUPPORT);
+
+        TH_EXPECT(th_ws_send(ws, (th_buffer){"hi", 2}, TH_WS_TEXT) == TH_ERR_OK);
+        th_fake_conn_complete_send(&conn);
+
+        static const unsigned char expected[] = {0x81, 0x02, 'h', 'i'};
+        TH_EXPECT(conn.sent_len == sizeof(expected));
+        TH_EXPECT(memcmp(conn.sent_buf, expected, sizeof(expected)) == 0);
 
         conn.next_recv_err = TH_ERR_EOF;
         th_fake_conn_run(&conn);
+    }
+    TH_TEST_CASE_END
+    TH_TEST_CASE_BEGIN(ws_send_binary_uses_binary_opcode)
+    {
+        th_ws* ws = NULL;
+        TH_EXPECT(th_ws_create(&ws, &conn.base, th_test_ws_handler, &calls, NULL) == TH_ERR_OK);
+        th_ws_start(ws);
+
+        TH_EXPECT(th_ws_send(ws, (th_buffer){"hi", 2}, TH_WS_BINARY) == TH_ERR_OK);
+        th_fake_conn_complete_send(&conn);
+
+        static const unsigned char expected[] = {0x82, 0x02, 'h', 'i'};
+        TH_EXPECT(conn.sent_len == sizeof(expected));
+        TH_EXPECT(memcmp(conn.sent_buf, expected, sizeof(expected)) == 0);
+
+        conn.next_recv_err = TH_ERR_EOF;
+        th_fake_conn_run(&conn);
+    }
+    TH_TEST_CASE_END
+    TH_TEST_CASE_BEGIN(ws_send_queues_second_send_while_first_in_flight)
+    {
+        th_ws* ws = NULL;
+        TH_EXPECT(th_ws_create(&ws, &conn.base, th_test_ws_handler, &calls, NULL) == TH_ERR_OK);
+        th_ws_start(ws);
+
+        TH_EXPECT(th_ws_send(ws, (th_buffer){"hi", 2}, TH_WS_TEXT) == TH_ERR_OK);
+        TH_EXPECT(th_ws_send(ws, (th_buffer){"yo", 2}, TH_WS_TEXT) == TH_ERR_OK); // queued, first still in flight
+
+        th_fake_conn_complete_send(&conn); // finishes "hi" frame, kicks off "yo" frame
+        th_fake_conn_complete_send(&conn); // finishes "yo" frame
+
+        static const unsigned char expected[] = {0x81, 0x02, 'h', 'i', 0x81, 0x02, 'y', 'o'};
+        TH_EXPECT(conn.sent_len == sizeof(expected));
+        TH_EXPECT(memcmp(conn.sent_buf, expected, sizeof(expected)) == 0);
+
+        conn.next_recv_err = TH_ERR_EOF;
+        th_fake_conn_run(&conn);
+    }
+    TH_TEST_CASE_END
+    TH_TEST_CASE_BEGIN(ws_send_grows_past_the_initial_ring_size)
+    {
+        th_ws* ws = NULL;
+        TH_EXPECT(th_ws_create(&ws, &conn.base, th_test_ws_handler, &calls, NULL) == TH_ERR_OK);
+        th_ws_start(ws);
+
+        static char big[TH_CONFIG_WS_SEND_RING_LEN];
+        memset(big, 'x', sizeof(big));
+        // bigger than the initial chunk once the frame header is added - grows
+        // a new chunk instead of rejecting the send
+        TH_EXPECT(th_ws_send(ws, (th_buffer){big, sizeof(big)}, TH_WS_TEXT) == TH_ERR_OK);
+        size_t sent = th_fake_conn_complete_send_len(&conn);
+        TH_EXPECT(sent == sizeof(big) + 4); // 4-byte header: FIN|TEXT, 16-bit extended length
+        TH_EXPECT(!conn.destroyed);
+
+        conn.next_recv_err = TH_ERR_EOF;
+        th_fake_conn_run(&conn);
+    }
+    TH_TEST_CASE_END
+    TH_TEST_CASE_BEGIN(ws_send_rejects_message_over_send_max_len)
+    {
+        th_ws* ws = NULL;
+        TH_EXPECT(th_ws_create(&ws, &conn.base, th_test_ws_handler, &calls, NULL) == TH_ERR_OK);
+        th_ws_start(ws);
+
+        static char huge[TH_CONFIG_WS_SEND_MAX_LEN + 1];
+        memset(huge, 'x', sizeof(huge));
+        TH_EXPECT(th_ws_send(ws, (th_buffer){huge, sizeof(huge)}, TH_WS_TEXT) == TH_ERR_INVALID_ARG);
+        TH_EXPECT(!conn.destroyed);
+        TH_EXPECT(conn.send_callback == NULL); // nothing was ever queued to send
+
+        conn.next_recv_err = TH_ERR_EOF;
+        th_fake_conn_run(&conn);
+    }
+    TH_TEST_CASE_END
+    TH_TEST_CASE_BEGIN(ws_send_error_closes_connection)
+    {
+        th_ws* ws = NULL;
+        TH_EXPECT(th_ws_create(&ws, &conn.base, th_test_ws_handler, &calls, NULL) == TH_ERR_OK);
+        th_ws_start(ws);
+
+        TH_EXPECT(th_ws_send(ws, (th_buffer){"hi", 2}, TH_WS_TEXT) == TH_ERR_OK);
+        void (*send_callback)(void*, size_t, th_err) = conn.send_callback;
+        void* send_user_data = conn.send_user_data;
+        conn.send_callback = NULL;
+        send_callback(send_user_data, 0, TH_ERR_SYSTEM(TH_EIO));
+
+        TH_EXPECT(calls.close_count == 1);
+        TH_EXPECT(conn.destroyed);
     }
     TH_TEST_CASE_END
     TH_TEST_CASE_BEGIN(ws_close_returns_nosupport)

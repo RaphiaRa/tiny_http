@@ -34,6 +34,14 @@
 #define TH_CONFIG_WS_MAX_MESSAGE_LEN (4 * 1024 * 1024)
 #endif
 
+#ifndef TH_CONFIG_WS_SEND_RING_LEN
+#define TH_CONFIG_WS_SEND_RING_LEN (16 * 1024)
+#endif
+
+#ifndef TH_CONFIG_WS_SEND_MAX_LEN
+#define TH_CONFIG_WS_SEND_MAX_LEN (256 * 1024)
+#endif
+
 /* feature configuration end */
 
 #if defined(__APPLE__)

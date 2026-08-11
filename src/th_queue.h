@@ -71,6 +71,8 @@
         T* item = queue->head;                                   \
         if (item) {                                              \
             queue->head = item->next;                            \
+            if (queue->head == NULL)                             \
+                queue->tail = NULL;                              \
             item->next = NULL;                                   \
         }                                                        \
         return item;                                             \

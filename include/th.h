@@ -337,20 +337,21 @@ typedef enum th_ws_event {
 
 typedef struct th_ws th_ws;
 
+/** th_ws_type
+ * @brief Text vs binary, for both received messages and th_ws_send.
+ */
+typedef enum th_ws_type {
+    TH_WS_TEXT,
+    TH_WS_BINARY,
+} th_ws_type;
+
 /** th_ws_handler
  * @brief WebSocket event callback. data is empty for TH_WS_EVENT_OPEN/CLOSE,
- * and holds one complete message's payload for TH_WS_EVENT_DATA. ws must
- * not be used after TH_WS_EVENT_CLOSE has been delivered.
+ * and holds one complete message's payload for TH_WS_EVENT_DATA - type is
+ * only meaningful for TH_WS_EVENT_DATA. ws must not be used after
+ * TH_WS_EVENT_CLOSE has been delivered.
  */
-typedef th_err (*th_ws_handler)(void* userp, th_ws* ws, th_ws_event ev, th_buffer data);
-
-/** th_ws_msg_type
- * @brief Selects the opcode a th_ws_send message goes out as.
- */
-typedef enum th_ws_msg_type {
-    TH_WS_MSG_TEXT,
-    TH_WS_MSG_BINARY,
-} th_ws_msg_type;
+typedef th_err (*th_ws_handler)(void* userp, th_ws* ws, th_ws_event ev, th_buffer data, th_ws_type type);
 
 /** th_ws_send
  * @brief Sends one WebSocket message. type selects the opcode (text vs
@@ -359,7 +360,7 @@ typedef enum th_ws_msg_type {
  * finished yet (retry once the next event is delivered), TH_ERR_INVALID_ARG
  * if the connection is closing/closed.
  */
-th_err th_ws_send(th_ws* ws, th_buffer data, th_ws_msg_type type);
+th_err th_ws_send(th_ws* ws, th_buffer data, th_ws_type type);
 
 /** th_ws_close
  * @brief Starts closing the connection. TH_WS_EVENT_CLOSE will be

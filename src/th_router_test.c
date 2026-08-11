@@ -33,12 +33,13 @@ expect_pathvars_handler(void* user_data, const th_request* req, th_response* res
 }
 
 static th_err
-noop_ws_handler(void* userp, th_ws* ws, th_ws_event ev, th_buffer data)
+noop_ws_handler(void* userp, th_ws* ws, th_ws_event ev, th_buffer data, th_ws_type type)
 {
     (void)userp;
     (void)ws;
     (void)ev;
     (void)data;
+    (void)type;
     return TH_ERR_OK;
 }
 

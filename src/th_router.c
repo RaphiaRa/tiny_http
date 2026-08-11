@@ -238,8 +238,8 @@ th_route_parse_trail(th_str* trail, th_str* name, th_capture_type* type)
     return TH_ERR_OK;
 }
 
-TH_PRIVATE(th_err)
-th_router_add_route(th_router* router, th_method method, th_str path, th_handler handler, void* user_data)
+TH_LOCAL(th_err)
+th_router_find_or_create_segment(th_router* router, th_str path, th_route_segment** out)
 {
     if (th_str_empty(path) || path.ptr[0] != '/')
         return TH_ERR_INVALID_ARG;
@@ -278,7 +278,17 @@ th_router_add_route(th_router* router, th_method method, th_str path, th_handler
             }
         }
     }
+    *out = route;
+    return TH_ERR_OK;
+}
 
+TH_PRIVATE(th_err)
+th_router_add_route(th_router* router, th_method method, th_str path, th_handler handler, void* user_data)
+{
+    th_route_segment* route = NULL;
+    th_err err = TH_ERR_OK;
+    if ((err = th_router_find_or_create_segment(router, path, &route)) != TH_ERR_OK)
+        return err;
     if (route->handler[TH_METHOD_ANY].handler != NULL
         || route->handler[method].handler != NULL)
         return TH_ERR_INVALID_ARG; // Route already exists

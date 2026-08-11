@@ -1,0 +1,7 @@
+ignore:
+  - "examples"
+  - ".github"
+  - "src/*_test.c"
+  - "src/*_test.h"
+  - "src/*_bench.c"
+  - "src/th_bench.h"

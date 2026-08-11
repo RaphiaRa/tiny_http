@@ -1,6 +1,5 @@
 #include "th_router.h"
 #include "th_allocator.h"
-#include "th_log.h"
 #include "th_request.h"
 #include "th_str.h"
 #include "th_url_decode.h"
@@ -8,9 +7,6 @@
 
 #include <assert.h>
 #include <string.h>
-
-#undef TH_LOG_TAG
-#define TH_LOG_TAG "router"
 
 TH_LOCAL(th_err)
 th_route_init(th_route_segment* route, th_capture_type type, th_str segment, th_allocator* allocator)
@@ -86,7 +82,7 @@ th_router_deinit(th_router* router)
 }
 
 TH_LOCAL(th_err)
-th_route_consume_trail(th_route_segment* route, th_request* request, th_str* trail, bool dry, bool* result)
+th_route_consume_trail(th_route_segment* route, th_str* trail, th_router_capture_cb on_capture, void* userp, bool* result)
 {
     th_str route_name = th_string_view(&route->name);
     th_str raw_segment = th_str_substr(*trail, 0, th_str_find_first_of(*trail, 0, "/?"));
@@ -111,21 +107,21 @@ th_route_consume_trail(th_route_segment* route, th_request* request, th_str* tra
         break;
     case TH_CAPTURE_TYPE_INT:
         if (th_str_is_uint(segment)) {
-            if (!dry)
-                (void)th_request_add_pathvar(request, route_name, segment);
+            if (on_capture)
+                on_capture(userp, route_name, segment);
             *trail = th_str_substr(*trail, raw_segment.len + 1, th_str_npos);
             *result = true;
         }
         break;
     case TH_CAPTURE_TYPE_STRING:
-        if (!dry)
-            (void)th_request_add_pathvar(request, route_name, segment);
+        if (on_capture)
+            on_capture(userp, route_name, segment);
         *trail = th_str_substr(*trail, raw_segment.len + 1, th_str_npos);
         *result = true;
         break;
     case TH_CAPTURE_TYPE_PATH:
-        if (!dry)
-            (void)th_request_add_pathvar(request, route_name, *trail);
+        if (on_capture)
+            on_capture(userp, route_name, *trail);
         *trail = th_str_make(NULL, 0);
         *result = true;
         break;
@@ -139,19 +135,18 @@ cleanup:
 }
 
 TH_LOCAL(th_err)
-th_router_do_handle(th_router* router, th_method method, th_request* request, th_response* response, bool dry)
+th_router_resolve(th_router* router, th_str path, th_router_capture_cb on_capture, void* userp, th_route_segment** out)
 {
-    TH_LOG_DEBUG("Handling request %p: %s", request, th_string_data(&request->uri_path));
-    if (*th_string_at(&request->uri_path, 0) != '/')
+    if (th_str_empty(path) || *path.ptr != '/')
         return TH_ERR_HTTP(TH_CODE_BAD_REQUEST);
-    th_str trail = th_str_substr(th_string_view(&request->uri_path), 1, th_str_npos);
+    th_str trail = th_str_substr(path, 1, th_str_npos);
     th_route_segment* route = router->routes;
     while (1) {
         th_err err = TH_ERR_OK;
         bool consumed = false;
         if (route == NULL) {
             break;
-        } else if ((err = th_route_consume_trail(route, request, &trail, dry, &consumed)) != TH_ERR_OK
+        } else if ((err = th_route_consume_trail(route, &trail, on_capture, userp, &consumed)) != TH_ERR_OK
                    || consumed) {
             if (err != TH_ERR_OK)
                 return err;
@@ -165,6 +160,25 @@ th_router_do_handle(th_router* router, th_method method, th_request* request, th
     if (route == NULL) {
         return TH_ERR_HTTP(TH_CODE_NOT_FOUND);
     }
+    *out = route;
+    return TH_ERR_OK;
+}
+
+TH_LOCAL(void)
+th_router_capture_to_pathvar(void* userp, th_str key, th_str value)
+{
+    th_request* request = userp;
+    (void)th_request_add_pathvar(request, key, value);
+}
+
+TH_LOCAL(th_err)
+th_router_do_handle(th_router* router, th_method method, th_request* request, th_response* response, bool dry)
+{
+    th_route_segment* route = NULL;
+    th_err err = TH_ERR_OK;
+    th_router_capture_cb on_capture = dry ? NULL : th_router_capture_to_pathvar;
+    if ((err = th_router_resolve(router, th_string_view(&request->uri_path), on_capture, request, &route)) != TH_ERR_OK)
+        return err;
     th_route_handler handler = route->handler[method].handler ? route->handler[method] : route->handler[TH_METHOD_ANY];
     if (handler.handler == NULL) {
         return TH_ERR_HTTP(TH_CODE_METHOD_NOT_ALLOWED);
@@ -184,6 +198,19 @@ TH_PRIVATE(bool)
 th_router_would_handle(th_router* router, th_method method, th_request* request)
 {
     return th_router_do_handle(router, method, request, NULL, true) == TH_ERR_OK;
+}
+
+TH_PRIVATE(bool)
+th_router_find_ws_route(th_router* router, th_str path, th_ws_handler* handler, void** user_data)
+{
+    th_route_segment* route = NULL;
+    if (th_router_resolve(router, path, NULL, NULL, &route) != TH_ERR_OK)
+        return false;
+    if (route->ws_handler.handler == NULL)
+        return false;
+    *handler = route->ws_handler.handler;
+    *user_data = route->ws_handler.user_data;
+    return true;
 }
 
 // abc < {int} < {string} < {path}
@@ -294,5 +321,19 @@ th_router_add_route(th_router* router, th_method method, th_str path, th_handler
         return TH_ERR_INVALID_ARG; // Route already exists
     route->handler[method].handler = handler;
     route->handler[method].user_data = user_data;
+    return TH_ERR_OK;
+}
+
+TH_PRIVATE(th_err)
+th_router_add_ws_route(th_router* router, th_str path, th_ws_handler handler, void* user_data)
+{
+    th_route_segment* route = NULL;
+    th_err err = TH_ERR_OK;
+    if ((err = th_router_find_or_create_segment(router, path, &route)) != TH_ERR_OK)
+        return err;
+    if (route->ws_handler.handler != NULL)
+        return TH_ERR_INVALID_ARG; // WS route already exists
+    route->ws_handler.handler = handler;
+    route->ws_handler.user_data = user_data;
     return TH_ERR_OK;
 }

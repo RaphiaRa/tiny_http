@@ -131,8 +131,8 @@ th_ws_frame_parser_frame_done(th_ws_frame_parser* parser, bool* message_done, th
         if (parser->opcode != TH_WS_OPCODE_CONTINUATION)
             parser->message_opcode = parser->opcode;
         if (parser->fin) {
+            *type = parser->message_opcode == TH_WS_OPCODE_TEXT ? TH_WS_FRAME_TEXT : TH_WS_FRAME_BINARY;
             parser->message_opcode = 0;
-            *type = TH_WS_FRAME_DATA;
             *message_done = true;
         }
     }

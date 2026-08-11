@@ -47,7 +47,7 @@ th_ws_destroy(th_ws* ws)
 TH_LOCAL(void)
 th_ws_close_and_destroy(th_ws* ws)
 {
-    (void)ws->handler(ws->user_data, ws, TH_WS_EVENT_CLOSE, (th_buffer){0});
+    (void)ws->handler(ws->user_data, ws, TH_WS_EVENT_CLOSE, (th_buffer){0}, TH_WS_TEXT);
     th_ws_destroy(ws);
 }
 
@@ -76,7 +76,8 @@ th_ws_consume(th_ws* ws, char* data, size_t len)
             continue;
 
         th_buffer message = {th_buf_vec_begin(&ws->payload), th_buf_vec_size(&ws->payload)};
-        err = ws->handler(ws->user_data, ws, TH_WS_EVENT_DATA, message);
+        th_ws_type msg_type = type == TH_WS_FRAME_TEXT ? TH_WS_TEXT : TH_WS_BINARY;
+        err = ws->handler(ws->user_data, ws, TH_WS_EVENT_DATA, message, msg_type);
         th_buf_vec_clear(&ws->payload);
         if (err != TH_ERR_OK) {
             TH_LOG_DEBUG("%p: DATA handler returned %s, closing", (void*)ws, th_strerror(err));
@@ -105,7 +106,7 @@ th_ws_handle_recv(void* user_data, size_t len, th_err err)
 TH_PRIVATE(void)
 th_ws_start(th_ws* ws)
 {
-    th_err err = ws->handler(ws->user_data, ws, TH_WS_EVENT_OPEN, (th_buffer){0});
+    th_err err = ws->handler(ws->user_data, ws, TH_WS_EVENT_OPEN, (th_buffer){0}, TH_WS_TEXT);
     if (err != TH_ERR_OK) {
         TH_LOG_DEBUG("%p: OPEN handler returned %s, closing", (void*)ws, th_strerror(err));
         th_ws_destroy(ws);
@@ -115,7 +116,7 @@ th_ws_start(th_ws* ws)
 }
 
 TH_PUBLIC(th_err)
-th_ws_send(th_ws* ws, th_buffer data, th_ws_msg_type type)
+th_ws_send(th_ws* ws, th_buffer data, th_ws_type type)
 {
     (void)ws;
     (void)data;

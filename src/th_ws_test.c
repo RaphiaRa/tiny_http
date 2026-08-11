@@ -116,10 +116,11 @@ struct handler_calls {
     th_err return_on_open;
     char data_buf[64];
     size_t data_len;
+    th_ws_type data_type;
 };
 
 static th_err
-th_test_ws_handler(void* userp, th_ws* ws, th_ws_event ev, th_buffer data)
+th_test_ws_handler(void* userp, th_ws* ws, th_ws_event ev, th_buffer data, th_ws_type type)
 {
     (void)ws;
     struct handler_calls* calls = userp;
@@ -135,6 +136,7 @@ th_test_ws_handler(void* userp, th_ws* ws, th_ws_event ev, th_buffer data)
         TH_ASSERT(data.len <= sizeof(calls->data_buf));
         memcpy(calls->data_buf, data.ptr, data.len);
         calls->data_len = data.len;
+        calls->data_type = type;
         return TH_ERR_OK;
     default:
         return TH_ERR_OK;
@@ -217,8 +219,29 @@ TH_TEST_BEGIN(ws)
         TH_EXPECT(calls.data_count == 1);
         TH_EXPECT(calls.data_len == 2);
         TH_EXPECT(memcmp(calls.data_buf, "hi", 2) == 0);
+        TH_EXPECT(calls.data_type == TH_WS_TEXT);
         TH_EXPECT(calls.close_count == 0);
         TH_EXPECT(!conn.destroyed);
+
+        conn.next_recv_err = TH_ERR_EOF;
+        th_fake_conn_run(&conn);
+        TH_EXPECT(calls.close_count == 1);
+        TH_EXPECT(conn.destroyed);
+    }
+    TH_TEST_CASE_END
+    TH_TEST_CASE_BEGIN(ws_recv_binary_frame_reports_binary_type)
+    {
+        // masked "hi" binary frame: FIN|BINARY, len=2, mask 11 22 33 44
+        static const unsigned char frame[] = {0x82, 0x82, 0x11, 0x22, 0x33, 0x44, 0x79, 0x4b};
+
+        th_ws* ws = NULL;
+        TH_EXPECT(th_ws_create(&ws, &conn.base, th_test_ws_handler, &calls, NULL) == TH_ERR_OK);
+        th_ws_start(ws);
+
+        th_fake_conn_deliver(&conn, frame, sizeof(frame));
+        TH_EXPECT(calls.data_count == 1);
+        TH_EXPECT(calls.data_type == TH_WS_BINARY);
+        TH_EXPECT(calls.close_count == 0);
 
         conn.next_recv_err = TH_ERR_EOF;
         th_fake_conn_run(&conn);
@@ -285,7 +308,7 @@ TH_TEST_BEGIN(ws)
         th_ws* ws = NULL;
         TH_EXPECT(th_ws_create(&ws, &conn.base, th_test_ws_handler, &calls, NULL) == TH_ERR_OK);
         th_ws_start(ws);
-        TH_EXPECT(th_ws_send(ws, (th_buffer){"hi", 2}, TH_WS_MSG_TEXT) == TH_ERR_NOSUPPORT);
+        TH_EXPECT(th_ws_send(ws, (th_buffer){"hi", 2}, TH_WS_TEXT) == TH_ERR_NOSUPPORT);
 
         conn.next_recv_err = TH_ERR_EOF;
         th_fake_conn_run(&conn);

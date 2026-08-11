@@ -195,12 +195,13 @@ th_test_system_error_handler(void* user_data, const th_request* req, th_response
 }
 
 static th_err
-th_test_ws_handler(void* userp, th_ws* ws, th_ws_event ev, th_buffer data)
+th_test_ws_handler(void* userp, th_ws* ws, th_ws_event ev, th_buffer data, th_ws_type type)
 {
     (void)userp;
     (void)ws;
     (void)ev;
     (void)data;
+    (void)type;
     return TH_ERR_OK;
 }
 

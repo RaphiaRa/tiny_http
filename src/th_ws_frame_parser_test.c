@@ -56,7 +56,7 @@ TH_TEST_BEGIN(ws_frame_parser)
         th_err err = th_ws_frame_parser_parse(&parser, (char*)buf, sizeof(buf), &payload, &parsed, &type);
         TH_EXPECT(err == TH_ERR_OK);
         TH_EXPECT(parsed == sizeof(buf));
-        TH_EXPECT(type == TH_WS_FRAME_DATA);
+        TH_EXPECT(type == TH_WS_FRAME_TEXT);
         TH_EXPECT(th_buf_vec_size(&payload) == 5);
         TH_EXPECT(memcmp(th_buf_vec_begin(&payload), "hello", 5) == 0);
     }
@@ -93,7 +93,7 @@ TH_TEST_BEGIN(ws_frame_parser)
         th_err err = th_ws_frame_parser_parse(&parser, (char*)buf, sizeof(buf), &payload, &parsed, &type);
         TH_EXPECT(err == TH_ERR_OK);
         TH_EXPECT(parsed == sizeof(buf));
-        TH_EXPECT(type == TH_WS_FRAME_DATA);
+        TH_EXPECT(type == TH_WS_FRAME_TEXT);
         TH_EXPECT(th_buf_vec_size(&payload) == 6);
         TH_EXPECT(memcmp(th_buf_vec_begin(&payload), "foobar", 6) == 0);
     }
@@ -138,7 +138,7 @@ TH_TEST_BEGIN(ws_frame_parser)
         err = th_ws_frame_parser_parse(&parser, (char*)buf + sizeof(FRAME_PING), sizeof(FRAME_TEXT_HI), &payload,
                                         &parsed, &type);
         TH_EXPECT(err == TH_ERR_OK);
-        TH_EXPECT(type == TH_WS_FRAME_DATA);
+        TH_EXPECT(type == TH_WS_FRAME_TEXT);
         TH_EXPECT(th_buf_vec_size(&payload) == 2);
         TH_EXPECT(memcmp(th_buf_vec_begin(&payload), "hi", 2) == 0);
     }
@@ -179,6 +179,7 @@ TH_TEST_BEGIN(ws_frame_parser)
         th_err err = th_ws_frame_parser_parse(&parser, (char*)buf, sizeof(buf), &payload, &parsed, &type);
         TH_EXPECT(err == TH_ERR_OK);
         TH_EXPECT(parsed == sizeof(buf));
+        TH_EXPECT(type == TH_WS_FRAME_BINARY);
         TH_EXPECT(th_buf_vec_size(&payload) == sizeof(src));
         TH_EXPECT(memcmp(th_buf_vec_begin(&payload), src, sizeof(src)) == 0);
     }

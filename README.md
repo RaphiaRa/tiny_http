@@ -45,21 +45,18 @@ I wrote this library because I wanted a simple drop-in solution for the legacy C
 ## Features
 
 - Simple integration (just copy the `th.h` and `th.c` files to your project)
-- HTTPS support (via OpenSSL) (Works, but still needs to be optimized as it's quite slow)
+- HTTPS support (via OpenSSL)
 - Path capturing (e.g. `/user/{id}`)
 - Supports Linux and MacOS (Windows support is planned)
 - Fully customizable memory allocation and logging
 - File Uploads (Multipart form data)
-
-## Planned features
-
 - Websockets
 
 ## Dependencies
 
 - The C standard library
 - OpenSSL (optional, for HTTPS support)
-- gperf (optinal, for binary builds and amalgamation)
+- gperf (optional, for binary builds and amalgamation)
 - python3 (optional, for running the amalgamation script)
 
 ## Enabling HTTPS

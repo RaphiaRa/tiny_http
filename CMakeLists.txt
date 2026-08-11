@@ -204,6 +204,7 @@ if (NOT TH_DISABLE_EXAMPLES)
     add_tiny_http_example(file_server)
     add_tiny_http_example(file_upload)
     add_tiny_http_example(hello_world)
+    add_tiny_http_example(websocket)
 endif()
 
 # Tests

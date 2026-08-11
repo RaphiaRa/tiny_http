@@ -347,19 +347,15 @@ typedef enum th_ws_type {
 
 /** th_ws_handler
  * @brief WebSocket event callback. data is empty for TH_WS_EVENT_OPEN/CLOSE,
- * and holds one complete message's payload for TH_WS_EVENT_DATA - type is
- * only meaningful for TH_WS_EVENT_DATA. ws must not be used after
- * TH_WS_EVENT_CLOSE has been delivered.
+ * data and type is only useful for TH_WS_EVENT_DATA
+ * ws must not be used after TH_WS_EVENT_CLOSE has been delivered.
  */
 typedef th_err (*th_ws_handler)(void* userp, th_ws* ws, th_ws_event ev, th_buffer data, th_ws_type type);
 
 /** th_ws_send
- * @brief Queues one WebSocket message for sending. type selects the
- * opcode (text vs binary), it does not otherwise affect encoding - data
- * is sent as-is.
- * @return TH_ERR_SYSTEM(TH_EAGAIN) if the send queue is full - retry
- * once a previously queued message has gone out. TH_ERR_INVALID_ARG if
- * the connection is closing/closed.
+ * @brief Queues one WebSocket message for sending.
+ * @return TH_ERR_SYSTEM(TH_EAGAIN) if the send queue is full.
+ * @return TH_ERR_INVALID_ARG if the connection is closing/closed.
  */
 th_err th_ws_send(th_ws* ws, th_buffer data, th_ws_type type);
 
@@ -403,7 +399,7 @@ th_err th_route(th_server* server, th_method method, const char* route, th_handl
  */
 th_err th_route_ws(th_server* server, const char* path, th_ws_handler handler, void* userp);
 
-/** th_err
+/** th_add_dir
  * @brief Add a directory to the server (for serving or storing files).
  * @param name Label for the directory.
  * @param path File system path.

@@ -74,6 +74,7 @@ SET(TH_CORE_SRC
     src/th_sha1.c
     src/th_base64.c
     src/th_ws_handshake.c
+    src/th_ws_frame_parser.c
     src/th_ws.c
 #   SSL (compiled out via TH_WITH_SSL=0 when OpenSSL is not found)
     src/th_ssl_smem_bio.c
@@ -243,6 +244,7 @@ if (NOT TH_DISABLE_TESTS)
         src/th_sha1_test.c
         src/th_base64_test.c
         src/th_ws_handshake_test.c
+        src/th_ws_frame_parser_test.c
         src/th_response_test.c
         src/th_http_test.c
         src/th_ws_test.c

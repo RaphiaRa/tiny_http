@@ -23,6 +23,7 @@ struct th_ws {
     th_ring send_ring;
     th_iov send_iov[2];
     bool sending;
+    bool closing; // a CLOSE frame is queued/in flight - destroy once send_ring drains
 };
 
 TH_PRIVATE(void)

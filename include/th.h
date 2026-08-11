@@ -358,13 +358,15 @@ typedef th_err (*th_ws_handler)(void* userp, th_ws* ws, th_ws_event ev, th_buffe
  * opcode (text vs binary), it does not otherwise affect encoding - data
  * is sent as-is.
  * @return TH_ERR_SYSTEM(TH_EAGAIN) if the send queue is full - retry
- * once a previously queued message has gone out.
+ * once a previously queued message has gone out. TH_ERR_INVALID_ARG if
+ * the connection is closing/closed.
  */
 th_err th_ws_send(th_ws* ws, th_buffer data, th_ws_type type);
 
 /** th_ws_close
  * @brief Starts closing the connection. TH_WS_EVENT_CLOSE will be
  * delivered once the close handshake completes.
+ * @return TH_ERR_INVALID_ARG if the connection is already closing/closed.
  */
 th_err th_ws_close(th_ws* ws);
 

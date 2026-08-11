@@ -37,6 +37,8 @@ th_ring_chunk_free_space(const th_ring_chunk* chunk)
 TH_LOCAL(void)
 th_ring_chunk_write(th_ring_chunk* chunk, const void* data, size_t len)
 {
+    if (len == 0)
+        return;
     size_t offset = chunk->tail % chunk->capacity;
     size_t first = chunk->capacity - offset < len ? chunk->capacity - offset : len;
     memcpy(chunk->data + offset, data, first);

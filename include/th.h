@@ -146,6 +146,7 @@ typedef enum th_code {
     TH_CODE_URI_TOO_LONG = 414,
     TH_CODE_UNSUPPORTED_MEDIA_TYPE = 415,
     TH_CODE_RANGE_NOT_SATISFIABLE = 416,
+    TH_CODE_UPGRADE_REQUIRED = 426,
     TH_CODE_TOO_MANY_REQUESTS = 429,
     TH_CODE_REQUEST_HEADER_FIELDS_TOO_LARGE = 431,
     TH_CODE_INTERNAL_SERVER_ERROR = 500,
@@ -343,14 +344,22 @@ typedef struct th_ws th_ws;
  */
 typedef th_err (*th_ws_handler)(void* userp, th_ws* ws, th_ws_event ev, th_buffer data);
 
+/** th_ws_msg_type
+ * @brief Selects the opcode a th_ws_send message goes out as.
+ */
+typedef enum th_ws_msg_type {
+    TH_WS_MSG_TEXT,
+    TH_WS_MSG_BINARY,
+} th_ws_msg_type;
+
 /** th_ws_send
- * @brief Sends one WebSocket message. binary selects the opcode (text vs
+ * @brief Sends one WebSocket message. type selects the opcode (text vs
  * binary), it does not otherwise affect encoding - data is sent as-is.
  * @return TH_ERR_BUSY if a previous send on this connection hasn't
  * finished yet (retry once the next event is delivered), TH_ERR_INVALID_ARG
  * if the connection is closing/closed.
  */
-th_err th_ws_send(th_ws* ws, th_buffer data, bool binary);
+th_err th_ws_send(th_ws* ws, th_buffer data, th_ws_msg_type type);
 
 /** th_ws_close
  * @brief Starts closing the connection. TH_WS_EVENT_CLOSE will be

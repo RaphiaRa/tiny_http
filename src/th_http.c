@@ -1,6 +1,9 @@
 #include "th_http.h"
 #include "th_fmt.h"
 #include "th_http_error.h"
+#include "th_utility.h"
+#include "th_ws.h"
+#include "th_ws_handshake.h"
 
 #include <stdbool.h>
 
@@ -22,11 +25,25 @@ th_http_destroy(void* self)
     th_allocator_free(http->allocator, http);
 }
 
+// Moves conn out of http (leaving it destroy-safe with a NULL conn) and
+// destroys everything else - used to hand conn off to upgrade it to
+// another protocol without tearing it down.
+TH_LOCAL(th_conn*)
+th_http_detach_conn(th_http* http)
+{
+    th_conn* conn = TH_MOVE_PTR(http->conn);
+    th_http_destroy(http);
+    return conn;
+}
+
 TH_LOCAL(void)
 th_http_handle_read_request(void* user_data, size_t len, th_err err);
 
 TH_LOCAL(void)
 th_http_handle_write_response(void* user_data, size_t len, th_err err);
+
+TH_LOCAL(void)
+th_http_handle_error(th_http* http, th_err err);
 
 TH_LOCAL(void)
 th_http_restart(th_http* http)
@@ -50,24 +67,90 @@ th_http_complete(th_http* http)
 }
 
 TH_LOCAL(void)
-th_http_write_response(th_http* http)
+th_http_write_response_cb(th_http* http, th_send_cb callback)
 {
     th_response_write_plan plan;
     th_err err = th_response_prepare_write(&http->response, &plan);
     if (err != TH_ERR_OK) {
-        th_http_handle_write_response(http, 0, err);
+        callback(http, 0, err);
         return;
     }
-    th_conn_send(http->conn, plan.iov, plan.iovcnt, plan.file, plan.offset, plan.len, th_http_handle_write_response, http);
+    th_conn_send(http->conn, plan.iov, plan.iovcnt, plan.file, plan.offset, plan.len, callback, http);
+}
+
+TH_LOCAL(void)
+th_http_write_response(th_http* http)
+{
+    th_http_write_response_cb(http, th_http_handle_write_response);
+}
+
+TH_LOCAL(void)
+th_http_handle_ws_upgrade_written(void* user_data, size_t len, th_err err)
+{
+    th_http* http = user_data;
+    (void)len;
+    if (err != TH_ERR_OK) {
+        TH_LOG_ERROR("%p: Failed to write WS upgrade response: %s", (void*)http, th_strerror(err));
+        th_http_destroy(http);
+        return;
+    }
+    th_ws_handler handler = http->ws_handler;
+    void* ws_user_data = http->ws_user_data;
+    th_conn* conn = th_http_detach_conn(http);
+    th_ws* ws = NULL;
+    if ((err = th_ws_create(&ws, conn, handler, ws_user_data, NULL)) != TH_ERR_OK) {
+        TH_LOG_ERROR("Failed to create ws instance: %s", th_strerror(err));
+        th_conn_destroy(conn);
+        return;
+    }
+    th_ws_start(ws);
+}
+
+// Sends the 101 response and, on success, hands conn off to a new th_ws.
+// If request wasn't actually a WS handshake, sends a 426 Upgrade Required
+// instead.
+TH_LOCAL(void)
+th_http_try_upgrade_ws(th_http* http)
+{
+    th_ws_handler handler = NULL;
+    void* user_data = NULL;
+    bool is_ws_route = th_router_find_ws_route(http->router, th_string_view(&http->request.uri_path), &handler, &user_data);
+    if (!is_ws_route || !th_ws_is_handshake(&http->request)) {
+        th_response_add_header(&http->response, TH_STR("Upgrade"), TH_STR("websocket"));
+        th_http_handle_error(http, TH_ERR_HTTP(TH_CODE_UPGRADE_REQUIRED));
+        return;
+    }
+
+    th_err err = TH_ERR_OK;
+    if ((err = th_response_add_header(&http->response, TH_STR("Upgrade"), TH_STR("websocket"))) != TH_ERR_OK)
+        goto fail;
+    if ((err = th_response_add_header(&http->response, TH_STR("Connection"), TH_STR("Upgrade"))) != TH_ERR_OK)
+        goto fail;
+    th_string accept_key;
+    th_string_init(&accept_key, http->allocator);
+    err = th_ws_handshake_accept_key(th_request_get_header(&http->request, TH_STR("sec-websocket-key")), &accept_key);
+    if (err == TH_ERR_OK)
+        err = th_response_add_header(&http->response, TH_STR("Sec-WebSocket-Accept"), th_string_view(&accept_key));
+    th_string_deinit(&accept_key);
+    if (err != TH_ERR_OK)
+        goto fail;
+
+    http->ws_handler = handler;
+    http->ws_user_data = user_data;
+    th_http_write_response_cb(http, th_http_handle_ws_upgrade_written);
+    return;
+fail:
+    TH_LOG_ERROR("%p: Failed to prepare WS upgrade response: %s", (void*)http, th_strerror(err));
+    th_response_reset(&http->response);
+    th_http_handle_error(http, TH_ERR_HTTP(TH_CODE_INTERNAL_SERVER_ERROR));
 }
 
 TH_LOCAL(void)
 th_http_write_error_response(th_http* http, th_err err)
 {
     th_response_set_code(&http->response, TH_ERR_CODE(err));
-    if (th_string_len(&http->request.uri_path) == 0) {
-        // Set default error message
-        th_printf_body(&http->response, "%d %s", TH_ERR_CODE(err), th_http_strerror((int)err));
+    if (!http->response.is_file && th_string_len(&http->response.body) == 0) {
+        th_printf_body(&http->response, "%d %s", TH_ERR_CODE(err), th_http_strerror((int)TH_ERR_CODE(err)));
     }
     if (http->close) {
         th_response_add_header(&http->response, TH_STR("Connection"), TH_STR("close"));
@@ -171,6 +254,10 @@ th_http_handle_request_and_write_response(th_http* http)
     case TH_HTTP_CODE_TYPE_INFORMATIONAL:
         if (request->version == 0) {
             th_http_handle_require_1_1(http);
+            return;
+        }
+        if (TH_ERR_CODE(err) == TH_CODE_SWITCHING_PROTOCOLS) {
+            th_http_try_upgrade_ws(http);
             return;
         }
         break;

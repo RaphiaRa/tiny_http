@@ -423,5 +423,36 @@ TH_TEST_BEGIN(router)
         th_router_deinit(&router);
     }
     TH_TEST_CASE_END
+    TH_TEST_CASE_BEGIN(router_ws_only_route_returns_switching_protocols_instead_of_405)
+    {
+        th_router router;
+        th_router_init(&router, NULL);
+        TH_EXPECT(th_router_add_ws_route(&router, TH_STR("/ws"), noop_ws_handler, NULL) == TH_ERR_OK);
+        th_request request = {0};
+        th_request_init(&request, NULL);
+        request.method = TH_METHOD_GET;
+        th_string_set(&request.uri_path, TH_STR("/ws"));
+        th_response response = {0};
+        TH_EXPECT(th_router_handle(&router, &request, &response) == TH_ERR_HTTP(TH_CODE_SWITCHING_PROTOCOLS));
+        th_request_deinit(&request);
+        th_router_deinit(&router);
+    }
+    TH_TEST_CASE_END
+    TH_TEST_CASE_BEGIN(router_add_route_after_ws_route_overrides_default_gate)
+    {
+        th_router router;
+        th_router_init(&router, NULL);
+        TH_EXPECT(th_router_add_ws_route(&router, TH_STR("/ws"), noop_ws_handler, NULL) == TH_ERR_OK);
+        TH_EXPECT(th_router_add_route(&router, TH_METHOD_GET, TH_STR("/ws"), expect_pathvars_handler, NULL) == TH_ERR_OK);
+        th_request request = {0};
+        th_request_init(&request, NULL);
+        request.method = TH_METHOD_GET;
+        th_string_set(&request.uri_path, TH_STR("/ws"));
+        th_response response = {0};
+        TH_EXPECT(th_router_handle(&router, &request, &response) == TH_ERR_OK);
+        th_request_deinit(&request);
+        th_router_deinit(&router);
+    }
+    TH_TEST_CASE_END
 }
 TH_TEST_END

@@ -31,6 +31,10 @@ struct th_http {
 
     // true if the connection should be closed
     bool close;
+
+    // set by th_http_try_upgrade_ws, read once the 101 response is written
+    th_ws_handler ws_handler;
+    void* ws_user_data;
 };
 
 typedef struct th_http_upgrader {

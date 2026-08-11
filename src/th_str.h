@@ -49,6 +49,13 @@ th_str_from_cstr(const char* str)
 TH_PRIVATE(bool)
 th_str_eq(th_str a, th_str b);
 
+/** th_str_ieq
+ * @brief Case-insensitive version of th_str_eq.
+ * @return 1 if the strings are equal ignoring case, 0 otherwise.
+ */
+TH_PRIVATE(bool)
+th_str_ieq(th_str a, th_str b);
+
 /** th_str_empty
  * @brief Helper function to check if a th_str is empty.
  * @return true if the string is empty, false otherwise.

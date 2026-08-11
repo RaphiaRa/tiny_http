@@ -88,6 +88,9 @@ th_http_strerror(int code)
     case TH_CODE_RANGE_NOT_SATISFIABLE:
         return "Range Not Satisfiable";
         break;
+    case TH_CODE_UPGRADE_REQUIRED:
+        return "Upgrade Required";
+        break;
     case TH_CODE_REQUEST_HEADER_FIELDS_TOO_LARGE:
         return "Request Header Fields Too Large";
         break;

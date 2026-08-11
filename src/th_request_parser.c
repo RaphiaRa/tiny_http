@@ -291,7 +291,7 @@ th_request_parse_handle_header(th_request_parser* parser, th_request* request, t
         } else if (th_str_eq(value, TH_STR("keep-alive"))) {
             request->close = false;
         }
-        return TH_ERR_OK;
+        break;
     case TH_HEADER_ID_CONTENT_TYPE:
         if (th_str_eq(value, TH_STR("application/x-www-form-urlencoded"))) {
             parser->body_encoding = TH_REQUEST_BODY_ENCODING_FORM_URL_ENCODED;

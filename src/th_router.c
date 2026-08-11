@@ -23,6 +23,7 @@ th_route_init(th_route_segment* route, th_capture_type type, th_str segment, th_
     route->allocator = allocator;
     for (size_t i = 0; i < TH_METHOD_MAX; ++i)
         route->handler[i] = (th_route_handler){NULL, NULL};
+    route->ws_handler = (th_ws_route_handler){NULL, NULL};
     return TH_ERR_OK;
 }
 

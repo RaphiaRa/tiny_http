@@ -4,8 +4,9 @@
 #include <th.h>
 
 #include "th_conn.h"
+#include "th_vec.h"
+#include "th_ws_frame_parser.h"
 
-// Frame parsing isn't implemented yet; received bytes are discarded here.
 #define TH_WS_SCRATCH_RECV_LEN 8192
 
 struct th_ws {
@@ -13,6 +14,8 @@ struct th_ws {
     th_ws_handler handler;
     void* user_data;
     th_allocator* allocator;
+    th_ws_frame_parser parser;
+    th_buf_vec payload; // accumulates a message's payload across fragments/calls
     char scratch[TH_WS_SCRATCH_RECV_LEN];
 };
 

@@ -38,6 +38,7 @@ th_system_strerror(int errc)
 #define TH_ENOSYS ENOSYS
 #define TH_ETIMEDOUT ETIMEDOUT
 #define TH_ECANCELED ECANCELED
+#define TH_EPROTO EPROTO
 #elif defined(TH_CONFIG_OS_WIN)
 #define TH_ENOENT ERROR_FILE_NOT_FOUND
 #define TH_EINTR ERROR_INTERRUPT
@@ -50,6 +51,7 @@ th_system_strerror(int errc)
 #define TH_ENOSYS ERROR_NOT_SUPPORTED
 #define TH_ETIMEDOUT ERROR_TIMEOUT
 #define TH_ECANCELED ERROR_CANCELLED
+#define TH_EPROTO ERROR_INVALID_DATA
 #endif
 
 #endif

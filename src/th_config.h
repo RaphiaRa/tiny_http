@@ -30,6 +30,10 @@
 #define TH_MAX_BODY_LEN (4 * 1024 * 1024)
 #endif
 
+#ifndef TH_CONFIG_WS_MAX_MESSAGE_LEN
+#define TH_CONFIG_WS_MAX_MESSAGE_LEN (4 * 1024 * 1024)
+#endif
+
 /* feature configuration end */
 
 #if defined(__APPLE__)

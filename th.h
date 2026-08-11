@@ -53,6 +53,7 @@ typedef struct th_buffer {
 #define TH_ERRC_EOF 3
 #define TH_ERRC_NOSUPPORT 4
 #define TH_ERRC_UNKNOWN 5
+#define TH_ERRC_BUSY 6
 
 /* error pack/unpack macros */
 #define TH_ERR_CODE_BITS (sizeof(unsigned) * 8 - 4)
@@ -70,6 +71,7 @@ typedef enum th_err {
     TH_ERR_EOF = TH_ERR_PACK(TH_ERR_CATEGORY_OTHER, TH_ERRC_EOF),
     TH_ERR_NOSUPPORT = TH_ERR_PACK(TH_ERR_CATEGORY_OTHER, TH_ERRC_NOSUPPORT),
     TH_ERR_UNKNOWN = TH_ERR_PACK(TH_ERR_CATEGORY_OTHER, TH_ERRC_UNKNOWN),
+    TH_ERR_BUSY = TH_ERR_PACK(TH_ERR_CATEGORY_OTHER, TH_ERRC_BUSY),
 } th_err;
 
 #define TH_ERR(category, code) (th_err)(TH_ERR_PACK(category, code))
@@ -131,6 +133,7 @@ typedef enum th_method {
 } th_method;
 
 typedef enum th_code {
+    TH_CODE_SWITCHING_PROTOCOLS = 101,
     TH_CODE_OK = 200,
     TH_CODE_MOVED_PERMANENTLY = 301,
     TH_CODE_BAD_REQUEST = 400,
@@ -143,6 +146,7 @@ typedef enum th_code {
     TH_CODE_URI_TOO_LONG = 414,
     TH_CODE_UNSUPPORTED_MEDIA_TYPE = 415,
     TH_CODE_RANGE_NOT_SATISFIABLE = 416,
+    TH_CODE_UPGRADE_REQUIRED = 426,
     TH_CODE_TOO_MANY_REQUESTS = 429,
     TH_CODE_REQUEST_HEADER_FIELDS_TOO_LARGE = 431,
     TH_CODE_INTERNAL_SERVER_ERROR = 500,
@@ -322,6 +326,46 @@ th_err th_add_cookie(th_response* resp, const char* key, const char* value, th_c
  */
 typedef th_err (*th_handler)(void* userp, const th_request* req, th_response* resp);
 
+/** th_ws_event
+ * @brief The kind of event delivered to a th_ws_handler.
+ */
+typedef enum th_ws_event {
+    TH_WS_EVENT_OPEN,  // connection upgraded, ready to send/receive
+    TH_WS_EVENT_DATA,  // one complete message received (data holds its payload)
+    TH_WS_EVENT_CLOSE, // connection closed, ws is no longer valid after this call returns
+} th_ws_event;
+
+typedef struct th_ws th_ws;
+
+/** th_ws_type
+ * @brief Text vs binary, for both received messages and th_ws_send.
+ */
+typedef enum th_ws_type {
+    TH_WS_TEXT,
+    TH_WS_BINARY,
+} th_ws_type;
+
+/** th_ws_handler
+ * @brief WebSocket event callback. data is empty for TH_WS_EVENT_OPEN/CLOSE,
+ * data and type is only useful for TH_WS_EVENT_DATA
+ * ws must not be used after TH_WS_EVENT_CLOSE has been delivered.
+ */
+typedef th_err (*th_ws_handler)(void* userp, th_ws* ws, th_ws_event ev, th_buffer data, th_ws_type type);
+
+/** th_ws_send
+ * @brief Queues one WebSocket message for sending.
+ * @return TH_ERR_SYSTEM(TH_EAGAIN) if the send queue is full.
+ * @return TH_ERR_INVALID_ARG if the connection is closing/closed.
+ */
+th_err th_ws_send(th_ws* ws, th_buffer data, th_ws_type type);
+
+/** th_ws_close
+ * @brief Starts closing the connection. TH_WS_EVENT_CLOSE will be
+ * delivered once the close handshake completes.
+ * @return TH_ERR_INVALID_ARG if the connection is already closing/closed.
+ */
+th_err th_ws_close(th_ws* ws);
+
 typedef struct th_server th_server;
 
 /** th_server_create
@@ -345,7 +389,17 @@ th_err th_bind(th_server* server, const char* addr, const char* port, th_bind_op
 
 th_err th_route(th_server* server, th_method method, const char* route, th_handler handler, void* userp);
 
-/** th_err
+/** th_route_ws
+ * @brief Registers a WebSocket endpoint at path. Any request to path with
+ * a valid WebSocket handshake is upgraded, after which handler(userp, ...)
+ * receives its events. To gate the upgrade (e.g. auth), also register a
+ * plain th_route on the same path with TH_METHOD_GET: if it returns an
+ * error, that error is sent as a normal HTTP response and no upgrade
+ * happens; if it returns TH_ERR_OK (or is absent), the upgrade proceeds.
+ */
+th_err th_route_ws(th_server* server, const char* path, th_ws_handler handler, void* userp);
+
+/** th_add_dir
  * @brief Add a directory to the server (for serving or storing files).
  * @param name Label for the directory.
  * @param path File system path.

@@ -43,6 +43,9 @@ TH_INLINE(const char*)
 th_http_strerror(int code)
 {
     switch (code) {
+    case TH_CODE_SWITCHING_PROTOCOLS:
+        return "Switching Protocols";
+        break;
     case TH_CODE_OK:
         return "OK";
         break;

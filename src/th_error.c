@@ -19,6 +19,8 @@ th_strerror(th_err err)
             return "invalid argument";
         case TH_ERRC_EOF:
             return "end of file";
+        case TH_ERRC_BUSY:
+            return "busy";
         default:
             return "unknown error";
         }

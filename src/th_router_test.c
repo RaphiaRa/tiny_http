@@ -32,6 +32,16 @@ expect_pathvars_handler(void* user_data, const th_request* req, th_response* res
     return TH_ERR_OK;
 }
 
+static th_err
+noop_ws_handler(void* userp, th_ws* ws, th_ws_event ev, th_buffer data)
+{
+    (void)userp;
+    (void)ws;
+    (void)ev;
+    (void)data;
+    return TH_ERR_OK;
+}
+
 TH_TEST_BEGIN(router)
 {
     TH_TEST_CASE_BEGIN(router_init)
@@ -356,6 +366,60 @@ TH_TEST_BEGIN(router)
             TH_EXPECT(th_router_handle(&router, &request, &response) == TH_ERR_OK);
             th_request_deinit(&request);
         }
+        th_router_deinit(&router);
+    }
+    TH_TEST_CASE_END
+    TH_TEST_CASE_BEGIN(router_find_ws_route)
+    {
+        th_router router;
+        th_router_init(&router, NULL);
+        int userp = 0;
+        TH_EXPECT(th_router_add_ws_route(&router, TH_STR("/ws"), noop_ws_handler, &userp) == TH_ERR_OK);
+        th_ws_handler handler = NULL;
+        void* user_data = NULL;
+        TH_EXPECT(th_router_find_ws_route(&router, TH_STR("/ws"), &handler, &user_data));
+        TH_EXPECT(handler == noop_ws_handler);
+        TH_EXPECT(user_data == &userp);
+        th_router_deinit(&router);
+    }
+    TH_TEST_CASE_END
+    TH_TEST_CASE_BEGIN(router_find_ws_route_not_registered)
+    {
+        th_router router;
+        th_router_init(&router, NULL);
+        TH_EXPECT(th_router_add_route(&router, TH_METHOD_GET, TH_STR("/plain"), expect_pathvars_handler, NULL) == TH_ERR_OK);
+        th_ws_handler handler = NULL;
+        void* user_data = NULL;
+        TH_EXPECT(!th_router_find_ws_route(&router, TH_STR("/plain"), &handler, &user_data));
+        th_router_deinit(&router);
+    }
+    TH_TEST_CASE_END
+    TH_TEST_CASE_BEGIN(router_ws_route_and_http_route_coexist)
+    {
+        th_router router;
+        th_router_init(&router, NULL);
+        TH_EXPECT(th_router_add_route(&router, TH_METHOD_GET, TH_STR("/chat"), expect_pathvars_handler, NULL) == TH_ERR_OK);
+        TH_EXPECT(th_router_add_ws_route(&router, TH_STR("/chat"), noop_ws_handler, NULL) == TH_ERR_OK);
+        th_request request = {0};
+        th_request_init(&request, NULL);
+        request.method = TH_METHOD_GET;
+        th_string_set(&request.uri_path, TH_STR("/chat"));
+        th_response response = {0};
+        TH_EXPECT(th_router_handle(&router, &request, &response) == TH_ERR_OK);
+        th_ws_handler handler = NULL;
+        void* user_data = NULL;
+        TH_EXPECT(th_router_find_ws_route(&router, th_string_view(&request.uri_path), &handler, &user_data));
+        TH_EXPECT(handler == noop_ws_handler);
+        th_request_deinit(&request);
+        th_router_deinit(&router);
+    }
+    TH_TEST_CASE_END
+    TH_TEST_CASE_BEGIN(router_add_ws_route_twice_fails)
+    {
+        th_router router;
+        th_router_init(&router, NULL);
+        TH_EXPECT(th_router_add_ws_route(&router, TH_STR("/ws"), noop_ws_handler, NULL) == TH_ERR_OK);
+        TH_EXPECT(th_router_add_ws_route(&router, TH_STR("/ws"), noop_ws_handler, NULL) == TH_ERR_INVALID_ARG);
         th_router_deinit(&router);
     }
     TH_TEST_CASE_END

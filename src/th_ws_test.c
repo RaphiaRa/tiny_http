@@ -304,7 +304,7 @@ TH_TEST_BEGIN(ws)
         TH_EXPECT(conn.destroyed);
     }
     TH_TEST_CASE_END
-    TH_TEST_CASE_BEGIN(ws_recv_close_frame_closes_connection)
+    TH_TEST_CASE_BEGIN(ws_recv_close_frame_echoes_close_then_destroys)
     {
         // masked empty CLOSE frame: FIN|CLOSE, len=0, mask 11 22 33 44
         static const unsigned char frame[] = {0x88, 0x80, 0x11, 0x22, 0x33, 0x44};
@@ -315,6 +315,14 @@ TH_TEST_BEGIN(ws)
 
         th_fake_conn_deliver(&conn, frame, sizeof(frame));
         TH_EXPECT(calls.data_count == 0);
+        TH_EXPECT(calls.close_count == 0); // not yet - our own CLOSE echo hasn't finished sending
+        TH_EXPECT(!conn.destroyed);
+        TH_EXPECT(conn.send_callback != NULL);
+
+        th_fake_conn_complete_send(&conn);
+        static const unsigned char expected[] = {0x88, 0x00}; // unmasked, empty CLOSE echo
+        TH_EXPECT(conn.sent_len == sizeof(expected));
+        TH_EXPECT(memcmp(conn.sent_buf, expected, sizeof(expected)) == 0);
         TH_EXPECT(calls.close_count == 1);
         TH_EXPECT(conn.destroyed);
     }
@@ -463,15 +471,46 @@ TH_TEST_BEGIN(ws)
         TH_EXPECT(conn.destroyed);
     }
     TH_TEST_CASE_END
-    TH_TEST_CASE_BEGIN(ws_close_returns_nosupport)
+    TH_TEST_CASE_BEGIN(ws_close_sends_close_frame_then_destroys)
     {
         th_ws* ws = NULL;
         TH_EXPECT(th_ws_create(&ws, &conn.base, th_test_ws_handler, &calls, NULL) == TH_ERR_OK);
         th_ws_start(ws);
-        TH_EXPECT(th_ws_close(ws) == TH_ERR_NOSUPPORT);
 
-        conn.next_recv_err = TH_ERR_EOF;
-        th_fake_conn_run(&conn);
+        TH_EXPECT(th_ws_close(ws) == TH_ERR_OK);
+        TH_EXPECT(calls.close_count == 0); // not yet - waiting for our CLOSE frame to finish sending
+        TH_EXPECT(!conn.destroyed);
+
+        th_fake_conn_complete_send(&conn);
+        static const unsigned char expected[] = {0x88, 0x00};
+        TH_EXPECT(conn.sent_len == sizeof(expected));
+        TH_EXPECT(memcmp(conn.sent_buf, expected, sizeof(expected)) == 0);
+        TH_EXPECT(calls.close_count == 1);
+        TH_EXPECT(conn.destroyed);
+    }
+    TH_TEST_CASE_END
+    TH_TEST_CASE_BEGIN(ws_close_twice_returns_invalid_arg)
+    {
+        th_ws* ws = NULL;
+        TH_EXPECT(th_ws_create(&ws, &conn.base, th_test_ws_handler, &calls, NULL) == TH_ERR_OK);
+        th_ws_start(ws);
+
+        TH_EXPECT(th_ws_close(ws) == TH_ERR_OK);
+        TH_EXPECT(th_ws_close(ws) == TH_ERR_INVALID_ARG);
+
+        th_fake_conn_complete_send(&conn);
+    }
+    TH_TEST_CASE_END
+    TH_TEST_CASE_BEGIN(ws_send_after_close_returns_invalid_arg)
+    {
+        th_ws* ws = NULL;
+        TH_EXPECT(th_ws_create(&ws, &conn.base, th_test_ws_handler, &calls, NULL) == TH_ERR_OK);
+        th_ws_start(ws);
+
+        TH_EXPECT(th_ws_close(ws) == TH_ERR_OK);
+        TH_EXPECT(th_ws_send(ws, (th_buffer){"hi", 2}, TH_WS_TEXT) == TH_ERR_INVALID_ARG);
+
+        th_fake_conn_complete_send(&conn);
     }
     TH_TEST_CASE_END
 }

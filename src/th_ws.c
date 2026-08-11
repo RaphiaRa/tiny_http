@@ -17,6 +17,7 @@ th_ws_init(th_ws* ws, th_conn* conn, th_ws_handler handler, void* user_data, th_
     th_buf_vec_init(&ws->payload, ws->allocator);
     th_ring_init(&ws->send_ring, ws->allocator, TH_CONFIG_WS_SEND_RING_LEN, TH_CONFIG_WS_SEND_MAX_LEN);
     ws->sending = false;
+    ws->closing = false;
 }
 
 TH_PRIVATE(void)
@@ -57,6 +58,9 @@ th_ws_close_and_destroy(th_ws* ws)
 TH_LOCAL(void)
 th_ws_handle_recv(void* user_data, size_t len, th_err err);
 
+TH_LOCAL(th_err)
+th_ws_queue_frame(th_ws* ws, th_ws_frame_type frame_type, th_buffer data);
+
 TH_LOCAL(bool)
 th_ws_consume(th_ws* ws, char* data, size_t len)
 {
@@ -73,8 +77,13 @@ th_ws_consume(th_ws* ws, char* data, size_t len)
             return false;
         }
 
-        if (type == TH_WS_FRAME_CLOSE)
+        if (type == TH_WS_FRAME_CLOSE) {
+            if (!ws->closing) {
+                ws->closing = true;
+                th_ws_queue_frame(ws, TH_WS_FRAME_CLOSE, (th_buffer){0});
+            }
             return false;
+        }
         if (type == TH_WS_FRAME_PING || type == TH_WS_FRAME_PONG)
             continue;
 
@@ -100,7 +109,10 @@ th_ws_handle_recv(void* user_data, size_t len, th_err err)
         return;
     }
     if (!th_ws_consume(ws, ws->scratch, len)) {
-        th_ws_close_and_destroy(ws);
+        // if closing, a CLOSE frame is now queued/in flight - the send
+        // path destroys once it drains, so as not to cut it off mid-send
+        if (!ws->closing)
+            th_ws_close_and_destroy(ws);
         return;
     }
     th_conn_recv(ws->conn, ws->scratch, sizeof(ws->scratch), false, th_ws_handle_recv, ws);
@@ -127,6 +139,8 @@ th_ws_send_drain(th_ws* ws)
     size_t iovcnt = th_ring_peek(&ws->send_ring, ws->send_iov);
     if (iovcnt == 0) {
         ws->sending = false;
+        if (ws->closing)
+            th_ws_close_and_destroy(ws);
         return;
     }
     ws->sending = true;
@@ -146,10 +160,9 @@ th_ws_handle_send(void* user_data, size_t len, th_err err)
     th_ws_send_drain(ws);
 }
 
-TH_PUBLIC(th_err)
-th_ws_send(th_ws* ws, th_buffer data, th_ws_type type)
+TH_LOCAL(th_err)
+th_ws_queue_frame(th_ws* ws, th_ws_frame_type frame_type, th_buffer data)
 {
-    th_ws_frame_type frame_type = type == TH_WS_TEXT ? TH_WS_FRAME_TEXT : TH_WS_FRAME_BINARY;
     unsigned char header[TH_WS_FRAME_HEADER_MAX_LEN];
     size_t header_len = th_ws_frame_header_write(header, frame_type, data.len);
 
@@ -167,9 +180,19 @@ th_ws_send(th_ws* ws, th_buffer data, th_ws_type type)
 }
 
 TH_PUBLIC(th_err)
+th_ws_send(th_ws* ws, th_buffer data, th_ws_type type)
+{
+    if (ws->closing)
+        return TH_ERR_INVALID_ARG;
+    th_ws_frame_type frame_type = type == TH_WS_TEXT ? TH_WS_FRAME_TEXT : TH_WS_FRAME_BINARY;
+    return th_ws_queue_frame(ws, frame_type, data);
+}
+
+TH_PUBLIC(th_err)
 th_ws_close(th_ws* ws)
 {
-    (void)ws;
-    TH_LOG_ERROR("WebSocket close handshake is not implemented yet.");
-    return TH_ERR_NOSUPPORT;
+    if (ws->closing)
+        return TH_ERR_INVALID_ARG;
+    ws->closing = true;
+    return th_ws_queue_frame(ws, TH_WS_FRAME_CLOSE, (th_buffer){0});
 }

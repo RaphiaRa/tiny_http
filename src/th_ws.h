@@ -4,6 +4,8 @@
 #include <th.h>
 
 #include "th_conn.h"
+#include "th_iov.h"
+#include "th_ring.h"
 #include "th_vec.h"
 #include "th_ws_frame_parser.h"
 
@@ -17,6 +19,10 @@ struct th_ws {
     th_ws_frame_parser parser;
     th_buf_vec payload; // accumulates a message's payload across fragments/calls
     char scratch[TH_WS_SCRATCH_RECV_LEN];
+
+    th_ring send_ring;
+    th_iov send_iov[2];
+    bool sending;
 };
 
 TH_PRIVATE(void)

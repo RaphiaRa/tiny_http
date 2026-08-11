@@ -74,7 +74,9 @@ SET(TH_CORE_SRC
     src/th_sha1.c
     src/th_base64.c
     src/th_ws_handshake.c
+    src/th_ws_frame.c
     src/th_ws_frame_parser.c
+    src/th_ring.c
     src/th_ws.c
 #   SSL (compiled out via TH_WITH_SSL=0 when OpenSSL is not found)
     src/th_ssl_smem_bio.c
@@ -221,6 +223,7 @@ if (NOT TH_DISABLE_TESTS)
     set(CMAKE_TESTDRIVER_AFTER_TESTMAIN "th_test_teardown();")
 
     set(TH_TESTS
+        src/th_queue_test.c
         src/th_task_test.c
         src/th_timer_test.c
         src/th_loop_test.c
@@ -244,7 +247,9 @@ if (NOT TH_DISABLE_TESTS)
         src/th_sha1_test.c
         src/th_base64_test.c
         src/th_ws_handshake_test.c
+        src/th_ws_frame_test.c
         src/th_ws_frame_parser_test.c
+        src/th_ring_test.c
         src/th_response_test.c
         src/th_http_test.c
         src/th_ws_test.c

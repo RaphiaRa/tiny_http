@@ -15,12 +15,15 @@ th_ws_init(th_ws* ws, th_conn* conn, th_ws_handler handler, void* user_data, th_
     ws->allocator = allocator ? allocator : th_default_allocator_get();
     ws->parser = (th_ws_frame_parser){0};
     th_buf_vec_init(&ws->payload, ws->allocator);
+    th_ring_init(&ws->send_ring, ws->allocator, TH_CONFIG_WS_SEND_RING_LEN, TH_CONFIG_WS_SEND_MAX_LEN);
+    ws->sending = false;
 }
 
 TH_PRIVATE(void)
 th_ws_deinit(th_ws* ws)
 {
     th_buf_vec_deinit(&ws->payload);
+    th_ring_deinit(&ws->send_ring);
     th_conn_destroy(ws->conn);
 }
 
@@ -115,14 +118,52 @@ th_ws_start(th_ws* ws)
     th_conn_recv(ws->conn, ws->scratch, sizeof(ws->scratch), false, th_ws_handle_recv, ws);
 }
 
+TH_LOCAL(void)
+th_ws_handle_send(void* user_data, size_t len, th_err err);
+
+TH_LOCAL(void)
+th_ws_send_drain(th_ws* ws)
+{
+    size_t iovcnt = th_ring_peek(&ws->send_ring, ws->send_iov);
+    if (iovcnt == 0) {
+        ws->sending = false;
+        return;
+    }
+    ws->sending = true;
+    th_conn_send(ws->conn, ws->send_iov, iovcnt, NULL, 0, 0, th_ws_handle_send, ws);
+}
+
+TH_LOCAL(void)
+th_ws_handle_send(void* user_data, size_t len, th_err err)
+{
+    th_ws* ws = user_data;
+    if (err != TH_ERR_OK) {
+        TH_LOG_DEBUG("%p: Send error: %s, closing", (void*)ws, th_strerror(err));
+        th_ws_close_and_destroy(ws);
+        return;
+    }
+    th_ring_consume(&ws->send_ring, len);
+    th_ws_send_drain(ws);
+}
+
 TH_PUBLIC(th_err)
 th_ws_send(th_ws* ws, th_buffer data, th_ws_type type)
 {
-    (void)ws;
-    (void)data;
-    (void)type;
-    TH_LOG_ERROR("WebSocket frame sending is not implemented yet.");
-    return TH_ERR_NOSUPPORT;
+    th_ws_frame_type frame_type = type == TH_WS_TEXT ? TH_WS_FRAME_TEXT : TH_WS_FRAME_BINARY;
+    unsigned char header[TH_WS_FRAME_HEADER_MAX_LEN];
+    size_t header_len = th_ws_frame_header_write(header, frame_type, data.len);
+
+    th_iov parts[2] = {
+        {header, header_len},
+        {(void*)data.ptr, data.len},
+    };
+    th_err err = th_ring_write(&ws->send_ring, parts, 2);
+    if (err != TH_ERR_OK)
+        return err;
+
+    if (!ws->sending)
+        th_ws_send_drain(ws);
+    return TH_ERR_OK;
 }
 
 TH_PUBLIC(th_err)

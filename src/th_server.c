@@ -94,6 +94,12 @@ th_server_route(th_server* server, th_method method, const char* path, th_handle
 }
 
 TH_LOCAL(th_err)
+th_server_route_ws(th_server* server, const char* path, th_ws_handler handler, void* user_data)
+{
+    return th_router_add_ws_route(&server->router, th_str_from_cstr(path), handler, user_data);
+}
+
+TH_LOCAL(th_err)
 th_server_add_dir(th_server* server, const char* name, const char* path)
 {
     th_dir dir;
@@ -177,6 +183,12 @@ TH_PUBLIC(th_err)
 th_route(th_server* server, th_method method, const char* route, th_handler handler, void* userp)
 {
     return th_server_route(server, method, route, handler, userp);
+}
+
+TH_PUBLIC(th_err)
+th_route_ws(th_server* server, const char* path, th_ws_handler handler, void* userp)
+{
+    return th_server_route_ws(server, path, handler, userp);
 }
 
 TH_PUBLIC(th_err)

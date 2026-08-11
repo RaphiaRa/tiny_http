@@ -23,6 +23,17 @@ TH_TEST_BEGIN(request_parser)
         TH_EXPECT(TH_STR_EQ(request.body, ""));
     }
     TH_TEST_CASE_END
+    TH_TEST_CASE_BEGIN(parse_connection_header_is_stored_verbatim)
+    {
+        // th_request_close is derived from this header, but the raw value
+        // must still be stored and retrievable, whatever it is.
+        th_str data = TH_STR("GET /test HTTP/1.1\r\nHost: example.com\r\nConnection: Upgrade\r\n\r\n");
+        size_t parsed = 0;
+        TH_EXPECT(th_request_parser_parse(&parser, &request, data, &parsed) == TH_ERR_OK);
+        TH_EXPECT(TH_STR_EQ(th_request_get_header(&request, TH_STR("connection")), "Upgrade"));
+        TH_EXPECT(request.close == false);
+    }
+    TH_TEST_CASE_END
     TH_TEST_CASE_BEGIN(parse_path_and_query)
     {
         th_str data = TH_STR("GET /test?key1=value1&key2=value2 HTTP/1.1\r\nHost: example.com\r\n\r\n");

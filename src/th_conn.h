@@ -87,7 +87,8 @@ th_conn_cancel(th_conn* conn)
 TH_INLINE(void)
 th_conn_destroy(th_conn* conn)
 {
-    conn->methods->destroy(conn);
+    if (conn)
+        conn->methods->destroy(conn);
 }
 
 /* th_conn interface end */

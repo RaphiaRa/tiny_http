@@ -194,6 +194,16 @@ th_test_system_error_handler(void* user_data, const th_request* req, th_response
     return TH_ERR_SYSTEM(TH_ENOENT);
 }
 
+static th_err
+th_test_ws_handler(void* userp, th_ws* ws, th_ws_event ev, th_buffer data)
+{
+    (void)userp;
+    (void)ws;
+    (void)ev;
+    (void)data;
+    return TH_ERR_OK;
+}
+
 TH_TEST_BEGIN(http)
 {
     th_conn_tracker tracker;
@@ -204,6 +214,7 @@ TH_TEST_BEGIN(http)
     TH_EXPECT(th_router_add_route(&router, TH_METHOD_POST, TH_STR("/test"), th_test_handler, NULL) == TH_ERR_OK);
     TH_EXPECT(th_router_add_route(&router, TH_METHOD_GET, TH_STR("/informational"), th_test_informational_handler, NULL) == TH_ERR_OK);
     TH_EXPECT(th_router_add_route(&router, TH_METHOD_GET, TH_STR("/system-error"), th_test_system_error_handler, NULL) == TH_ERR_OK);
+    TH_EXPECT(th_router_add_ws_route(&router, TH_STR("/ws"), th_test_ws_handler, NULL) == TH_ERR_OK);
     th_http_upgrader upgrader;
     th_http_upgrader_init(&upgrader, &tracker, &router, NULL, NULL, th_default_allocator_get());
     th_fake_conn conn;
@@ -233,6 +244,7 @@ TH_TEST_BEGIN(http)
             th_fake_conn_run(&conn);
 
         TH_EXPECT(th_buf_starts_with(conn.written, conn.written_len, "HTTP/1.1 404 Not Found\r\n"));
+        TH_EXPECT(th_buf_ends_with(conn.written, conn.written_len, "404 Not Found"));
     }
     TH_TEST_CASE_END
     TH_TEST_CASE_BEGIN(http_writes_400_for_bad_request)
@@ -466,6 +478,44 @@ TH_TEST_BEGIN(http)
             th_fake_conn_run(&conn);
 
         TH_EXPECT(th_buf_starts_with(conn.written, conn.written_len, "HTTP/1.1 404 Not Found\r\n"));
+        TH_EXPECT(conn.destroyed);
+    }
+    TH_TEST_CASE_END
+    TH_TEST_CASE_BEGIN(http_upgrades_valid_ws_handshake)
+    {
+        th_fake_conn_set_request(
+            &conn,
+            TH_STR("GET /ws HTTP/1.1\r\nHost: example.com\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+                   "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n"));
+
+        th_conn_upgrader_upgrade(&upgrader.base, &conn.base);
+        while (conn.written_len == 0)
+            th_fake_conn_run(&conn);
+
+        TH_EXPECT(th_buf_starts_with(conn.written, conn.written_len, "HTTP/1.1 101 Switching Protocols\r\n"));
+        TH_EXPECT(th_buf_has_header(conn.written, conn.written_len, "Upgrade", "websocket"));
+        TH_EXPECT(th_buf_has_header(conn.written, conn.written_len, "Sec-WebSocket-Accept", "s3pPLMBiTxaQ9kYGzzhZRbK+xOo="));
+        // conn is handed off to th_ws, not destroyed by th_http.
+        TH_EXPECT(!conn.destroyed);
+
+        // Drives the send completion (creates+starts th_ws) and then
+        // th_ws_start's recv, which sees the fully-consumed request as
+        // EOF and cleans up.
+        th_fake_conn_run(&conn);
+        th_fake_conn_run(&conn);
+        TH_EXPECT(conn.destroyed);
+    }
+    TH_TEST_CASE_END
+    TH_TEST_CASE_BEGIN(http_rejects_non_handshake_request_to_ws_route)
+    {
+        th_fake_conn_set_request(&conn, TH_STR("GET /ws HTTP/1.1\r\nHost: example.com\r\nConnection: close\r\n\r\n"));
+
+        th_conn_upgrader_upgrade(&upgrader.base, &conn.base);
+        while (!conn.destroyed && conn.callback != NULL)
+            th_fake_conn_run(&conn);
+
+        TH_EXPECT(th_buf_starts_with(conn.written, conn.written_len, "HTTP/1.1 426 Upgrade Required\r\n"));
+        TH_EXPECT(th_buf_has_header(conn.written, conn.written_len, "Upgrade", "websocket"));
         TH_EXPECT(conn.destroyed);
     }
     TH_TEST_CASE_END

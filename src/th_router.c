@@ -309,6 +309,15 @@ th_router_find_or_create_segment(th_router* router, th_str path, th_route_segmen
     return TH_ERR_OK;
 }
 
+TH_LOCAL(th_err)
+th_router_ws_default_handler(void* user_data, const th_request* request, th_response* response)
+{
+    (void)user_data;
+    (void)request;
+    (void)response;
+    return TH_ERR_HTTP(TH_CODE_SWITCHING_PROTOCOLS);
+}
+
 TH_PRIVATE(th_err)
 th_router_add_route(th_router* router, th_method method, th_str path, th_handler handler, void* user_data)
 {
@@ -316,8 +325,9 @@ th_router_add_route(th_router* router, th_method method, th_str path, th_handler
     th_err err = TH_ERR_OK;
     if ((err = th_router_find_or_create_segment(router, path, &route)) != TH_ERR_OK)
         return err;
+    bool is_ws_default = route->handler[method].handler == th_router_ws_default_handler;
     if (route->handler[TH_METHOD_ANY].handler != NULL
-        || route->handler[method].handler != NULL)
+        || (route->handler[method].handler != NULL && !is_ws_default))
         return TH_ERR_INVALID_ARG; // Route already exists
     route->handler[method].handler = handler;
     route->handler[method].user_data = user_data;
@@ -335,5 +345,11 @@ th_router_add_ws_route(th_router* router, th_str path, th_ws_handler handler, vo
         return TH_ERR_INVALID_ARG; // WS route already exists
     route->ws_handler.handler = handler;
     route->ws_handler.user_data = user_data;
+    // No gating th_route registered for this path/method yet: default to
+    // allowing the upgrade, so a WS-only route doesn't 405.
+    if (route->handler[TH_METHOD_GET].handler == NULL && route->handler[TH_METHOD_ANY].handler == NULL) {
+        route->handler[TH_METHOD_GET].handler = th_router_ws_default_handler;
+        route->handler[TH_METHOD_GET].user_data = NULL;
+    }
     return TH_ERR_OK;
 }

@@ -20,9 +20,7 @@ typedef struct th_capture {
 } th_capture;
 
 /** th_router_capture_cb
- * @brief Called by th_router_resolve for each capture ({name}, {int:name},
- * {path:name}) discovered while resolving a path. NULL means don't report
- * captures (a dry run).
+ * @brief Called per capture found while resolving a path. NULL = dry run.
  */
 typedef void (*th_router_capture_cb)(void* userp, th_str key, th_str value);
 

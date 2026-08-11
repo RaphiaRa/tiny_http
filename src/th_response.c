@@ -214,7 +214,9 @@ th_response_set_default_headers(th_response* response)
 {
     th_err err = TH_ERR_OK;
     char buffer[256];
-    if (response->is_file) {
+    if (response->code == TH_CODE_SWITCHING_PROTOCOLS) {
+        // No body, and RFC 7230 forbids Content-Length framing here.
+    } else if (response->is_file) {
         size_t len = 0;
         const char* content_len = th_fmt_uint_to_str_ex(buffer, sizeof(buffer), (unsigned int)response->file_len, &len);
         if ((err = th_response_add_header(response, TH_STR("Content-Length"), th_str_make(content_len, len))) != TH_ERR_OK)

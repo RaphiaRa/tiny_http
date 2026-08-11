@@ -71,6 +71,10 @@ SET(TH_CORE_SRC
     src/th_timer.c
     src/th_conn_tracker.c
     src/th_url_decode.c
+    src/th_sha1.c
+    src/th_base64.c
+    src/th_ws_handshake.c
+    src/th_ws.c
 #   SSL (compiled out via TH_WITH_SSL=0 when OpenSSL is not found)
     src/th_ssl_smem_bio.c
     src/th_ssl_context.c
@@ -236,8 +240,12 @@ if (NOT TH_DISABLE_TESTS)
         src/th_cookie_parser_test.c
         src/th_multipart_parser_test.c
         src/th_url_decode_test.c
+        src/th_sha1_test.c
+        src/th_base64_test.c
+        src/th_ws_handshake_test.c
         src/th_response_test.c
         src/th_http_test.c
+        src/th_ws_test.c
         src/th_fcache_test.c
         src/th_filepath_test.c
         src/th_file_test.c

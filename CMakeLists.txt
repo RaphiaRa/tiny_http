@@ -239,6 +239,7 @@ if (NOT TH_DISABLE_TESTS)
         src/th_acceptor_test.c
         src/th_accept_test.c
         src/th_conn_test.c
+        src/th_conn_tracker_test.c
         src/th_tcp_conn_test.c
         src/th_router_test.c
         src/th_allocator_test.c

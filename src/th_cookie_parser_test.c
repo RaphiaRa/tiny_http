@@ -88,6 +88,17 @@ TH_TEST_BEGIN(cookie_parser)
         TH_EXPECT(th_cookie_parser_done(&parser));
     }
     TH_TEST_CASE_END
+    TH_TEST_CASE_BEGIN(tolerates_tabs_before_the_value)
+    {
+        th_cookie_parser parser;
+        th_cookie_parser_init(&parser, TH_STR("name=\t\tvalue"));
+
+        th_str key, value;
+        TH_EXPECT(th_cookie_parser_next(&parser, &key, &value) == TH_ERR_OK);
+        TH_EXPECT(TH_STR_EQ(key, "name") && TH_STR_EQ(value, "value"));
+        TH_EXPECT(th_cookie_parser_done(&parser));
+    }
+    TH_TEST_CASE_END
     TH_TEST_CASE_BEGIN(empty_cookie_value_is_valid)
     {
         th_cookie_parser parser;
@@ -130,6 +141,16 @@ TH_TEST_BEGIN(cookie_parser)
         // a lone/unmatched DQUOTE is not a valid cookie-octet.
         th_cookie_parser parser;
         th_cookie_parser_init(&parser, TH_STR("name=\"abc"));
+
+        th_str key, value;
+        TH_EXPECT(th_cookie_parser_next(&parser, &key, &value) == TH_ERR_HTTP(TH_CODE_BAD_REQUEST));
+        TH_EXPECT(th_cookie_parser_done(&parser));
+    }
+    TH_TEST_CASE_END
+    TH_TEST_CASE_BEGIN(quoted_cookie_value_containing_control_character_is_a_bad_request)
+    {
+        th_cookie_parser parser;
+        th_cookie_parser_init(&parser, TH_STR("name=\"\t\""));
 
         th_str key, value;
         TH_EXPECT(th_cookie_parser_next(&parser, &key, &value) == TH_ERR_HTTP(TH_CODE_BAD_REQUEST));
@@ -205,6 +226,16 @@ TH_TEST_BEGIN(cookie_parser)
         // '(' is a token separator per RFC 2616 section 2.2.
         th_cookie_parser parser;
         th_cookie_parser_init(&parser, TH_STR("bad(name=1"));
+
+        th_str key, value;
+        TH_EXPECT(th_cookie_parser_next(&parser, &key, &value) == TH_ERR_HTTP(TH_CODE_BAD_REQUEST));
+        TH_EXPECT(th_cookie_parser_done(&parser));
+    }
+    TH_TEST_CASE_END
+    TH_TEST_CASE_BEGIN(cookie_name_starting_with_a_separator_is_a_bad_request)
+    {
+        th_cookie_parser parser;
+        th_cookie_parser_init(&parser, TH_STR("(name=1"));
 
         th_str key, value;
         TH_EXPECT(th_cookie_parser_next(&parser, &key, &value) == TH_ERR_HTTP(TH_CODE_BAD_REQUEST));

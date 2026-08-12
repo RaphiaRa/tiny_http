@@ -31,6 +31,12 @@ void th_test_teardown(void);
  */
 int th_test_allocator_outstanding(void);
 
+/** th_test_allocator_fail_after
+ * @brief Makes the Nth alloc/realloc call from now return NULL (0 = the
+ * very next call). Self-resets to never-fail once that call happens.
+ */
+void th_test_allocator_fail_after(int n);
+
 /* Re-runs the whole function once per case, skipping all but the selected
  * one, so shared setup is fresh for every case. */
 #define TH_TEST_BEGIN(name)                         \
@@ -40,7 +46,8 @@ int th_test_allocator_outstanding(void);
         (void)argv;                                 \
         for (size_t th_target = 0;; th_target++) {  \
             size_t th_index = 0;                    \
-            bool th_ran = false;
+            bool th_ran = false;                    \
+            th_test_allocator_fail_after(-1);
 
 /* Leak check runs once per iteration, not in TH_TEST_CASE_END, so shared
  * fixture state isn't flagged as a leak mid-case. */

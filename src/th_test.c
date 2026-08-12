@@ -12,12 +12,25 @@ typedef struct th_alloc_list {
 typedef struct th_test_allocator {
     th_allocator base;
     th_alloc_list* list;
+    int fail_countdown; /* -1 = disabled; 0 = fail the next alloc/realloc */
 } th_test_allocator;
 
-static void*
-th_test_allocator_alloc(void* self, size_t size)
+/* -1 (disabled) never reaches 0, so it's left untouched. */
+static bool
+th_test_allocator_should_fail(th_test_allocator* allocator)
 {
-    th_test_allocator* allocator = self;
+    if (allocator->fail_countdown < 0)
+        return false;
+    if (allocator->fail_countdown-- == 0) {
+        allocator->fail_countdown = -1;
+        return true;
+    }
+    return false;
+}
+
+static void*
+th_test_allocator_track(th_test_allocator* allocator, size_t size)
+{
     void* ptr = calloc(1, size);
     if (!ptr)
         return NULL;
@@ -33,9 +46,20 @@ th_test_allocator_alloc(void* self, size_t size)
 }
 
 static void*
+th_test_allocator_alloc(void* self, size_t size)
+{
+    th_test_allocator* allocator = self;
+    if (th_test_allocator_should_fail(allocator))
+        return NULL;
+    return th_test_allocator_track(allocator, size);
+}
+
+static void*
 th_test_allocator_realloc(void* self, void* ptr, size_t size)
 {
     th_test_allocator* allocator = self;
+    if (th_test_allocator_should_fail(allocator))
+        return NULL;
     for (th_alloc_list* node = allocator->list; node != NULL; node = node->next) {
         if (node->ptr == ptr) {
             void* new_ptr = realloc(ptr, size);
@@ -45,7 +69,7 @@ th_test_allocator_realloc(void* self, void* ptr, size_t size)
             return new_ptr;
         }
     }
-    return th_test_allocator_alloc(self, size);
+    return th_test_allocator_track(allocator, size);
 }
 
 static void
@@ -77,6 +101,12 @@ int th_test_allocator_outstanding(void)
     return count;
 }
 
+void th_test_allocator_fail_after(int n)
+{
+    th_test_allocator* allocator = (th_test_allocator*)th_default_allocator_get();
+    allocator->fail_countdown = n;
+}
+
 void th_test_setup(void)
 {
     static th_test_allocator allocator = {
@@ -86,6 +116,7 @@ void th_test_setup(void)
             .free = th_test_allocator_free,
         },
         .list = NULL,
+        .fail_countdown = -1,
     };
     th_default_allocator_set(&allocator.base);
 }
@@ -100,5 +131,6 @@ void th_test_teardown(void)
         node = next;
     }
     allocator->list = NULL;
+    allocator->fail_countdown = -1;
     th_default_allocator_set(NULL);
 }

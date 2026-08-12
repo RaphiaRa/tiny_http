@@ -53,6 +53,25 @@ TH_TEST_BEGIN(dir_mgr)
         th_dir_mgr_deinit(&mgr);
     }
     TH_TEST_CASE_END
+    TH_TEST_CASE_BEGIN(dir_mgr_add_survives_alloc_failure_at_every_step)
+    {
+        int n = 0;
+        th_err err;
+        do {
+            th_dir dir;
+            th_dir_init(&dir, &ops.base);
+            TH_EXPECT(th_dir_open(&dir, TH_STR("/")) == TH_ERR_OK);
+
+            th_test_allocator_fail_after(n++);
+            err = th_dir_mgr_add(&mgr, TH_STR("justsomelongdirnametotriggeralloc"), dir);
+            TH_EXPECT(err == TH_ERR_OK || err == TH_ERR_BAD_ALLOC);
+            TH_EXPECT(n < 1000);
+        } while (err != TH_ERR_OK);
+
+        TH_EXPECT(th_dir_mgr_get(&mgr, TH_STR("justsomelongdirnametotriggeralloc")) != NULL);
+        th_dir_mgr_deinit(&mgr);
+    }
+    TH_TEST_CASE_END
     TH_TEST_CASE_BEGIN(dir_mgr_add_duplicate_label)
     {
         th_dir dir1;

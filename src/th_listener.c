@@ -43,8 +43,13 @@ th_listener_init(th_listener* listener, th_loop* loop,
     listener->ssl_enabled = false;
     listener->allocator = allocator ? allocator : th_default_allocator_get();
     th_err err = TH_ERR_OK;
+
+    th_addrinfo info;
+    if ((err = th_addrinfo_from_str(&info, host, port, th_addrinfo_ops_os())) != TH_ERR_OK)
+        return err;
+
     th_acceptor_init(&listener->acceptor, loop, th_acceptor_ops_os());
-    if ((err = th_acceptor_open(&listener->acceptor, host, port)) != TH_ERR_OK)
+    if ((err = th_acceptor_open(&listener->acceptor, &info)) != TH_ERR_OK)
         return err;
     if (opt && opt->key_file && opt->cert_file) {
         if ((err = th_listener_enable_ssl(listener, opt->key_file, opt->cert_file)) != TH_ERR_OK)

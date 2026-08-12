@@ -1,6 +1,7 @@
 #include <string.h>
 #include <th.h>
 
+#include "th_address.h"
 #include "th_http_error.h"
 #include "th_ssl_error.h"
 #include "th_utility.h"
@@ -36,6 +37,8 @@ th_strerror(th_err err)
         TH_ASSERT(0 && "SSL not enabled");
         return NULL;
 #endif
+    case TH_ERR_CATEGORY_EAI:
+        return th_addrinfo_strerror(TH_ERR_CODE(err));
     default:
         break;
     }

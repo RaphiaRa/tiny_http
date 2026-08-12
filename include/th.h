@@ -45,6 +45,7 @@ typedef struct th_buffer {
 #define TH_ERR_CATEGORY_SYSTEM 1 // system error, corresponds to errno or GetLastError
 #define TH_ERR_CATEGORY_HTTP 2   // http protocol error
 #define TH_ERR_CATEGORY_SSL 3    // ssl error
+#define TH_ERR_CATEGORY_EAI 4    // getaddrinfo error, EAI_* code (not errno)
 
 /* other error codes */
 #define TH_ERRC_OK 0
@@ -78,6 +79,7 @@ typedef enum th_err {
 #define TH_ERR_SYSTEM(code) TH_ERR(TH_ERR_CATEGORY_SYSTEM, code)
 #define TH_ERR_HTTP(code) TH_ERR(TH_ERR_CATEGORY_HTTP, code)
 #define TH_ERR_SSL(code) TH_ERR(TH_ERR_CATEGORY_SSL, code)
+#define TH_ERR_EAI(code) TH_ERR(TH_ERR_CATEGORY_EAI, code)
 #define TH_ERR_CATEGORY(err) (err >> TH_ERR_CATEGORY_SHIFT)
 #define TH_ERR_CODE(err) (err & TH_ERR_CODE_MASK)
 

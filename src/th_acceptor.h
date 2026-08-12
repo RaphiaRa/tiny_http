@@ -9,21 +9,17 @@
 #include "th_socket.h"
 
 /** th_acceptor_ops
- * @brief The raw listen-socket syscalls a th_acceptor performs. Injected
- * at construction time so tests can fake an acceptor without a real fd.
+ * @brief Mirrors the raw listen-socket syscalls directly, one op each,
+ * so tests can fake a th_acceptor without a real fd.
  */
 typedef struct th_acceptor_ops {
-    /** open
-     * @brief Resolves addr/port, creates a non-blocking listening socket
-     * bound and listening on it, and writes its fd to *fd.
-     */
-    th_err (*open)(void* self, const char* addr, const char* port, int* fd);
-
-    /** accept
-     * @brief Accepts one pending connection on fd, writes the peer
-     * address to addr and the new non-blocking socket's fd to *out_fd.
-     * TH_ERR_SYSTEM(TH_EAGAIN)/TH_EWOULDBLOCK when none is pending.
-     */
+    th_err (*socket)(void* self, int domain, int type, int protocol, int* out_fd);
+    th_err (*setsockopt)(void* self, int fd, int level, int optname, const void* optval, socklen_t optlen);
+    th_err (*set_nonblocking)(void* self, int fd);
+    th_err (*bind)(void* self, int fd, const struct sockaddr* addr, socklen_t addrlen);
+    th_err (*listen)(void* self, int fd, int backlog);
+    void (*close)(void* self, int fd);
+    // TH_ERR_SYSTEM(TH_EAGAIN)/TH_EWOULDBLOCK when nothing is pending.
     th_err (*accept)(void* self, int fd, th_address* addr, int* out_fd);
 } th_acceptor_ops;
 
@@ -46,11 +42,11 @@ TH_PRIVATE(void)
 th_acceptor_init(th_acceptor* acceptor, th_loop* loop, th_acceptor_ops* ops);
 
 /** th_acceptor_open
- * @brief Resolves addr/port and registers the resulting listening socket
- * with the acceptor's reactor, replacing any fd previously set.
+ * @brief Opens a listening socket matching info and registers it with
+ * the acceptor's reactor, replacing any fd previously set.
  */
 TH_PRIVATE(th_err)
-th_acceptor_open(th_acceptor* acceptor, const char* addr, const char* port);
+th_acceptor_open(th_acceptor* acceptor, const th_addrinfo* info);
 
 TH_INLINE(int)
 th_acceptor_get_fd(const th_acceptor* acceptor)

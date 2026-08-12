@@ -87,13 +87,60 @@ typedef struct th_fake_acceptor_ops {
 } th_fake_acceptor_ops;
 
 static th_err
-th_fake_acceptor_open(void* self, const char* addr, const char* port, int* out_fd)
+th_fake_acceptor_socket(void* self, int domain, int type, int protocol, int* out_fd)
 {
-    (void)addr;
-    (void)port;
+    (void)domain;
+    (void)type;
+    (void)protocol;
     th_fake_acceptor_ops* ops = self;
     *out_fd = ops->open_fd;
     return TH_ERR_OK;
+}
+
+static th_err
+th_fake_acceptor_setsockopt(void* self, int fd, int level, int optname, const void* optval, socklen_t optlen)
+{
+    (void)self;
+    (void)fd;
+    (void)level;
+    (void)optname;
+    (void)optval;
+    (void)optlen;
+    return TH_ERR_OK;
+}
+
+static th_err
+th_fake_acceptor_set_nonblocking(void* self, int fd)
+{
+    (void)self;
+    (void)fd;
+    return TH_ERR_OK;
+}
+
+static th_err
+th_fake_acceptor_bind(void* self, int fd, const struct sockaddr* addr, socklen_t addrlen)
+{
+    (void)self;
+    (void)fd;
+    (void)addr;
+    (void)addrlen;
+    return TH_ERR_OK;
+}
+
+static th_err
+th_fake_acceptor_listen(void* self, int fd, int backlog)
+{
+    (void)self;
+    (void)fd;
+    (void)backlog;
+    return TH_ERR_OK;
+}
+
+static void
+th_fake_acceptor_close(void* self, int fd)
+{
+    (void)self;
+    (void)fd;
 }
 
 static th_err
@@ -114,7 +161,12 @@ th_fake_acceptor_accept(void* self, int fd, th_address* addr, int* out_fd)
 static void
 th_fake_acceptor_ops_init(th_fake_acceptor_ops* ops)
 {
-    ops->base.open = th_fake_acceptor_open;
+    ops->base.socket = th_fake_acceptor_socket;
+    ops->base.setsockopt = th_fake_acceptor_setsockopt;
+    ops->base.set_nonblocking = th_fake_acceptor_set_nonblocking;
+    ops->base.bind = th_fake_acceptor_bind;
+    ops->base.listen = th_fake_acceptor_listen;
+    ops->base.close = th_fake_acceptor_close;
     ops->base.accept = th_fake_acceptor_accept;
     ops->open_fd = 9;
     ops->accept_err = TH_ERR_OK;
@@ -158,7 +210,8 @@ TH_TEST_BEGIN(accept)
     th_fake_acceptor_ops_init(&ops);
     th_acceptor acceptor;
     th_acceptor_init(&acceptor, &loop, &ops.base);
-    th_acceptor_open(&acceptor, "127.0.0.1", "8080");
+    th_addrinfo info = {0};
+    th_acceptor_open(&acceptor, &info);
 
     TH_TEST_CASE_BEGIN(accept_completes_with_new_fd)
     {

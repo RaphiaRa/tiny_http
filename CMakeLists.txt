@@ -45,6 +45,7 @@ SET(TH_CORE_SRC
     src/th_send.c
     src/th_sendvec.c
     src/th_sendfile.c
+    src/th_address.c
     src/th_acceptor.c
     src/th_accept.c
     src/th_tcp_conn.c
@@ -234,6 +235,7 @@ if (NOT TH_DISABLE_TESTS)
         src/th_send_test.c
         src/th_sendvec_test.c
         src/th_sendfile_test.c
+        src/th_address_test.c
         src/th_acceptor_test.c
         src/th_accept_test.c
         src/th_conn_test.c

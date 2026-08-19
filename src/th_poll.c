@@ -147,7 +147,10 @@ th_poll_handle_map_remove(th_poll_handle_map* map, int fd)
         th_poll_fd_to_idx_map_erase(&map->fd_to_idx_map, iter);
         if (idx != map->size - 1) {
             th_poll_fd_to_idx_map_iter last = th_poll_fd_to_idx_map_find(&map->fd_to_idx_map, map->handles[map->size - 1]->fd);
-            last->value = idx;
+            TH_ASSERT(last && "Last handle's fd must be present in the map");
+            if (last) {
+                last->value = idx;
+            }
             map->handles[idx] = map->handles[map->size - 1];
         }
         --map->size;

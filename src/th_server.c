@@ -34,6 +34,7 @@ th_server_init(th_server* server, th_allocator* allocator)
     th_fcache_init(&server->fcache, th_file_ops_os(), allocator);
     server->listeners = NULL;
     server->allocator = allocator;
+    return TH_ERR_OK;
 cleanup_router:
     th_router_deinit(&server->router);
     return err;
